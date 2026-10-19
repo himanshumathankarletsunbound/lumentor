@@ -148,10 +148,17 @@ export default function LoginPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {/* Administrator Role Card */}
-              <button
-                type="button"
+              <div
+                role="button"
+                tabIndex={0}
                 onClick={() => handleRoleTabClick('ADMINISTRATOR')}
-                className={`p-4 rounded-2xl border text-left transition-all relative ${
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleRoleTabClick('ADMINISTRATOR');
+                  }
+                }}
+                className={`p-4 rounded-2xl border text-left transition-all relative cursor-pointer select-none ${
                   selectedRole === 'ADMINISTRATOR'
                     ? 'bg-indigo-950/60 border-indigo-500 shadow-lg shadow-indigo-900/40'
                     : 'bg-slate-900/70 border-slate-800 hover:border-slate-700 hover:bg-slate-900'
@@ -184,13 +191,20 @@ export default function LoginPage() {
                     Enter →
                   </button>
                 </div>
-              </button>
+              </div>
 
               {/* Operations Specialist Role Card */}
-              <button
-                type="button"
+              <div
+                role="button"
+                tabIndex={0}
                 onClick={() => handleRoleTabClick('OPERATIONS')}
-                className={`p-4 rounded-2xl border text-left transition-all relative ${
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleRoleTabClick('OPERATIONS');
+                  }
+                }}
+                className={`p-4 rounded-2xl border text-left transition-all relative cursor-pointer select-none ${
                   selectedRole === 'OPERATIONS'
                     ? 'bg-sky-950/60 border-sky-500 shadow-lg shadow-sky-900/40'
                     : 'bg-slate-900/70 border-slate-800 hover:border-slate-700 hover:bg-slate-900'
@@ -223,13 +237,20 @@ export default function LoginPage() {
                     Enter →
                   </button>
                 </div>
-              </button>
+              </div>
 
               {/* Faculty Mentor Role Card */}
-              <button
-                type="button"
+              <div
+                role="button"
+                tabIndex={0}
                 onClick={() => handleRoleTabClick('MENTOR')}
-                className={`p-4 rounded-2xl border text-left transition-all relative ${
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleRoleTabClick('MENTOR');
+                  }
+                }}
+                className={`p-4 rounded-2xl border text-left transition-all relative cursor-pointer select-none ${
                   selectedRole === 'MENTOR'
                     ? 'bg-emerald-950/60 border-emerald-500 shadow-lg shadow-emerald-900/40'
                     : 'bg-slate-900/70 border-slate-800 hover:border-slate-700 hover:bg-slate-900'
@@ -262,7 +283,7 @@ export default function LoginPage() {
                     Enter →
                   </button>
                 </div>
-              </button>
+              </div>
             </div>
           </div>
 

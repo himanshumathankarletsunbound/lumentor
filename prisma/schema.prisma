@@ -1,0 +1,520 @@
+// Prisma Schema for Classcard-Integrated Operations, Scheduling & Payroll Management System
+// Target Database: PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SystemRole {
+  ADMINISTRATOR
+  OPERATIONS
+  MENTOR
+  CUSTOM
+}
+
+enum DataProvenance {
+  CLASSCARD_SOURCED
+  LOCALLY_CREATED
+  LOCALLY_MODIFIED
+  PENDING_SYNC
+  SYNC_FAILED
+  RECONCILED
+}
+
+enum ClassStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  LATE_CANCELLED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+  UNMARKED
+}
+
+enum CompensationModel {
+  PER_CLASS
+  DURATION_BASED
+  PER_STUDENT
+  FIXED_SALARY
+  PERCENTAGE_BASED
+  HYBRID
+}
+
+enum PenaltyCategory {
+  LATE_CANCELLATION
+  UNAPPROVED_ABSENCE
+  MISSING_ATTENDANCE
+  POLICY_VIOLATION
+  ADMINISTRATIVE
+  OTHER
+}
+
+enum PenaltyStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  APPLIED
+  REVERSED
+}
+
+enum PayrollBatchStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  LOCKED
+  PAID
+}
+
+enum PaymentStatus {
+  UNPAID
+  PARTIAL
+  PAID
+}
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  code      String   @unique
+  currency  String   @default("USD")
+  timezone  String   @default("America/New_York")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branches     Branch[]
+  users        User[]
+  payrollPlans PayrollPlan[]
+}
+
+model Branch {
+  id             String         @id @default(uuid())
+  organizationId String
+  organization   Organization   @relation(fields: [organizationId], references: [id])
+  name           String
+  code           String         @unique
+  address        String?
+  city           String?
+  timezone       String         @default("America/New_York")
+  phone          String?
+  email          String?
+  isActive       Boolean        @default(true)
+  externalId     String?        @unique
+  provenance     DataProvenance @default(LOCALLY_CREATED)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  students    Student[]
+  mentors     Mentor[]
+  classes     ClassEvent[]
+  invoices    Invoice[]
+  penalties   Penalty[]
+}
+
+model User {
+  id           String     @id @default(uuid())
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
+  email        String     @unique
+  name         String
+  passwordHash String
+  role         SystemRole @default(OPERATIONS)
+  roleId       String?
+  roleDef      Role?      @relation(fields: [roleId], references: [id])
+  mentorId     String?    @unique
+  mentor       Mentor?    @relation(fields: [mentorId], references: [id])
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  auditEvents  AuditEvent[]
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  systemRole  SystemRole
+  description String
+  permissions Json     // List of { module, actions, branchIds }
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users User[]
+}
+
+model Subject {
+  id                     String         @id @default(uuid())
+  name                   String
+  code                   String         @unique
+  category               String
+  description            String?
+  defaultDurationMinutes Int            @default(60)
+  availableDurations     Int[]          @default([30, 45, 60, 90])
+  isActive               Boolean        @default(true)
+  color                  String         @default("#4f46e5")
+  externalId             String?        @unique
+  provenance             DataProvenance @default(LOCALLY_CREATED)
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  classes ClassEvent[]
+}
+
+model Package {
+  id            String         @id @default(uuid())
+  name          String
+  code          String         @unique
+  price         Decimal        @db.Decimal(10, 2)
+  currency      String         @default("USD")
+  totalSessions Int            @default(10)
+  validityDays  Int            @default(90)
+  isActive      Boolean        @default(true)
+  externalId    String?        @unique
+  provenance    DataProvenance @default(LOCALLY_CREATED)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  enrolments Enrolment[]
+}
+
+model Student {
+  id           String         @id @default(uuid())
+  branchId     String
+  branch       Branch         @relation(fields: [branchId], references: [id])
+  firstName    String
+  lastName     String
+  email        String         @unique
+  phone        String?
+  dateOfBirth  DateTime?
+  guardianName String?
+  guardianEmail String?
+  status       String         @default("ACTIVE")
+  customFields Json?
+  externalId   String?        @unique
+  provenance   DataProvenance @default(LOCALLY_CREATED)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  enrolments   Enrolment[]
+  attendances  ClassAttendance[]
+  invoices     Invoice[]
+}
+
+model Mentor {
+  id                     String         @id @default(uuid())
+  branchId               String
+  branch                 Branch         @relation(fields: [branchId], references: [id])
+  firstName              String
+  lastName               String
+  email                  String         @unique
+  phone                  String?
+  avatarUrl              String?
+  payrollPlanId          String
+  payrollPlan            PayrollPlan    @relation(fields: [payrollPlanId], references: [id])
+  status                 String         @default("ACTIVE")
+  externalId             String?        @unique
+  provenance             DataProvenance @default(LOCALLY_CREATED)
+  teachingHoursThisMonth Float          @default(0)
+  completedClassesCount  Int            @default(0)
+  attendanceRate         Float          @default(100.0)
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  user         User?
+  classes      ClassEvent[]
+  penalties    Penalty[]
+  adjustments  Adjustment[]
+  lineItems    PayrollLineItem[]
+  payslips     Payslip[]
+}
+
+model ClassEvent {
+  id                      String         @id @default(uuid())
+  branchId                String
+  branch                  Branch         @relation(fields: [branchId], references: [id])
+  subjectId               String
+  subject                 Subject        @relation(fields: [subjectId], references: [id])
+  mentorId                String
+  mentor                  Mentor         @relation(fields: [mentorId], references: [id])
+  title                   String
+  startTime               DateTime
+  endTime                 DateTime
+  durationMinutes         Int
+  isGroup                 Boolean        @default(false)
+  capacity                Int            @default(1)
+  status                  ClassStatus    @default(SCHEDULED)
+  isLateCancellation      Boolean        @default(false)
+  cancellationReason      String?
+  cancelledAt             DateTime?
+  cancelledBy             String?
+  room                    String?
+  meetingLink             String?
+  externalId              String?        @unique
+  provenance              DataProvenance @default(LOCALLY_CREATED)
+  notes                   String?
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
+
+  attendances ClassAttendance[]
+  penalties   Penalty[]
+}
+
+model ClassAttendance {
+  id           String           @id @default(uuid())
+  classEventId String
+  classEvent   ClassEvent       @relation(fields: [classEventId], references: [id], onDelete: Cascade)
+  studentId    String
+  student      Student          @relation(fields: [studentId], references: [id])
+  status       AttendanceStatus @default(UNMARKED)
+  markedAt     DateTime?
+  markedBy     String?
+  notes        String?
+  externalId   String?
+  provenance   DataProvenance   @default(LOCALLY_CREATED)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@unique([classEventId, studentId])
+}
+
+model Enrolment {
+  id                String         @id @default(uuid())
+  studentId         String
+  student           Student        @relation(fields: [studentId], references: [id])
+  packageId         String
+  package           Package        @relation(fields: [packageId], references: [id])
+  sessionsTotal     Int
+  sessionsRemaining Int
+  status            String         @default("ACTIVE")
+  startDate         DateTime
+  expiryDate        DateTime
+  externalId        String?        @unique
+  provenance        DataProvenance @default(LOCALLY_CREATED)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+}
+
+model Invoice {
+  id            String         @id @default(uuid())
+  branchId      String
+  branch        Branch         @relation(fields: [branchId], references: [id])
+  studentId     String
+  student       Student        @relation(fields: [studentId], references: [id])
+  invoiceNumber String         @unique
+  issueDate     DateTime
+  dueDate       DateTime
+  totalAmount   Decimal        @db.Decimal(10, 2)
+  paidAmount    Decimal        @db.Decimal(10, 2) @default(0)
+  currency      String         @default("USD")
+  status        String         @default("UNPAID")
+  externalId    String?        @unique
+  provenance    DataProvenance @default(LOCALLY_CREATED)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  payments Payment[]
+}
+
+model Payment {
+  id            String         @id @default(uuid())
+  invoiceId     String
+  invoice       Invoice        @relation(fields: [invoiceId], references: [id])
+  paymentNumber String         @unique
+  amount        Decimal        @db.Decimal(10, 2)
+  paymentDate   DateTime
+  method        String
+  status        String         @default("SUCCESS")
+  externalId    String?        @unique
+  provenance    DataProvenance @default(LOCALLY_CREATED)
+  createdAt     DateTime       @default(now())
+}
+
+model PayrollPlan {
+  id                         String            @id @default(uuid())
+  organizationId             String
+  organization               Organization      @relation(fields: [organizationId], references: [id])
+  name                       String
+  code                       String            @unique
+  description                String?
+  compensationModel          CompensationModel
+  currency                   String            @default("USD")
+  baseSalary                 Decimal           @default(0) @db.Decimal(10, 2)
+  defaultClassRate           Decimal           @default(0) @db.Decimal(10, 2)
+  hourlyRate                 Decimal           @default(0) @db.Decimal(10, 2)
+  perStudentRate             Decimal           @default(0) @db.Decimal(10, 2)
+  revenuePercentage          Decimal           @default(0) @db.Decimal(5, 2)
+  minEligibleDurationMinutes Int               @default(30)
+  payableClassStatuses       ClassStatus[]
+  lateCancellationPayPercent Decimal           @default(50) @db.Decimal(5, 2)
+  groupMultiplier            Decimal           @default(1.25) @db.Decimal(4, 2)
+  subjectRates               Json?
+  branchRates                Json?
+  version                    Int               @default(1)
+  effectiveFrom              DateTime
+  effectiveTo                DateTime?
+  isActive                   Boolean           @default(true)
+  createdAt                  DateTime          @default(now())
+  updatedAt                  DateTime          @updatedAt
+
+  mentors Mentor[]
+}
+
+model Penalty {
+  id                    String          @id @default(uuid())
+  mentorId              String
+  mentor                Mentor          @relation(fields: [mentorId], references: [id])
+  classId               String?
+  classEvent            ClassEvent?     @relation(fields: [classId], references: [id])
+  branchId              String
+  branch                Branch          @relation(fields: [branchId], references: [id])
+  category              PenaltyCategory
+  reason                String
+  amount                Decimal         @db.Decimal(10, 2)
+  evidenceNote          String?
+  evidenceUrl           String?
+  createdBy             String
+  status                PenaltyStatus   @default(SUBMITTED)
+  approvedBy            String?
+  approvedAt            DateTime?
+  rejectionReason       String?
+  appliedPayrollBatchId String?
+  appliedAt             DateTime?
+  reversedBy            String?
+  reversedAt            DateTime?
+  reversalReason        String?
+  disputeStatus         String?         @default("NONE")
+  disputeNote           String?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+}
+
+model Adjustment {
+  id                    String   @id @default(uuid())
+  mentorId              String
+  mentor                Mentor   @relation(fields: [mentorId], references: [id])
+  type                  String
+  reason                String
+  amount                Decimal  @db.Decimal(10, 2)
+  approvedBy            String
+  appliedPayrollBatchId String?
+  createdAt             DateTime @default(now())
+}
+
+model PayrollBatch {
+  id                   String             @id @default(uuid())
+  batchNumber          String             @unique
+  periodName           String
+  startDate            DateTime
+  endDate              DateTime
+  branchId             String?
+  status               PayrollBatchStatus @default(DRAFT)
+  totalMentors         Int                @default(0)
+  totalEligibleClasses Int                @default(0)
+  totalGross           Decimal            @default(0) @db.Decimal(12, 2)
+  totalPenalties       Decimal            @default(0) @db.Decimal(12, 2)
+  totalAdjustments     Decimal            @default(0) @db.Decimal(12, 2)
+  totalNet             Decimal            @default(0) @db.Decimal(12, 2)
+  currency             String             @default("USD")
+  submittedBy          String?
+  submittedAt          DateTime?
+  approvedBy           String?
+  approvedAt           DateTime?
+  lockedAt             DateTime?
+  paymentStatus        PaymentStatus      @default(UNPAID)
+  paidAt               DateTime?
+  paymentReference     String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  lineItems PayrollLineItem[]
+  payslips  Payslip[]
+}
+
+model PayrollLineItem {
+  id                      String            @id @default(uuid())
+  batchId                 String
+  batch                   PayrollBatch      @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  mentorId                String
+  mentor                  Mentor            @relation(fields: [mentorId], references: [id])
+  payrollPlanId           String
+  planVersion             Int
+  planName                String
+  compensationModel       CompensationModel
+  eligibleClassesCount    Int
+  eligibleDurationMinutes Int
+  baseSalaryAmount        Decimal           @db.Decimal(10, 2)
+  classEarnings           Decimal           @db.Decimal(10, 2)
+  durationEarnings        Decimal           @db.Decimal(10, 2)
+  studentEarnings         Decimal           @db.Decimal(10, 2)
+  revenueShareEarnings    Decimal           @db.Decimal(10, 2)
+  bonusAmount             Decimal           @db.Decimal(10, 2)
+  penaltyDeductions       Decimal           @db.Decimal(10, 2)
+  appliedPenaltyIds       String[]
+  grossEarnings           Decimal           @db.Decimal(10, 2)
+  netPayable              Decimal           @db.Decimal(10, 2)
+  calculationDetails      Json
+}
+
+model Payslip {
+  id                      String            @id @default(uuid())
+  payslipNumber           String            @unique
+  batchId                 String
+  batch                   PayrollBatch      @relation(fields: [batchId], references: [id])
+  mentorId                String
+  mentor                  Mentor            @relation(fields: [mentorId], references: [id])
+  periodName              String
+  startDate               DateTime
+  endDate                 DateTime
+  planName                String
+  compensationModel       CompensationModel
+  planVersion             Int
+  eligibleClassesCount    Int
+  eligibleDurationMinutes Int
+  earningsItems           Json              // array of { description, amount, rate, count }
+  penaltyItems            Json              // array of { category, reason, amount, date }
+  grossEarnings           Decimal           @db.Decimal(10, 2)
+  totalDeductions         Decimal           @db.Decimal(10, 2)
+  netPayable              Decimal           @db.Decimal(10, 2)
+  currency                String            @default("USD")
+  paymentStatus           PaymentStatus     @default(UNPAID)
+  paidAt                  DateTime?
+  paymentReference        String?
+  generatedAt             DateTime          @default(now())
+}
+
+model AuditEvent {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  timestamp  DateTime @default(now())
+  action     String
+  entityType String
+  entityId   String
+  details    String
+  ipAddress  String?
+  branchId   String?
+}
+
+model SyncJob {
+  id               String   @id @default(uuid())
+  jobType          String
+  status           String
+  startedAt        DateTime @default(now())
+  completedAt      DateTime?
+  recordsProcessed Int      @default(0)
+  recordsCreated   Int      @default(0)
+  recordsUpdated   Int      @default(0)
+  recordsFailed    Int      @default(0)
+  errorMessage     String?
+  logSummary       String[]
+}

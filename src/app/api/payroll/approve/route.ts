@@ -1,0 +1,56 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { db } from '../../../../lib/db/store';
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { batchId, approverId, approverName, action, rejectionReason } = body;
+
+    const batch = db.getPayrollBatchById(batchId);
+    if (!batch) {
+      return NextResponse.json({ error: 'Batch not found' }, { status: 404 });
+    }
+
+    if (action === 'APPROVE') {
+      batch.status = 'APPROVED';
+      batch.approvedBy = approverId;
+      batch.approvedByName = approverName;
+      batch.approvedAt = new Date().toISOString();
+      batch.updatedAt = new Date().toISOString();
+      db.savePayrollBatch(batch);
+
+      db.logAudit({
+        userId: approverId,
+        userName: approverName,
+        userRole: 'ADMINISTRATOR',
+        action: 'PAYROLL_APPROVED',
+        entityType: 'PayrollBatch',
+        entityId: batch.id,
+        details: `Approved payroll batch ${batch.batchNumber} (${batch.totalMentors} mentors, $${batch.totalNet} net).`,
+      });
+
+      return NextResponse.json(batch);
+    } else if (action === 'REJECT') {
+      batch.status = 'DRAFT';
+      batch.updatedAt = new Date().toISOString();
+      db.savePayrollBatch(batch);
+
+      db.logAudit({
+        userId: approverId,
+        userName: approverName,
+        userRole: 'ADMINISTRATOR',
+        action: 'PAYROLL_RETURNED',
+        entityType: 'PayrollBatch',
+        entityId: batch.id,
+        details: `Returned payroll batch ${batch.batchNumber} for corrections: ${rejectionReason || 'No reason specified'}`,
+      });
+
+      return NextResponse.json(batch);
+    }
+
+    return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: errorMsg }, { status: 500 });
+  }
+}

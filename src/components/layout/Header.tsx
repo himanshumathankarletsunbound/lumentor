@@ -1,0 +1,71 @@
+'use client';
+
+import React from 'react';
+import { Menu, Building2, Bell, RefreshCw } from 'lucide-react';
+import { useAuth } from '../../lib/auth/AuthContext';
+import { RoleSwitcher } from './RoleSwitcher';
+import { SEED_BRANCHES } from '../../lib/db/seedData';
+import Link from 'next/link';
+
+export function Header({ onMenuClick }: { onMenuClick: () => void }) {
+  const { selectedBranch, setSelectedBranch, isMentor } = useAuth();
+
+  return (
+    <header className="h-16 bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between gap-4 sticky top-0 z-30 shadow-2xs">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onMenuClick}
+          className="lg:hidden p-2 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 focus:outline-none"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+
+        {/* Global Branch Selector (Hidden for Mentor role) */}
+        {!isMentor && (
+          <div className="hidden sm:flex items-center gap-2">
+            <Building2 className="w-4 h-4 text-slate-400" />
+            <select
+              value={selectedBranch}
+              onChange={(e) => setSelectedBranch(e.target.value)}
+              aria-label="Filter by Branch"
+              className="text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+            >
+              <option value="ALL">All Campus Branches</option>
+              {SEED_BRANCHES.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name} ({b.code})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
+      {/* Header Actions */}
+      <div className="flex items-center gap-2.5 sm:gap-4">
+        {/* Quick Classcard Sync button */}
+        <Link
+          href="/admin/classcard-integration"
+          className="hidden md:flex items-center gap-1.5 text-xs text-slate-600 hover:text-indigo-600 px-2.5 py-1.5 rounded-lg hover:bg-slate-50 border border-slate-200 transition-colors"
+        >
+          <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
+          <span>Classcard Sync</span>
+        </Link>
+
+        {/* Notification Bell */}
+        <button
+          className="p-2 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 relative transition-colors"
+          title="Notifications"
+        >
+          <Bell className="w-4 h-4" />
+          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white" />
+        </button>
+
+        <div className="h-6 w-px bg-slate-200 hidden sm:block" />
+
+        {/* Role Switcher Pill */}
+        <RoleSwitcher />
+      </div>
+    </header>
+  );
+}

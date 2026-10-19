@@ -25,7 +25,7 @@ export default function LoginPage() {
   const router = useRouter();
   const { login, availableUsers } = useAuth();
 
-  const [email, setEmail] = useState('admin@academyapex.com');
+  const [email, setEmail] = useState('admin@lumentor.com');
   const [password, setPassword] = useState('••••••••••••');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
@@ -88,7 +88,7 @@ export default function LoginPage() {
         </div>
 
         <h1 className="text-3xl font-extrabold text-white tracking-tight sm:text-4xl">
-          Apex Management Portal
+          LUmentor Management Portal
         </h1>
         <p className="mt-2 text-sm text-slate-400 max-w-md mx-auto">
           Unified scheduling, multi-model mentor payroll, attendance tracking, and Classcard synchronization.
@@ -201,7 +201,7 @@ export default function LoginPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@academyapex.com"
+                  placeholder="admin@lumentor.com"
                   required
                   className="w-full pl-9 pr-3 py-2 bg-slate-900/90 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
                 />

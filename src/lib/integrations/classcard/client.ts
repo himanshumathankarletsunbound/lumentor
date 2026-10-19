@@ -129,7 +129,7 @@ export class ClasscardApiClient {
     if (endpoint === '/test' || endpoint === '/status' || endpoint.includes('ping')) {
       return {
         success: true,
-        data: ({ status: 'CONNECTED', version: '2.4.1', institution: 'Apex Academy Sandbox' } as unknown) as T,
+        data: ({ status: 'CONNECTED', version: '2.4.1', institution: 'LUmentor Sandbox' } as unknown) as T,
         statusCode: 200,
         isMock: true,
         emptyBody: false,

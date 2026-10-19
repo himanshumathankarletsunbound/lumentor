@@ -9,7 +9,7 @@ import { Alert } from '../../../components/ui/Alert';
 import { Save, RefreshCw } from 'lucide-react';
 
 export default function SettingsPage() {
-  const [orgName, setOrgName] = useState('Apex Academy & Educational Services');
+  const [orgName, setOrgName] = useState('LUmentor Educational Services');
   const [currency, setCurrency] = useState('USD');
   const [timezone, setTimezone] = useState('America/New_York');
   const [cutoffDay, setCutoffDay] = useState('15');

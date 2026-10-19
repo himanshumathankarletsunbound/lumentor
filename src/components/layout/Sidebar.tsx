@@ -290,7 +290,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
             </div>
             <div>
               <span className="font-bold text-white text-base tracking-tight leading-none block">
-                Apex Portal
+                LUmentor
               </span>
               <span className="text-[10px] text-indigo-400 font-medium tracking-wider uppercase block mt-0.5">
                 Classcard Integrated

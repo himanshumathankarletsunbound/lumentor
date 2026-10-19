@@ -1,4 +1,4 @@
-# Classcard Operations, Scheduling & Payroll Management System
+# LUmentor - Operations, Scheduling & Mentor Payroll System
 
 A high-performance SaaS management platform built for tutoring and education businesses that use **Classcard** as their operational data source.
 
@@ -110,7 +110,7 @@ Calculates mentor compensations with precision arithmetic (2 decimal places) acr
 Clone repository and install dependencies:
 ```bash
 git clone <repository-url>
-cd Website_MVA
+cd LUmentor
 pnpm install
 ```
 
@@ -179,7 +179,7 @@ pnpm test
 Out of the box, the app uses an atomic, transactional JSON store (`data/app-db.json`) backed by `src/lib/db/store.ts`. It provides zero-dependency setup for testing, local evaluation, and demonstrations.
 
 ### Migrating to Production PostgreSQL:
-1. Review the Prisma schema in [`prisma/schema.prisma`](file:///Users/himanshumathankar/Documents/CS/Website_MVA/prisma/schema.prisma), which defines full models for:
+1. Review the Prisma schema in [`prisma/schema.prisma`](file:///Users/himanshumathankar/Developer/LUmentor/prisma/schema.prisma), which defines full models for:
    - `User`, `Role`, `AuditLog`
    - `Branch`, `Subject`, `Package`
    - `Mentor`, `PayrollPlan`, `PayrollBatch`, `Payslip`, `Penalty`
@@ -191,7 +191,7 @@ Out of the box, the app uses an atomic, transactional JSON store (`data/app-db.j
    ```
 3. Run Prisma migration:
    ```bash
-   npx prisma migrate dev --name init_mva_production
+   npx prisma migrate dev --name init_lumentor_production
    ```
 4. Generate the Prisma client:
    ```bash

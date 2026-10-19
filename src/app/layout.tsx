@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Apex Operations, Scheduling & Payroll - Classcard Integrated',
-  description: 'Enterprise operational scheduling, multi-model mentor payroll calculation, attendance verification, and Classcard synchronization management system.',
+  title: 'LUmentor - Operations, Scheduling & Mentor Payroll Management',
+  description: 'LUmentor enterprise operational scheduling, multi-model mentor payroll calculation, attendance verification, and Classcard synchronization platform.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

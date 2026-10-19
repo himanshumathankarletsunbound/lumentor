@@ -55,7 +55,7 @@ export function PayslipViewer({
         {/* Company Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
           <div>
-            <h2 className="text-xl font-bold text-slate-900 tracking-tight">Apex Academy & Mentorship</h2>
+            <h2 className="text-xl font-bold text-slate-900 tracking-tight">LUmentor Education & Mentorship</h2>
             <p className="text-xs text-slate-500 mt-0.5">Educational Services & Scheduling Management System</p>
             <p className="text-xs text-slate-400 mt-1">Branch Campus: {payslip.branchName}</p>
           </div>
@@ -192,7 +192,7 @@ export function PayslipViewer({
 
         {/* Footer Audit Note */}
         <div className="text-[10px] text-slate-400 border-t border-slate-100 pt-3 text-center">
-          Generated automatically by Apex Educational Management System • Immutable calculation snapshot.
+          Generated automatically by LUmentor Management System • Immutable calculation snapshot.
         </div>
       </div>
     </Modal>

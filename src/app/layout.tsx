@@ -23,8 +23,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col bg-slate-50 text-slate-800">
+      <body
+        className="min-h-full flex flex-col bg-slate-50 text-slate-800"
+        suppressHydrationWarning
+      >
         <RootProvider>{children}</RootProvider>
       </body>
     </html>

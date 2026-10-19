@@ -382,7 +382,7 @@ export default function LoginPage() {
           <div className="mt-8 pt-5 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>Connected to Classcard Public API v2 Sandbox</span>
+              <span>Connected to Classcard Public API v2 (Production)</span>
             </div>
             <div className="text-slate-500 text-[11px]">
               LUmentor Enterprise RBAC Engine

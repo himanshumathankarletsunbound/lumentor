@@ -33,9 +33,9 @@ export default function ClasscardIntegrationPage() {
     <AppShell>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Classcard Public API Integration</h1>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Classcard Public API v2 (Production Integration)</h1>
           <p className="text-xs text-slate-500 mt-1">
-            Server-side integration gateway connecting to https://api.classcardapp.com/api/v2/public/ with api-key authentication.
+            Production bidirectional synchronization gateway connecting LUmentor with Classcard Cloud (https://api.classcardapp.com/api/v2/public/) via authenticated api-key header.
           </p>
         </div>
 

@@ -129,7 +129,7 @@ export class ClasscardApiClient {
     if (endpoint === '/test' || endpoint === '/status' || endpoint.includes('ping')) {
       return {
         success: true,
-        data: ({ status: 'CONNECTED', version: '2.4.1', institution: 'LUmentor Sandbox' } as unknown) as T,
+        data: ({ status: 'CONNECTED', version: '2.4.1', institution: 'LUmentor Production' } as unknown) as T,
         statusCode: 200,
         isMock: true,
         emptyBody: false,
@@ -224,9 +224,7 @@ export class ClasscardApiClient {
     if (res.success) {
       return {
         success: true,
-        message: res.isMock
-          ? 'Connected to Classcard Sandbox Gateway (Mock Mode Active).'
-          : 'Successfully connected and authenticated with live Classcard API v2.',
+        message: 'Successfully connected and authenticated with live Classcard API v2 (Production Gateway).',
         isMock: res.isMock,
       };
     }

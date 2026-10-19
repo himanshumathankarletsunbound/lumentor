@@ -249,3 +249,23 @@ export interface AuditEvent {
   ipAddress?: string;
   branchId?: string;
 }
+
+export type CustomFieldEntityType = 'STUDENT' | 'MENTOR' | 'CLASS' | 'LEAD';
+export type CustomFieldType = 'TEXT' | 'NUMBER' | 'BOOLEAN' | 'SELECT' | 'DATE';
+
+export interface CustomFieldDefinition {
+  id: string;
+  name: string;
+  key: string;
+  entityType: CustomFieldEntityType;
+  fieldType: CustomFieldType;
+  classcardFieldKey?: string;
+  classcardEndpoint?: string;
+  isRequired: boolean;
+  options?: string[];
+  defaultValue?: string;
+  description?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}

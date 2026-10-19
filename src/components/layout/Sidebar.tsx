@@ -243,6 +243,12 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
           module: 'classcard_integration',
         },
         {
+          name: 'Custom Fields & Mappings',
+          href: '/admin/custom-fields',
+          icon: <Sliders className="w-4 h-4" />,
+          module: 'settings',
+        },
+        {
           name: 'Audit Logs',
           href: '/admin/audit-logs',
           icon: <History className="w-4 h-4" />,

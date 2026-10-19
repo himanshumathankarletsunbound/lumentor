@@ -8,6 +8,8 @@ import {
   Invoice,
   Payment,
   AuditEvent,
+  CustomFieldDefinition,
+  CustomFieldEntityType,
 } from '../types/models';
 import {
   PayrollPlan,
@@ -40,6 +42,7 @@ import {
   INITIAL_CLASSCARD_CONFIG,
   CLASSCARD_ENDPOINTS_REGISTRY,
   SEED_SYNC_JOBS,
+  SEED_CUSTOM_FIELDS,
 } from './seedData';
 
 interface AppDatabase {
@@ -63,6 +66,7 @@ interface AppDatabase {
   classcardConfig: ClasscardConfig;
   classcardEndpoints: ClasscardEndpointInfo[];
   syncJobs: SyncJob[];
+  customFields: CustomFieldDefinition[];
 }
 
 function getNodeFsAndPath() {
@@ -112,6 +116,7 @@ class DataStore {
       classcardConfig: { ...INITIAL_CLASSCARD_CONFIG },
       classcardEndpoints: [...CLASSCARD_ENDPOINTS_REGISTRY],
       syncJobs: [...SEED_SYNC_JOBS],
+      customFields: [...SEED_CUSTOM_FIELDS],
     };
   }
 
@@ -693,6 +698,55 @@ class DataStore {
   public addSyncJob(job: SyncJob): void {
     this.data.syncJobs.unshift(job);
     this.saveToDisk();
+  }
+
+  // --- Custom Fields & Mappings ---
+  public getCustomFields(entityType?: CustomFieldEntityType): CustomFieldDefinition[] {
+    if (!this.data.customFields) {
+      this.data.customFields = [...SEED_CUSTOM_FIELDS];
+    }
+    if (!entityType || (entityType as string) === 'ALL') return this.data.customFields;
+    return this.data.customFields.filter((cf) => cf.entityType === entityType);
+  }
+
+  public getCustomFieldById(id: string): CustomFieldDefinition | undefined {
+    return this.getCustomFields().find((cf) => cf.id === id);
+  }
+
+  public saveCustomField(field: CustomFieldDefinition): CustomFieldDefinition {
+    const list = this.getCustomFields();
+    const idx = list.findIndex((cf) => cf.id === field.id);
+    if (idx === -1) {
+      list.push(field);
+    } else {
+      list[idx] = field;
+    }
+    this.data.customFields = list;
+    this.saveToDisk();
+    return field;
+  }
+
+  public createCustomField(field: Omit<CustomFieldDefinition, 'id' | 'createdAt' | 'updatedAt'>): CustomFieldDefinition {
+    const now = new Date().toISOString();
+    const newField: CustomFieldDefinition = {
+      ...field,
+      id: `cf-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.saveCustomField(newField);
+    return newField;
+  }
+
+  public deleteCustomField(id: string): boolean {
+    const list = this.getCustomFields();
+    const filtered = list.filter((cf) => cf.id !== id);
+    if (filtered.length !== list.length) {
+      this.data.customFields = filtered;
+      this.saveToDisk();
+      return true;
+    }
+    return false;
   }
 
   // --- Reset to seed data ---

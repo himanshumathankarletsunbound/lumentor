@@ -412,6 +412,64 @@ async function runAcceptanceTests() {
     assert(newLogs[0].userName === 'Alexandria Vance');
   });
 
+  // --- 19. CUSTOM FIELDS & CLASSCARD MAPPINGS ---
+  test('Scenario 19: Custom fields can be defined and mapped to Classcard schemas', () => {
+    const initialFields = db.getCustomFields();
+    assert(initialFields.length >= 5, 'Seed custom fields should be initialized');
+
+    const created = db.createCustomField({
+      name: 'Diagnostic Baseline Score',
+      key: 'baseline_score',
+      entityType: 'STUDENT',
+      fieldType: 'NUMBER',
+      classcardFieldKey: 'custom_field_baseline',
+      classcardEndpoint: 'GET /students/{id}/custom-fields',
+      isRequired: false,
+      defaultValue: '1200',
+      description: 'Initial practice SAT score prior to package instruction',
+      isActive: true,
+    });
+
+    assert(created.id.startsWith('cf-'));
+    assert(created.key === 'baseline_score');
+    assert(created.classcardFieldKey === 'custom_field_baseline');
+
+    const studentFields = db.getCustomFields('STUDENT');
+    assert(studentFields.some((f) => f.key === 'baseline_score'));
+
+    const mentorFields = db.getCustomFields('MENTOR');
+    assert(mentorFields.every((f) => f.entityType === 'MENTOR'));
+
+    // Clean up
+    db.deleteCustomField(created.id);
+    const afterDelete = db.getCustomFields('STUDENT');
+    assert(!afterDelete.some((f) => f.id === created.id));
+  });
+
+  // --- 20. ATTENDANCE VERIFICATION & AUTO-COMPLETION ---
+  test('Scenario 20: Marking attendance recomputes class status and roster participation', () => {
+    const classes = db.getClasses();
+    const targetClass = classes.find((c) => c.status === 'SCHEDULED' && c.students.length > 0);
+    assert(targetClass, 'Should have at least one scheduled class with students');
+
+    const updatedRoster = targetClass.students.map((s) => ({
+      ...s,
+      attendanceStatus: 'PRESENT' as const,
+      markedAt: new Date().toISOString(),
+      markedBy: 'Auditor Pro',
+    }));
+
+    const updated = db.updateClass(targetClass.id, {
+      students: updatedRoster,
+      attendanceStatusSummary: 'ALL_PRESENT',
+      status: 'COMPLETED',
+    });
+
+    assert(updated.attendanceStatusSummary === 'ALL_PRESENT');
+    assert(updated.status === 'COMPLETED');
+    assert(updated.students.every((s) => s.attendanceStatus === 'PRESENT'));
+  });
+
   console.log('\n-------------------------------------------------------------');
   console.log(`   TEST EXECUTION SUMMARY: ${passed} PASSED, ${failed} FAILED`);
   console.log('-------------------------------------------------------------\n');

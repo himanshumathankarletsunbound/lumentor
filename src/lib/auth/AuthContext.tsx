@@ -8,6 +8,8 @@ import { hasPermission as checkPermission, canAccessModule } from './permissions
 interface AuthContextType {
   currentUser: CurrentUser;
   switchUser: (userId: string) => void;
+  login: (email: string, password?: string) => Promise<{ success: boolean; user?: CurrentUser; error?: string }>;
+  logout: () => void;
   availableUsers: CurrentUser[];
   selectedBranch: string; // 'ALL' or branchId
   setSelectedBranch: (branchId: string) => void;
@@ -40,6 +42,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const login = async (email: string, _password?: string): Promise<{ success: boolean; user?: CurrentUser; error?: string }> => {
+    const cleanEmail = email.trim().toLowerCase();
+    
+    // Quick role aliases
+    if (cleanEmail === 'admin' || cleanEmail === 'admin@academyapex.com') {
+      const adminUser = SEED_USERS.find((u) => u.role === 'ADMINISTRATOR') || SEED_USERS[0];
+      setCurrentUser(adminUser);
+      localStorage.setItem('classcard_mva_user_id', adminUser.id);
+      return { success: true, user: adminUser };
+    }
+
+    if (cleanEmail === 'ops' || cleanEmail === 'operations' || cleanEmail === 'operations@academyapex.com') {
+      const opsUser = SEED_USERS.find((u) => u.role === 'OPERATIONS') || SEED_USERS[1];
+      setCurrentUser(opsUser);
+      localStorage.setItem('classcard_mva_user_id', opsUser.id);
+      return { success: true, user: opsUser };
+    }
+
+    if (cleanEmail === 'mentor' || cleanEmail === 'elena.rostova@academyapex.com') {
+      const mentorUser = SEED_USERS.find((u) => u.role === 'MENTOR') || SEED_USERS[2];
+      setCurrentUser(mentorUser);
+      localStorage.setItem('classcard_mva_user_id', mentorUser.id);
+      return { success: true, user: mentorUser };
+    }
+
+    const matched = SEED_USERS.find(
+      (u) => u.email.toLowerCase() === cleanEmail || u.name.toLowerCase().includes(cleanEmail)
+    );
+
+    if (matched) {
+      setCurrentUser(matched);
+      localStorage.setItem('classcard_mva_user_id', matched.id);
+      return { success: true, user: matched };
+    }
+
+    return {
+      success: false,
+      error: 'Invalid credentials. Please select one of the demonstration personas or use a valid email.',
+    };
+  };
+
+  const logout = () => {
+    localStorage.removeItem('classcard_mva_user_id');
+    setCurrentUser(SEED_USERS[0]);
+  };
+
   const hasPerm = (module: PermissionModule, action: PermissionAction, branchId?: string) => {
     return checkPermission(currentUser, module, action, branchId || (selectedBranch !== 'ALL' ? selectedBranch : undefined));
   };
@@ -57,6 +105,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         currentUser,
         switchUser,
+        login,
+        logout,
         availableUsers: SEED_USERS,
         selectedBranch,
         setSelectedBranch,

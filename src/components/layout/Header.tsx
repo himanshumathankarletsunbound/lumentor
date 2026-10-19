@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Menu, Building2, Bell, RefreshCw } from 'lucide-react';
+import { Menu, Building2, Bell, RefreshCw, LogOut } from 'lucide-react';
 import { useAuth } from '../../lib/auth/AuthContext';
 import { RoleSwitcher } from './RoleSwitcher';
 import { SEED_BRANCHES } from '../../lib/db/seedData';
@@ -42,7 +42,7 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
       </div>
 
       {/* Header Actions */}
-      <div className="flex items-center gap-2.5 sm:gap-4">
+      <div className="flex items-center gap-2.5 sm:gap-3">
         {/* Quick Classcard Sync button */}
         <Link
           href="/admin/classcard-integration"
@@ -65,6 +65,15 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
 
         {/* Role Switcher Pill */}
         <RoleSwitcher />
+
+        {/* Sign Out / Login */}
+        <Link
+          href="/login"
+          title="Sign out / Switch account"
+          className="p-2 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
+        >
+          <LogOut className="w-4 h-4" />
+        </Link>
       </div>
     </header>
   );

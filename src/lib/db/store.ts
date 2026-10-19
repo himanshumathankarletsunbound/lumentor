@@ -45,7 +45,7 @@ import {
   SEED_CUSTOM_FIELDS,
 } from './seedData';
 
-interface AppDatabase {
+export interface AppDatabase {
   roles: UserRole[];
   users: CurrentUser[];
   branches: Branch[];
@@ -747,6 +747,17 @@ class DataStore {
       return true;
     }
     return false;
+  }
+
+  // --- Client/Server Hydration Snapshot ---
+  public getSnapshot(): AppDatabase {
+    return this.data;
+  }
+
+  public initClient(snapshot: AppDatabase): void {
+    if (snapshot) {
+      this.data = snapshot;
+    }
   }
 
   // --- Reset to seed data ---

@@ -31,6 +31,7 @@ import {
   ChevronDown,
   Layers,
   ChevronRight,
+  LogOut,
 } from 'lucide-react';
 import { cn } from '../../lib/utils/cn';
 
@@ -49,7 +50,7 @@ interface NavGroup {
 
 export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const pathname = usePathname();
-  const { canAccess, isMentor } = useAuth();
+  const { canAccess, isMentor, currentUser } = useAuth();
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
   const toggleGroup = (name: string) => {
@@ -366,8 +367,8 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
           })}
         </div>
 
-        {/* Sync Status Badge in Footer */}
-        <div className="p-3 border-t border-slate-800/80 bg-slate-950/40">
+        {/* Sync Status & User Account in Footer */}
+        <div className="p-3 border-t border-slate-800/80 bg-slate-950/40 space-y-2.5">
           <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between text-xs">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -378,6 +379,25 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
               className="text-indigo-400 hover:text-indigo-300 text-[11px] font-medium"
             >
               Sync Active
+            </Link>
+          </div>
+
+          <div className="flex items-center justify-between px-1 text-xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-6 h-6 rounded-full bg-indigo-600/30 text-indigo-400 font-bold flex items-center justify-center text-[10px] shrink-0">
+                {currentUser.name[0]}
+              </div>
+              <div className="truncate">
+                <p className="font-semibold text-slate-200 text-[11px] truncate">{currentUser.name}</p>
+                <p className="text-[10px] text-slate-500 capitalize">{currentUser.role.toLowerCase()}</p>
+              </div>
+            </div>
+            <Link
+              href="/login"
+              title="Sign Out / Switch Persona"
+              className="text-slate-400 hover:text-rose-400 p-1.5 rounded-md hover:bg-slate-800 transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5" />
             </Link>
           </div>
         </div>

@@ -470,6 +470,9 @@ async function runAcceptanceTests() {
     assert(updated.students.every((s) => s.attendanceStatus === 'PRESENT'));
   });
 
+  // Post-test cleanup to keep disk store in pristine seed state
+  db.resetToSeed();
+
   console.log('\n-------------------------------------------------------------');
   console.log(`   TEST EXECUTION SUMMARY: ${passed} PASSED, ${failed} FAILED`);
   console.log('-------------------------------------------------------------\n');

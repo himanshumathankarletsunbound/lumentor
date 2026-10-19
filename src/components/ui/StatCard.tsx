@@ -38,7 +38,9 @@ export function StatCard({
       <div className="flex items-start justify-between">
         <div>
           <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">{title}</p>
-          <p className="text-2xl font-bold text-slate-900 mt-1.5 tracking-tight">{value}</p>
+          <p className="text-2xl font-bold text-slate-900 mt-1.5 tracking-tight" suppressHydrationWarning>
+            {value}
+          </p>
         </div>
         {icon && (
           <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center shrink-0', iconColors[color])}>

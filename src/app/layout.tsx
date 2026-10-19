@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { RootProvider } from '../components/providers/RootProvider';
+import { db } from '../lib/db/store';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -19,6 +20,8 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const snapshot = db.getSnapshot();
+
   return (
     <html
       lang="en"
@@ -29,7 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         className="min-h-full flex flex-col bg-slate-50 text-slate-800"
         suppressHydrationWarning
       >
-        <RootProvider>{children}</RootProvider>
+        <RootProvider initialSnapshot={snapshot}>{children}</RootProvider>
       </body>
     </html>
   );

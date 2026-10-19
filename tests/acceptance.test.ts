@@ -1,3 +1,5 @@
+(process.env as Record<string, string | undefined>).NODE_ENV = 'test';
+
 import assert from 'assert';
 import { db } from '../src/lib/db/store';
 import { payrollEngine } from '../src/lib/payroll/engine';
@@ -8,6 +10,9 @@ import { SEED_USERS } from '../src/lib/db/seedData';
 import { formatCurrency, roundToTwoDecimals } from '../src/lib/utils/formatters';
 
 async function runAcceptanceTests() {
+  // Ensure test starts with clean seed data
+  db.resetToSeed();
+
   console.log('\n=============================================================');
   console.log('   RUNNING AUTOMATED ACCEPTANCE & VERIFICATION TEST SUITE    ');
   console.log('=============================================================\n');
@@ -470,8 +475,8 @@ async function runAcceptanceTests() {
     assert(updated.students.every((s) => s.attendanceStatus === 'PRESENT'));
   });
 
-  // Post-test cleanup to keep disk store in pristine seed state
-  db.resetToSeed();
+  // Post-test cleanup: purge all demo data to keep disk store 100% production-ready
+  db.purgeDemoData();
 
   console.log('\n-------------------------------------------------------------');
   console.log(`   TEST EXECUTION SUMMARY: ${passed} PASSED, ${failed} FAILED`);

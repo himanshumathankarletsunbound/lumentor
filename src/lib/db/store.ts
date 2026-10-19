@@ -765,6 +765,22 @@ class DataStore {
     this.data = this.getDefaultState();
     this.saveToDisk();
   }
+
+  // --- Purge Demo Data for Production API Mode ---
+  public purgeDemoData(): void {
+    this.data.students = [];
+    this.data.mentors = [];
+    this.data.classes = [];
+    this.data.invoices = [];
+    this.data.penalties = [];
+    this.data.adjustments = [];
+    this.data.payrollBatches = [];
+    this.data.payslips = [];
+    this.data.payments = [];
+    this.data.syncJobs = [];
+    this.data.classcardConfig.useMockMode = false;
+    this.saveToDisk();
+  }
 }
 
 export const db = new DataStore();

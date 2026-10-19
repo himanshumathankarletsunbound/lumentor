@@ -24,7 +24,13 @@ import { formatTime } from '../../lib/utils/formatters';
 
 export function UnifiedCalendar({ initialClasses }: { initialClasses?: ClassEvent[] }) {
   const [classes, setClasses] = useState<ClassEvent[]>(initialClasses || db.getClasses());
-  const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 9, 15)); // Default to Oct 2026 for seed data
+  const [currentDate, setCurrentDate] = useState<Date>(() => {
+    const list = initialClasses || db.getClasses();
+    if (list.length > 0) {
+      return new Date(list[0].startTime);
+    }
+    return new Date('2026-10-15T00:00:00Z');
+  });
   const [viewMode, setViewMode] = useState<CalendarViewMode>('month');
 
   // Filters
@@ -38,8 +44,12 @@ export function UnifiedCalendar({ initialClasses }: { initialClasses?: ClassEven
   const [today, setToday] = useState<Date | null>(null);
 
   React.useEffect(() => {
-    setToday(new Date());
-  }, []);
+    const now = new Date();
+    setToday(now);
+    if (!initialClasses && db.getClasses().length === 0) {
+      setCurrentDate(now);
+    }
+  }, [initialClasses]);
 
   const branches = db.getBranches();
   const subjects = db.getSubjects();

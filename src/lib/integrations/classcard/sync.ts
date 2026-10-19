@@ -20,9 +20,18 @@ export async function runClasscardSync(jobType: SyncJobType = 'ALL'): Promise<Sy
     // 1. Sync Students
     if (jobType === 'ALL' || jobType === 'STUDENTS') {
       const res = await classcardClient.getStudents();
-      if (res.success && Array.isArray(res.data)) {
-        job.logSummary.push(`Fetched ${res.data.length} student records from Classcard.`);
-        for (const item of res.data as Array<Record<string, unknown>>) {
+      const rawData = res.data;
+      const studentItems: Array<Record<string, unknown>> = Array.isArray(rawData)
+        ? (rawData as Array<Record<string, unknown>>)
+        : Array.isArray((rawData as any)?.data)
+        ? (rawData as any).data
+        : Array.isArray((rawData as any)?.students)
+        ? (rawData as any).students
+        : [];
+
+      if (res.success && studentItems.length > 0) {
+        job.logSummary.push(`Fetched ${studentItems.length} student records from Classcard Production API.`);
+        for (const item of studentItems) {
           job.recordsProcessed++;
           const extId = String(item.id || '');
           const email = String(item.email || '').toLowerCase();
@@ -65,9 +74,18 @@ export async function runClasscardSync(jobType: SyncJobType = 'ALL'): Promise<Sy
     // 2. Sync Staff / Mentors
     if (jobType === 'ALL' || jobType === 'STAFF') {
       const res = await classcardClient.getStaffList();
-      if (res.success && Array.isArray(res.data)) {
-        job.logSummary.push(`Fetched ${res.data.length} staff records from Classcard.`);
-        for (const item of res.data as Array<Record<string, unknown>>) {
+      const rawData = res.data;
+      const staffItems: Array<Record<string, unknown>> = Array.isArray(rawData)
+        ? (rawData as Array<Record<string, unknown>>)
+        : Array.isArray((rawData as any)?.data)
+        ? (rawData as any).data
+        : Array.isArray((rawData as any)?.staff)
+        ? (rawData as any).staff
+        : [];
+
+      if (res.success && staffItems.length > 0) {
+        job.logSummary.push(`Fetched ${staffItems.length} staff records from Classcard Production API.`);
+        for (const item of staffItems) {
           job.recordsProcessed++;
           const extId = String(item.id || '');
           const email = String(item.email || '').toLowerCase();
@@ -83,7 +101,7 @@ export async function runClasscardSync(jobType: SyncJobType = 'ALL'): Promise<Sy
             });
             job.recordsUpdated++;
           } else {
-            const names = String(item.name || 'Staff Member').split(' ');
+            const names = String(item.name || `${item.first_name || 'Staff'} ${item.last_name || ''}`).trim().split(' ');
             db.createMentor({
               firstName: names[0] || 'Staff',
               lastName: names.slice(1).join(' ') || 'Member',
@@ -108,9 +126,18 @@ export async function runClasscardSync(jobType: SyncJobType = 'ALL'): Promise<Sy
     // 3. Sync Events / Calendar
     if (jobType === 'ALL' || jobType === 'EVENTS') {
       const res = await classcardClient.getEvents();
-      if (res.success && Array.isArray(res.data)) {
-        job.logSummary.push(`Synchronized ${res.data.length} scheduled class events.`);
-        for (const item of res.data as Array<Record<string, unknown>>) {
+      const rawData = res.data;
+      const eventItems: Array<Record<string, unknown>> = Array.isArray(rawData)
+        ? (rawData as Array<Record<string, unknown>>)
+        : Array.isArray((rawData as any)?.data)
+        ? (rawData as any).data
+        : Array.isArray((rawData as any)?.events)
+        ? (rawData as any).events
+        : [];
+
+      if (res.success && eventItems.length > 0) {
+        job.logSummary.push(`Synchronized ${eventItems.length} scheduled class events from Classcard Production.`);
+        for (const item of eventItems) {
           job.recordsProcessed++;
           const extId = String(item.id || '');
           const existing = db.getClasses().find((c) => c.externalId === extId);

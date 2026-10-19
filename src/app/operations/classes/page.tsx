@@ -18,8 +18,26 @@ export default function ClassesPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [branchFilter, setBranchFilter] = useState('ALL');
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const branches = db.getBranches();
+
+  const handleSyncEvents = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await fetch('/api/classcard/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobType: 'EVENTS' }),
+      });
+      const data = await res.json();
+      if (data.status === 'COMPLETED' || data.success) {
+        setClasses(db.getClasses());
+      }
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const filtered = useMemo(() => {
     return classes.filter((c) => {
@@ -55,10 +73,18 @@ export default function ClassesPage() {
               Directory of scheduled, completed, and cancelled instructional sessions.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <span className="text-xs text-slate-500 font-medium">
               Showing {filtered.length} of {classes.length} sessions
             </span>
+            <Button
+              variant="outline"
+              size="sm"
+              isLoading={isSyncing}
+              onClick={handleSyncEvents}
+            >
+              Sync Events from Classcard
+            </Button>
           </div>
         </div>
 

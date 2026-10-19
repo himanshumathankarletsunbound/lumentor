@@ -41,6 +41,41 @@ export function ExecutiveDashboardView() {
   const [selectedEvent, setSelectedEvent] = useState<ClassEvent | null>(null);
   const [selectedPayslip, setSelectedPayslip] = useState<Payslip | null>(null);
 
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncNotice, setSyncNotice] = useState<{ success: boolean; message: string } | null>(null);
+
+  const handleLiveSync = async () => {
+    setIsSyncing(true);
+    setSyncNotice(null);
+    try {
+      const res = await fetch('/api/classcard/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobType: 'ALL' }),
+      });
+      const data = await res.json();
+      if (data.status === 'COMPLETED' || data.success) {
+        setSyncNotice({
+          success: true,
+          message: `Synchronized ${data.recordsProcessed || 0} production records from Classcard.`,
+        });
+        window.location.reload();
+      } else {
+        setSyncNotice({
+          success: false,
+          message: data.errorMessage || data.error || 'Failed to sync with Classcard API.',
+        });
+      }
+    } catch (err: unknown) {
+      setSyncNotice({
+        success: false,
+        message: err instanceof Error ? err.message : 'Network error during sync',
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const branches = db.getBranches();
   const mentors = db.getMentors(selectedBranch);
   const students = db.getStudents(selectedBranch);
@@ -61,8 +96,8 @@ export function ExecutiveDashboardView() {
   const lateCancelledClasses = classes.filter((c) => c.status === 'LATE_CANCELLED').length;
   const unmarkedClasses = classes.filter((c) => c.attendanceStatusSummary === 'UNMARKED').length;
 
-  const attendanceRate = totalClasses > 0 ? (completedClasses / totalClasses) * 100 : 96.5;
-  const cancellationRate = totalClasses > 0 ? (cancelledClasses / totalClasses) * 100 : 3.5;
+  const attendanceRate = totalClasses > 0 ? (completedClasses / totalClasses) * 100 : 0;
+  const cancellationRate = totalClasses > 0 ? (cancelledClasses / totalClasses) * 100 : 0;
 
   const totalPayrollExpenditure = batches.reduce((acc, b) => acc + b.totalNet, 0);
   const pendingBatches = batches.filter((b) => b.status === 'SUBMITTED' || b.status === 'DRAFT').length;
@@ -82,14 +117,25 @@ export function ExecutiveDashboardView() {
   }, [branches, classes]);
 
   const compensationSegments = useMemo(() => {
-    return [
-      { label: 'Hybrid Plan (Base + Bonus)', value: 45, color: '#4f46e5' },
-      { label: 'Per-Class Standard', value: 25, color: '#0284c7' },
-      { label: 'Duration Hourly ($50/hr)', value: 15, color: '#10b981' },
-      { label: 'Per-Student Group', value: 10, color: '#8b5cf6' },
-      { label: 'Fixed Salary / Rev Share', value: 5, color: '#f59e0b' },
-    ];
-  }, []);
+    const plans = db.getPayrollPlans();
+    if (mentors.length === 0) {
+      return plans.slice(0, 5).map((p, idx) => ({
+        label: p.name,
+        value: idx === 0 ? 100 : 0,
+        color: ['#4f46e5', '#0284c7', '#10b981', '#8b5cf6', '#f59e0b'][idx % 5],
+      }));
+    }
+    const computed = plans.map((p, idx) => {
+      const count = mentors.filter((m) => m.payrollPlanId === p.id).length;
+      const pct = Math.round((count / mentors.length) * 100);
+      return {
+        label: p.name,
+        value: pct,
+        color: ['#4f46e5', '#0284c7', '#10b981', '#8b5cf6', '#f59e0b'][idx % 5],
+      };
+    }).filter((s) => s.value > 0);
+    return computed.length > 0 ? computed : [{ label: 'Standard Plan', value: 100, color: '#4f46e5' }];
+  }, [mentors]);
 
   const upcomingClasses = classes
     .filter((c) => c.status === 'SCHEDULED')
@@ -149,6 +195,57 @@ export function ExecutiveDashboardView() {
         </div>
       </div>
 
+      {/* Production Live Sync Alert Banner */}
+      {syncNotice && (
+        <div className={`p-4 rounded-xl border text-xs flex items-center justify-between ${
+          syncNotice.success
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+            : 'bg-rose-50 border-rose-200 text-rose-800'
+        }`}>
+          <span>{syncNotice.message}</span>
+          <Button variant="ghost" size="sm" onClick={() => setSyncNotice(null)}>Dismiss</Button>
+        </div>
+      )}
+
+      {totalStudents === 0 && totalClasses === 0 && (
+        <div className="rounded-2xl border border-indigo-200 bg-gradient-to-r from-indigo-50/80 via-white to-sky-50/80 p-5 sm:p-6 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[11px] font-bold">
+                  <RefreshCw className="w-3.5 h-3.5 text-indigo-600" />
+                  Production API Gateway
+                </span>
+                <span className="text-xs text-slate-500 font-medium">Demo Data Purged</span>
+              </div>
+              <h3 className="text-base font-bold text-slate-900">
+                Classcard Cloud Synchronization Required
+              </h3>
+              <p className="text-xs text-slate-600 max-w-2xl leading-relaxed">
+                All mock entities have been removed. Connect your production Classcard API key to synchronize students, faculty staff, and scheduled classes directly into LUmentor.
+              </p>
+            </div>
+            <div className="flex items-center gap-2.5 shrink-0">
+              <Link href="/admin/classcard-integration">
+                <Button variant="outline" size="sm" className="bg-white">
+                  Classcard Settings
+                </Button>
+              </Link>
+              <Button
+                variant="primary"
+                size="sm"
+                className="bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/20"
+                onClick={handleLiveSync}
+                isLoading={isSyncing}
+                leftIcon={<RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />}
+              >
+                Sync Production Now
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Primary KPI Cards Grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
         <StatCard
@@ -174,14 +271,14 @@ export function ExecutiveDashboardView() {
         />
         <StatCard
           title="Attendance Rate"
-          value={formatPercentage(attendanceRate)}
+          value={totalClasses > 0 ? formatPercentage(attendanceRate) : '0%'}
           icon={<Percent className="w-5 h-5" />}
           color="emerald"
-          trend={{ value: '1.4%', isPositive: true, label: 'vs last cycle' }}
+          subtitle={totalClasses > 0 ? 'Verified class roster' : 'Awaiting sync'}
         />
         <StatCard
           title="Cancellation Rate"
-          value={formatPercentage(cancellationRate)}
+          value={totalClasses > 0 ? formatPercentage(cancellationRate) : '0%'}
           icon={<AlertTriangle className="w-5 h-5" />}
           color={cancellationRate > 5 ? 'rose' : 'amber'}
           subtitle={`${lateCancelledClasses} late cancellations`}

@@ -32,9 +32,9 @@ import { Payslip } from '../../lib/types/payroll';
 
 export function MentorDashboardView() {
   const { currentUser } = useAuth();
-  const mentor = db.getMentors().find((m) => m.id === currentUser.mentorId) || db.getMentors()[0];
+  const mentor = db.getMentors().find((m) => m.id === currentUser.mentorId) || db.getMentors()[0] || null;
   const plans = db.getPayrollPlans();
-  const mentorPlan = plans.find((p) => p.id === mentor.payrollPlanId) || plans[0];
+  const mentorPlan = mentor ? (plans.find((p) => p.id === mentor.payrollPlanId) || plans[0]) : plans[0];
 
   const [selectedEvent, setSelectedEvent] = useState<ClassEvent | null>(null);
   const [selectedPayslip, setSelectedPayslip] = useState<Payslip | null>(null);
@@ -43,12 +43,22 @@ export function MentorDashboardView() {
   const [disputeNote, setDisputeNote] = useState('');
 
   // Mentor's classes
-  const classes = db.getClasses({ mentorId: mentor.id });
+  const classes = mentor ? db.getClasses({ mentorId: mentor.id }) : [];
   const completedClasses = classes.filter((c) => c.status === 'COMPLETED');
   const upcomingClasses = classes.filter((c) => c.status === 'SCHEDULED');
 
   // Current Cycle Estimate (Oct 16 - Oct 31, 2026)
   const currentEstimate = useMemo(() => {
+    if (!mentor) {
+      return {
+        grossEarnings: 0,
+        netPayable: 0,
+        eligibleDurationMinutes: 0,
+        appliedPenaltyTotal: 0,
+        appliedPenaltyIds: [],
+        breakdown: [],
+      };
+    }
     return payrollEngine.calculateMentorPayroll(
       mentor,
       mentorPlan,
@@ -60,11 +70,11 @@ export function MentorDashboardView() {
   }, [mentor, mentorPlan, classes]);
 
   // Mentor's penalties and disputes
-  const penalties = db.getPenalties(mentor.id);
+  const penalties = mentor ? db.getPenalties(mentor.id) : [];
   const disputes = penalties.filter((p) => p.disputeStatus === 'DISPUTED');
 
   // Mentor's finalized payslips
-  const payslips = db.getPayslips(mentor.id);
+  const payslips = mentor ? db.getPayslips(mentor.id) : [];
   const latestPayslip = payslips[0] || null;
 
   const handleOpenDispute = (penId: string) => {
@@ -96,8 +106,7 @@ export function MentorDashboardView() {
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5">
           <div className="flex items-start gap-4">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-500 to-indigo-600 flex items-center justify-center text-white font-extrabold text-xl shadow-lg shadow-emerald-900/40 shrink-0">
-              {mentor.firstName[0]}
-              {mentor.lastName[0]}
+              {mentor ? `${mentor.firstName[0]}${mentor.lastName[0]}` : 'F'}
             </div>
             <div>
               <div className="flex items-center gap-2 mb-1">
@@ -105,14 +114,14 @@ export function MentorDashboardView() {
                   Faculty Member Portal
                 </span>
                 <Badge variant="success" size="sm">
-                  {mentorPlan.name}
+                  {mentorPlan?.name || 'Standard Plan'}
                 </Badge>
               </div>
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-                Welcome back, {mentor.firstName}!
+                {mentor ? `Welcome back, ${mentor.firstName}!` : 'Faculty Member Portal'}
               </h1>
               <p className="text-xs text-slate-300 mt-1">
-                Primary Campus: {mentor.branchName || 'Manhattan Campus'} • Contract Model: {mentorPlan.compensationModel}
+                {mentor ? `Primary Campus: ${mentor.branchName || 'Manhattan Campus'} • Contract Model: ${mentorPlan.compensationModel}` : 'Sync your Classcard staff roster to populate assigned faculty members.'}
               </p>
             </div>
           </div>

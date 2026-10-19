@@ -12,13 +12,17 @@ export interface ClasscardApiResponse<T> {
 export class ClasscardApiClient {
   private baseUrl: string;
   private apiKey: string;
-  private useMockMode: boolean;
+  private useMockMode: boolean = false;
+
+  private isHermeticTestMode(): boolean {
+    return process.env.NODE_ENV === 'test' && !process.env.CLASSCARD_API_KEY;
+  }
 
   constructor() {
     const config = db.getClasscardConfig();
-    this.baseUrl = config.baseUrl.replace(/\/+$/, '');
+    this.baseUrl = (config.baseUrl || 'https://api.classcardapp.com/api/v2/public/').replace(/\/+$/, '');
     this.apiKey = process.env.CLASSCARD_API_KEY || config.apiKey;
-    this.useMockMode = config.useMockMode || !this.apiKey;
+    this.useMockMode = false;
   }
 
   /**
@@ -30,16 +34,21 @@ export class ClasscardApiClient {
     body?: unknown,
     retries: number = 2
   ): Promise<ClasscardApiResponse<T>> {
-    // If mock mode is enabled or API key is not configured, return realistic simulated response
-    if (this.useMockMode) {
+    const config = db.getClasscardConfig();
+    const effectiveApiKey = process.env.CLASSCARD_API_KEY || config.apiKey;
+    const effectiveBaseUrl = (config.baseUrl || 'https://api.classcardapp.com/api/v2/public/').replace(/\/+$/, '');
+    const isMock = this.isHermeticTestMode() || config.useMockMode;
+
+    // If mock mode is enabled or running in test runner without live key, return simulated response
+    if (isMock) {
       return this.handleMockRequest<T>(endpoint, method, body);
     }
 
     const cleanPath = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-    const url = `${this.baseUrl}${cleanPath}`;
+    const url = `${effectiveBaseUrl}${cleanPath}`;
 
     const headers: Record<string, string> = {
-      'api-key': this.apiKey,
+      'api-key': effectiveApiKey,
       Accept: 'application/json',
     };
 
@@ -219,18 +228,28 @@ export class ClasscardApiClient {
   // --- Specific Documented Endpoint Implementations ---
 
   public async testConnection(): Promise<{ success: boolean; message: string; isMock: boolean }> {
-    // In live mode, we hit a light GET endpoint such as categories or items
-    const res = await this.request<{ status?: string }>('/categories', 'GET');
+    const config = db.getClasscardConfig();
+    const isMock = this.isHermeticTestMode() || config.useMockMode;
+
+    if (isMock) {
+      return {
+        success: true,
+        message: 'Successfully verified Classcard API integration gateway.',
+        isMock: true,
+      };
+    }
+    // In live production mode, hit documented GET /students
+    const res = await this.request<unknown[]>('/students', 'GET');
     if (res.success) {
       return {
         success: true,
-        message: 'Successfully connected and authenticated with live Classcard API v2 (Production Gateway).',
-        isMock: res.isMock,
+        message: 'Successfully connected and authenticated with live Classcard Production Cloud API.',
+        isMock: false,
       };
     }
     return {
       success: false,
-      message: res.errorMessage || 'Failed to authenticate with Classcard API.',
+      message: res.errorMessage || 'Failed to authenticate with live Classcard API.',
       isMock: false,
     };
   }

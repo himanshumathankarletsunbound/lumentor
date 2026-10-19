@@ -241,40 +241,67 @@ export function OperationsDashboardView() {
 
           {activeTab === 'schedule' && (
             <div className="divide-y divide-slate-100 text-xs">
-              {classes.map((cls) => (
-                <div
-                  key={cls.id}
-                  onClick={() => setSelectedEvent(cls)}
-                  className="p-4 hover:bg-slate-50/70 transition-colors cursor-pointer flex items-center justify-between gap-4"
-                >
-                  <div className="min-w-0">
-                    <p className="font-bold text-slate-900 text-sm truncate">{cls.title}</p>
-                    <p className="text-slate-500 text-xs mt-0.5 truncate">
-                      {formatDate(cls.startTime)} at {formatTime(cls.startTime)} ({cls.durationMinutes} mins) • {cls.mentorName} • {cls.branchName}
-                    </p>
+              {classes.length === 0 ? (
+                <div className="p-12 text-center">
+                  <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3">
+                    <Calendar className="w-6 h-6" />
                   </div>
-                  <Badge
-                    variant={
-                      cls.status === 'COMPLETED'
-                        ? 'success'
-                        : cls.status === 'CANCELLED' || cls.status === 'LATE_CANCELLED'
-                        ? 'danger'
-                        : 'info'
-                    }
-                    size="sm"
-                    dot
-                  >
-                    {cls.status}
-                  </Badge>
+                  <p className="font-bold text-slate-800 text-sm">No Scheduled Classes</p>
+                  <p className="text-slate-400 text-xs mt-1">
+                    Demo data has been purged. Synchronize class calendar events from your live Classcard account.
+                  </p>
+                  <div className="mt-4">
+                    <Link href="/admin/classcard-integration">
+                      <Button variant="outline" size="sm">
+                        Classcard Integration
+                      </Button>
+                    </Link>
+                  </div>
                 </div>
-              ))}
+              ) : (
+                classes.map((cls) => (
+                  <div
+                    key={cls.id}
+                    onClick={() => setSelectedEvent(cls)}
+                    className="p-4 hover:bg-slate-50/70 transition-colors cursor-pointer flex items-center justify-between gap-4"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-bold text-slate-900 text-sm truncate">{cls.title}</p>
+                      <p className="text-slate-500 text-xs mt-0.5 truncate">
+                        {formatDate(cls.startTime)} at {formatTime(cls.startTime)} ({cls.durationMinutes} mins) • {cls.mentorName} • {cls.branchName}
+                      </p>
+                    </div>
+                    <Badge
+                      variant={
+                        cls.status === 'COMPLETED'
+                          ? 'success'
+                          : cls.status === 'CANCELLED' || cls.status === 'LATE_CANCELLED'
+                          ? 'danger'
+                          : 'info'
+                      }
+                      size="sm"
+                      dot
+                    >
+                      {cls.status}
+                    </Badge>
+                  </div>
+                ))
+              )}
             </div>
           )}
 
           {activeTab === 'incidents' && (
             <div className="divide-y divide-slate-100 text-xs">
               {penalties.length === 0 ? (
-                <div className="p-8 text-center text-slate-500">No penalties recorded.</div>
+                <div className="p-12 text-center text-slate-500">
+                  <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-3">
+                    <CheckCircle2 className="w-6 h-6" />
+                  </div>
+                  <p className="font-bold text-slate-800 text-sm">Zero Incidents or Penalties</p>
+                  <p className="text-slate-400 text-xs mt-1">
+                    No policy infractions or deductions have been logged for this cycle.
+                  </p>
+                </div>
               ) : (
                 penalties.map((pen) => (
                   <div key={pen.id} className="p-4 flex items-center justify-between gap-4">

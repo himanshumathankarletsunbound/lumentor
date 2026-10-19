@@ -10,17 +10,36 @@ import { Button } from '../../../components/ui/Button';
 import { Drawer } from '../../../components/ui/Drawer';
 import { Tabs } from '../../../components/ui/Tabs';
 import { Mentor } from '../../../lib/types/models';
-import { GraduationCap, Mail, Phone, MapPin, DollarSign, Calendar, ShieldAlert, FileText, CheckCircle2 } from 'lucide-react';
+import { GraduationCap, Mail, Phone, MapPin, DollarSign, Calendar, ShieldAlert, FileText, CheckCircle2, RefreshCw } from 'lucide-react';
 import { formatCurrency, formatDuration, formatDate } from '../../../lib/utils/formatters';
+import Link from 'next/link';
 
 export default function MentorsPage() {
   const { hasPermission } = useAuth();
-  const [mentors] = useState<Mentor[]>(db.getMentors());
+  const [mentors, setMentors] = useState<Mentor[]>(db.getMentors());
   const [selectedMentor, setSelectedMentor] = useState<Mentor | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const plans = db.getPayrollPlans();
   const canViewPayroll = hasPermission('payroll_dashboard', 'view_sensitive_payroll');
+
+  const handleSyncStaff = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await fetch('/api/classcard/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobType: 'STAFF' }),
+      });
+      const data = await res.json();
+      if (data.status === 'COMPLETED' || data.success) {
+        setMentors(db.getMentors());
+      }
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const mentorClasses = selectedMentor
     ? db.getClasses({ mentorId: selectedMentor.id })
@@ -55,9 +74,44 @@ export default function MentorsPage() {
               Faculty roster, branch assignments, payroll plan mappings, and teaching metrics.
             </p>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            isLoading={isSyncing}
+            leftIcon={<RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />}
+            onClick={handleSyncStaff}
+          >
+            Sync Faculty from Classcard
+          </Button>
         </div>
 
-        {/* Mentors Table */}
+        {/* Mentors Table or Empty State */}
+        {mentors.length === 0 ? (
+          <div className="rounded-xl border border-slate-200 bg-white p-8">
+            <TableEmptyState
+              title="No Faculty Members Synchronized"
+              description="Your database is running in production API mode. Synchronize staff and mentors directly from Classcard Cloud."
+              action={
+                <div className="flex items-center justify-center gap-3">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    isLoading={isSyncing}
+                    leftIcon={<RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />}
+                    onClick={handleSyncStaff}
+                  >
+                    Sync Staff from Classcard
+                  </Button>
+                  <Link href="/admin/classcard-integration">
+                    <Button variant="outline" size="sm">
+                      Configure Gateway
+                    </Button>
+                  </Link>
+                </div>
+              }
+            />
+          </div>
+        ) : (
         <Table>
           <TableHeader>
             <TableRow>
@@ -137,6 +191,7 @@ export default function MentorsPage() {
             })}
           </TableBody>
         </Table>
+        )}
 
         {/* Mentor Detail Drawer */}
         <Drawer

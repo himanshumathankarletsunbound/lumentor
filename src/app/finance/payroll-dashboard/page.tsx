@@ -5,7 +5,7 @@ import { AppShell } from '../../../components/layout/AppShell';
 import { db } from '../../../lib/db/store';
 import { StatCard } from '../../../components/ui/StatCard';
 import { Card, CardHeader, CardContent } from '../../../components/ui/Card';
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../../../components/ui/Table';
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell, TableEmptyState } from '../../../components/ui/Table';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { DollarSign, Clock, CheckCircle2, ShieldAlert, ArrowRight, Plus } from 'lucide-react';
@@ -114,56 +114,74 @@ export default function PayrollDashboardPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {batches.map((b) => (
-                  <TableRow key={b.id}>
-                    <TableCell className="font-mono font-bold text-slate-900">{b.batchNumber}</TableCell>
-                    <TableCell className="text-xs text-slate-700">
-                      <p className="font-semibold">{b.periodName}</p>
-                      <p className="text-slate-400 text-[11px]">
-                        {formatDate(b.startDate)} - {formatDate(b.endDate)}
-                      </p>
-                    </TableCell>
-                    <TableCell className="text-xs text-slate-700">
-                      {b.totalMentors} mentors ({b.totalEligibleClasses} classes)
-                    </TableCell>
-                    <TableCell className="text-xs font-semibold text-slate-800">
-                      {formatCurrency(b.totalGross, b.currency)}
-                    </TableCell>
-                    <TableCell className="text-xs font-semibold text-rose-600">
-                      -{formatCurrency(b.totalPenalties, b.currency)}
-                    </TableCell>
-                    <TableCell className="text-xs font-bold text-slate-900">
-                      {formatCurrency(b.totalNet, b.currency)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          b.status === 'LOCKED' || b.status === 'APPROVED'
-                            ? 'success'
-                            : b.status === 'SUBMITTED'
-                            ? 'warning'
-                            : 'neutral'
+                {batches.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8}>
+                      <TableEmptyState
+                        title="No payroll calculation batches found"
+                        description="Run your first compensation cycle calculation after synchronizing classes and mentors from Classcard."
+                        action={
+                          <Link href="/finance/payroll-processing">
+                            <Button variant="primary" size="sm">
+                              Process New Cycle
+                            </Button>
+                          </Link>
                         }
-                        size="sm"
-                        dot
-                      >
-                        {b.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={b.paymentStatus === 'PAID' ? 'success' : 'neutral'} size="sm">
-                        {b.paymentStatus}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Link href="/finance/payroll-processing">
-                        <Button variant="outline" size="sm">
-                          Inspect
-                        </Button>
-                      </Link>
+                      />
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  batches.map((b) => (
+                    <TableRow key={b.id}>
+                      <TableCell className="font-mono font-bold text-slate-900">{b.batchNumber}</TableCell>
+                      <TableCell className="text-xs text-slate-700">
+                        <p className="font-semibold">{b.periodName}</p>
+                        <p className="text-slate-400 text-[11px]">
+                          {formatDate(b.startDate)} - {formatDate(b.endDate)}
+                        </p>
+                      </TableCell>
+                      <TableCell className="text-xs text-slate-700">
+                        {b.totalMentors} mentors ({b.totalEligibleClasses} classes)
+                      </TableCell>
+                      <TableCell className="text-xs font-semibold text-slate-800">
+                        {formatCurrency(b.totalGross, b.currency)}
+                      </TableCell>
+                      <TableCell className="text-xs font-semibold text-rose-600">
+                        -{formatCurrency(b.totalPenalties, b.currency)}
+                      </TableCell>
+                      <TableCell className="text-xs font-bold text-slate-900">
+                        {formatCurrency(b.totalNet, b.currency)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            b.status === 'LOCKED' || b.status === 'APPROVED'
+                              ? 'success'
+                              : b.status === 'SUBMITTED'
+                              ? 'warning'
+                              : 'neutral'
+                          }
+                          size="sm"
+                          dot
+                        >
+                          {b.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={b.paymentStatus === 'PAID' ? 'success' : 'neutral'} size="sm">
+                          {b.paymentStatus}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Link href="/finance/payroll-processing">
+                          <Button variant="outline" size="sm">
+                            Inspect
+                          </Button>
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </CardContent>

@@ -424,7 +424,8 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
       {/* Persistent Left Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-40 w-64 bg-slate-950 text-slate-300 flex flex-col transition-transform duration-200 ease-in-out border-r border-slate-800/80 shadow-2xl lg:shadow-none lg:static lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-40 w-64 h-screen max-h-screen bg-slate-950 text-slate-300 flex flex-col transition-transform duration-200 ease-in-out border-r border-slate-800/80 shadow-2xl shrink-0',
+          'lg:static lg:h-screen lg:max-h-screen lg:shrink-0 lg:translate-x-0',
           isOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
@@ -446,7 +447,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
         </div>
 
         {/* User Persona Banner */}
-        <div className="px-3.5 py-3 border-b border-slate-800/60 bg-slate-900/40">
+        <div className="px-3.5 py-3 border-b border-slate-800/60 bg-slate-900/40 shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 min-w-0">
               <div className="w-7 h-7 rounded-lg bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 font-bold flex items-center justify-center text-xs shrink-0">
@@ -463,7 +464,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
         </div>
 
         {/* Scrollable Navigation Groups */}
-        <div className="flex-1 overflow-y-auto px-3 py-4 space-y-6 text-sm">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-4 space-y-6 text-sm">
           {navGroups.map((group) => {
             const isCollapsed = collapsedGroups[group.groupName];
 
@@ -531,7 +532,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
         </div>
 
         {/* Sync Status & Sign Out in Footer */}
-        <div className="p-3 border-t border-slate-800/80 bg-slate-950/70 space-y-2.5">
+        <div className="p-3 border-t border-slate-800/80 bg-slate-950/70 space-y-2.5 shrink-0">
           <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between text-xs">
             <div className="flex items-center gap-2">
               <span className="relative flex h-2 w-2">

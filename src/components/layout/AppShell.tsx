@@ -8,12 +8,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-dashboard-canvas flex text-slate-900 antialiased">
-      {/* Persistent or Mobile Sidebar */}
+    <div className="h-screen max-h-screen flex bg-dashboard-canvas text-slate-900 antialiased overflow-hidden">
+      {/* Persistent Left Sidebar with its own independent scroll */}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* Main Content Area with its own independent vertical scroll */}
+      <div className="flex-1 flex flex-col h-screen min-w-0 overflow-y-auto overscroll-contain">
         <Header onMenuClick={() => setSidebarOpen(true)} />
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-6">
           {children}

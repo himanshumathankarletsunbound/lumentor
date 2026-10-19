@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import { AuthProvider } from '../../lib/auth/AuthContext';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 
@@ -9,7 +8,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-slate-50/60 flex text-slate-800 antialiased font-sans">
+    <div className="min-h-screen bg-dashboard-canvas flex text-slate-900 antialiased">
       {/* Persistent or Mobile Sidebar */}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 

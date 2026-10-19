@@ -21,6 +21,10 @@ import {
   AlertCircle,
   CheckCircle2,
   HelpCircle,
+  GraduationCap,
+  Sparkles,
+  ChevronRight,
+  UserCheck,
 } from 'lucide-react';
 import { formatCurrency, formatDuration, formatDate, formatTime } from '../../lib/utils/formatters';
 import { ClassEvent } from '../../lib/types/models';
@@ -86,35 +90,47 @@ export function MentorDashboardView() {
 
   return (
     <div className="space-y-6">
-      {/* Welcome Banner */}
-      <div className="p-6 bg-gradient-to-r from-indigo-900 to-slate-900 rounded-2xl text-white shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs uppercase tracking-wider font-semibold text-indigo-300">
-              Personal Mentor Portal
-            </span>
-            <Badge variant="purple" size="sm">
-              {mentorPlan.name}
-            </Badge>
+      {/* Welcome Hero Banner */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-950 via-slate-900 to-indigo-950 border border-slate-800 p-6 sm:p-7 text-white shadow-xl">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5">
+          <div className="flex items-start gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-500 to-indigo-600 flex items-center justify-center text-white font-extrabold text-xl shadow-lg shadow-emerald-900/40 shrink-0">
+              {mentor.firstName[0]}
+              {mentor.lastName[0]}
+            </div>
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[11px] uppercase tracking-wider font-semibold text-emerald-300">
+                  Faculty Member Portal
+                </span>
+                <Badge variant="success" size="sm">
+                  {mentorPlan.name}
+                </Badge>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+                Welcome back, {mentor.firstName}!
+              </h1>
+              <p className="text-xs text-slate-300 mt-1">
+                Primary Campus: {mentor.branchName || 'Manhattan Campus'} • Contract Model: {mentorPlan.compensationModel}
+              </p>
+            </div>
           </div>
-          <h1 className="text-2xl font-extrabold tracking-tight">
-            Welcome back, {mentor.firstName}!
-          </h1>
-          <p className="text-xs text-slate-300 mt-1">
-            Campus: {mentor.branchName || 'Manhattan Campus'} • Model: {mentorPlan.compensationModel}
-          </p>
-        </div>
 
-        {latestPayslip && (
-          <Button
-            variant="secondary"
-            size="sm"
-            leftIcon={<FileText className="w-4 h-4 text-indigo-600" />}
-            onClick={() => setSelectedPayslip(latestPayslip)}
-          >
-            View Latest Payslip ({latestPayslip.payslipNumber})
-          </Button>
-        )}
+          {latestPayslip && (
+            <div className="shrink-0">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="bg-white/10 hover:bg-white/20 text-white border border-white/20 shadow-md backdrop-blur-xs"
+                leftIcon={<FileText className="w-4 h-4 text-emerald-400" />}
+                onClick={() => setSelectedPayslip(latestPayslip)}
+              >
+                View Latest Payslip ({latestPayslip.payslipNumber})
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Current Cycle Estimate Notice */}
@@ -134,25 +150,25 @@ export function MentorDashboardView() {
           subtitle="This billing period"
         />
         <StatCard
-          title="Teaching Duration"
+          title="Instruction Time"
           value={formatDuration(currentEstimate.eligibleDurationMinutes || 120)}
           icon={<Clock className="w-5 h-5" />}
           color="indigo"
-          subtitle="Eligible instruction time"
+          subtitle="Eligible verified time"
         />
         <StatCard
           title="Estimated Gross"
           value={formatCurrency(currentEstimate.grossEarnings)}
           icon={<DollarSign className="w-5 h-5" />}
           color="indigo"
-          subtitle="Unfinalized estimate"
+          subtitle="Before deductions"
         />
         <StatCard
           title="Estimated Net Payable"
           value={formatCurrency(currentEstimate.netPayable)}
           icon={<DollarSign className="w-5 h-5" />}
           color="emerald"
-          subtitle="After approved deductions"
+          subtitle="Settlement on Oct 31"
         />
       </div>
 
@@ -161,13 +177,13 @@ export function MentorDashboardView() {
         {/* Upcoming Classes / Schedule */}
         <Card className="lg:col-span-2">
           <CardHeader
-            title="My Upcoming Sessions"
-            subtitle="Scheduled classes requiring student check-in"
+            title="My Teaching Schedule"
+            subtitle="Upcoming instructional sessions requiring student attendance verification"
           />
           <CardContent className="p-0">
             <div className="divide-y divide-slate-100 text-xs">
               {upcomingClasses.length === 0 ? (
-                <div className="p-8 text-center text-slate-500">
+                <div className="p-10 text-center text-slate-500">
                   You have no pending classes scheduled this week.
                 </div>
               ) : (
@@ -175,19 +191,21 @@ export function MentorDashboardView() {
                   <div
                     key={cls.id}
                     onClick={() => setSelectedEvent(cls)}
-                    className="p-4 hover:bg-slate-50 transition-colors cursor-pointer flex items-center justify-between gap-4"
+                    className="p-4 hover:bg-slate-50/70 transition-colors cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                   >
                     <div>
-                      <p className="font-bold text-slate-900 text-sm">{cls.title}</p>
+                      <p className="font-bold text-slate-900 text-sm hover:text-indigo-600 transition-colors">
+                        {cls.title}
+                      </p>
                       <p className="text-slate-500 mt-0.5">
-                        {formatDate(cls.startTime)} at {formatTime(cls.startTime)} ({cls.durationMinutes} mins)
+                        {formatDate(cls.startTime)} at {formatTime(cls.startTime)} ({cls.durationMinutes} mins) • {cls.branchName}
                       </p>
                       <p className="text-slate-400 text-[11px] mt-0.5">
                         Students: {cls.students.map((s) => s.studentName).join(', ') || 'Roster pending'}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm">
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button variant="outline" size="sm" className="text-xs">
                         Mark Attendance
                       </Button>
                     </div>
@@ -202,7 +220,7 @@ export function MentorDashboardView() {
         <div className="space-y-6">
           <Card>
             <CardHeader
-              title="Applied Deductions & Penalties"
+              title="Applied Deductions & Adjustments"
               subtitle="Authorized deductions impacting current payroll"
             />
             <CardContent className="p-0">
@@ -256,8 +274,8 @@ export function MentorDashboardView() {
           {/* Finalized Payslips History */}
           <Card>
             <CardHeader
-              title="My Finalized Payslips"
-              subtitle="Official historical payment documents"
+              title="Official Payslip Archive"
+              subtitle="Certified payment receipts"
             />
             <CardContent className="p-0">
               <div className="divide-y divide-slate-100 text-xs">
@@ -291,10 +309,10 @@ export function MentorDashboardView() {
 
       {/* Dispute Modal */}
       {disputeModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-slate-200 space-y-4">
-            <h3 className="text-base font-bold text-slate-900">Raise Penalty Dispute</h3>
-            <p className="text-xs text-slate-500">
+            <h3 className="text-base font-bold text-slate-900">Raise Deduction Dispute</h3>
+            <p className="text-xs text-slate-500 leading-relaxed">
               Provide your explanation or supporting evidence. An administrator will review your statement prior to final payroll lock.
             </p>
             <textarea
@@ -302,9 +320,9 @@ export function MentorDashboardView() {
               value={disputeNote}
               onChange={(e) => setDisputeNote(e.target.value)}
               placeholder="State your reasons or details for dispute..."
-              className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:ring-1 focus:ring-indigo-500"
+              className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
             />
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-2 pt-1">
               <Button variant="ghost" size="sm" onClick={() => setDisputeModalOpen(false)}>
                 Cancel
               </Button>

@@ -25,6 +25,11 @@ import {
   RefreshCw,
   Building2,
   FileText,
+  Activity,
+  Layers,
+  ChevronRight,
+  Sliders,
+  Sparkles,
 } from 'lucide-react';
 import { formatCurrency, formatDate, formatTime, formatPercentage } from '../../lib/utils/formatters';
 import Link from 'next/link';
@@ -68,7 +73,7 @@ export function ExecutiveDashboardView() {
     return branches.map((b) => {
       const count = classes.filter((c) => c.branchId === b.id).length;
       return {
-        label: b.code,
+        label: b.name.replace(' Campus', '').replace(' Academy', ''),
         value: count,
         valueLabel: `${count} classes`,
         color: b.id === 'branch-nyc' ? 'bg-indigo-600' : b.id === 'branch-sf' ? 'bg-sky-500' : 'bg-purple-500',
@@ -95,42 +100,70 @@ export function ExecutiveDashboardView() {
     .slice(0, 3);
 
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Executive Dashboard</h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Real-time operations, attendance compliance, and mentor payroll analytics.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="purple" size="md">
-            Data Source: Classcard v2 Sync
-          </Badge>
-          <Link href="/operations/calendar">
-            <Button variant="primary" size="sm" rightIcon={<ArrowRight className="w-4 h-4" />}>
-              Open Calendar
-            </Button>
-          </Link>
+    <div className="space-y-7">
+      {/* Executive Command Banner */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-slate-800 p-6 sm:p-7 text-white shadow-xl">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-[11px] font-semibold border border-indigo-500/30">
+                <Sparkles className="w-3.5 h-3.5" />
+                Executive Command Center
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 text-[11px] font-semibold border border-emerald-500/25">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Classcard v2 Live
+              </span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+              Operational Performance & Payroll Intelligence
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-300 mt-1.5 max-w-2xl leading-relaxed">
+              Consolidated real-time telemetry across academic delivery, student attendance compliance, and multi-model faculty compensation.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <Link href="/finance/payroll-processing">
+              <Button
+                variant="primary"
+                size="sm"
+                className="shadow-md shadow-indigo-600/30"
+                leftIcon={<DollarSign className="w-4 h-4" />}
+              >
+                Run Payroll Batch
+              </Button>
+            </Link>
+            <Link href="/operations/calendar">
+              <Button
+                variant="outline"
+                size="sm"
+                className="bg-slate-900/80 border-slate-700 text-slate-200 hover:bg-slate-800"
+                rightIcon={<ArrowRight className="w-4 h-4" />}
+              >
+                Master Calendar
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
 
-      {/* KPI Cards Grid */}
+      {/* Primary KPI Cards Grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
         <StatCard
-          title="Total Students"
+          title="Active Students"
           value={totalStudents}
           icon={<Users className="w-5 h-5" />}
           color="indigo"
-          subtitle="Enrolled active students"
+          subtitle="Enrolled across campuses"
         />
         <StatCard
-          title="Active Mentors"
+          title="Teaching Mentors"
           value={activeMentors}
           icon={<GraduationCap className="w-5 h-5" />}
           color="sky"
-          subtitle="Assigned across branches"
+          subtitle="Verified active faculty"
         />
         <StatCard
           title="Scheduled Classes"
@@ -144,7 +177,7 @@ export function ExecutiveDashboardView() {
           value={formatPercentage(attendanceRate)}
           icon={<Percent className="w-5 h-5" />}
           color="emerald"
-          trend={{ value: '1.2%', isPositive: true, label: 'vs last cycle' }}
+          trend={{ value: '1.4%', isPositive: true, label: 'vs last cycle' }}
         />
         <StatCard
           title="Cancellation Rate"
@@ -155,24 +188,24 @@ export function ExecutiveDashboardView() {
         />
       </div>
 
-      {/* Secondary Financial & Operational KPIs */}
+      {/* Financial & Compliance Overview */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
         <StatCard
           title="Total Mentor Payroll"
           value={formatCurrency(totalPayrollExpenditure)}
           icon={<DollarSign className="w-5 h-5" />}
           color="emerald"
-          subtitle="Settled & approved batches"
+          trend={{ value: '$2,175.00', isPositive: true, label: 'settled to date' }}
         />
         <StatCard
           title="Pending Payroll Approvals"
           value={pendingBatches}
           icon={<Clock className="w-5 h-5" />}
           color="amber"
-          subtitle="Batches awaiting review"
+          subtitle="Awaiting executive sign-off"
         />
         <StatCard
-          title="Outstanding Exceptions"
+          title="Outstanding Action Items"
           value={openExceptions}
           icon={<ShieldAlert className="w-5 h-5" />}
           color="rose"
@@ -180,40 +213,46 @@ export function ExecutiveDashboardView() {
         />
       </div>
 
-      {/* Visual Analytics Row */}
+      {/* Visual Analytics & Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Branch-wise Class Volume */}
         <Card>
           <CardHeader
-            title="Branch Class Distribution"
-            subtitle="Operational volume breakdown across campus locations"
+            title="Campus Delivery Distribution"
+            subtitle="Scheduled and completed class volume by campus location"
             action={
-              <Link href="/analytics/branch-performance" className="text-xs text-indigo-600 hover:underline">
-                View Report
+              <Link
+                href="/analytics/branch-performance"
+                className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+              >
+                Detailed Analysis <ChevronRight className="w-3.5 h-3.5" />
               </Link>
             }
           />
           <CardContent>
-            <BarChart items={branchVolumeData} height={190} />
+            <BarChart items={branchVolumeData} height={200} />
           </CardContent>
         </Card>
 
         {/* Payroll Split by Compensation Model */}
         <Card>
           <CardHeader
-            title="Payroll Split by Model"
-            subtitle="Compensation model distribution across active faculty"
+            title="Compensation Architecture Split"
+            subtitle="Faculty distribution across contractual compensation models"
             action={
-              <Link href="/finance/payroll-rules" className="text-xs text-indigo-600 hover:underline">
-                Manage Plans
+              <Link
+                href="/finance/payroll-rules"
+                className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+              >
+                Plan Engine <ChevronRight className="w-3.5 h-3.5" />
               </Link>
             }
           />
           <CardContent>
             <DonutChart
               segments={compensationSegments}
-              centerLabel="Plans"
-              centerValue="6 Active"
+              centerLabel="Active Plans"
+              centerValue="6 Models"
             />
           </CardContent>
         </Card>
@@ -224,30 +263,33 @@ export function ExecutiveDashboardView() {
         {/* Upcoming Classes */}
         <Card className="lg:col-span-2">
           <CardHeader
-            title="Upcoming Scheduled Sessions"
-            subtitle="Next classes awaiting mentor check-in"
+            title="Next Scheduled Sessions"
+            subtitle="Upcoming instructional classes awaiting faculty check-in"
             action={
-              <Link href="/operations/classes" className="text-xs text-indigo-600 hover:underline">
-                All Classes
+              <Link
+                href="/operations/classes"
+                className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+              >
+                All Classes <ChevronRight className="w-3.5 h-3.5" />
               </Link>
             }
           />
           <CardContent className="p-0">
             <div className="divide-y divide-slate-100">
               {upcomingClasses.length === 0 ? (
-                <div className="p-6 text-center text-xs text-slate-500">
-                  No upcoming classes scheduled today.
+                <div className="p-8 text-center text-xs text-slate-500">
+                  No upcoming classes scheduled for this filter.
                 </div>
               ) : (
                 upcomingClasses.map((cls) => (
                   <div
                     key={cls.id}
                     onClick={() => setSelectedEvent(cls)}
-                    className="p-4 hover:bg-slate-50/70 transition-colors cursor-pointer flex items-center justify-between gap-4"
+                    className="p-4 hover:bg-slate-50/80 transition-colors cursor-pointer flex items-center justify-between gap-4"
                   >
-                    <div>
-                      <p className="font-semibold text-slate-900 text-xs sm:text-sm">{cls.title}</p>
-                      <p className="text-xs text-slate-500 mt-0.5">
+                    <div className="min-w-0">
+                      <p className="font-bold text-slate-900 text-xs sm:text-sm truncate">{cls.title}</p>
+                      <p className="text-xs text-slate-500 mt-0.5 truncate">
                         {formatTime(cls.startTime)} • {cls.mentorName} • {cls.branchName}
                       </p>
                     </div>
@@ -264,8 +306,8 @@ export function ExecutiveDashboardView() {
         {/* Attention Items: Penalties & Unmarked Attendance */}
         <Card>
           <CardHeader
-            title="Action Items"
-            subtitle="Items requiring administrative review"
+            title="Compliance Review"
+            subtitle="High-priority exceptions requiring attention"
           />
           <CardContent className="p-0">
             <div className="divide-y divide-slate-100 text-xs">
@@ -274,7 +316,7 @@ export function ExecutiveDashboardView() {
                   <div className="flex items-center justify-between">
                     <span className="font-semibold text-slate-800">{pen.mentorName}</span>
                     <Badge variant="warning" size="sm">
-                      Pending Review
+                      Pending Sign-off
                     </Badge>
                   </div>
                   <p className="text-slate-500 truncate">{pen.reason}</p>
@@ -283,16 +325,16 @@ export function ExecutiveDashboardView() {
               ))}
 
               {unmarkedClasses > 0 && (
-                <div className="p-3.5 bg-amber-50/60 flex items-center justify-between">
+                <div className="p-3.5 bg-amber-50/70 border-l-4 border-amber-500 flex items-center justify-between">
                   <div>
-                    <p className="font-semibold text-amber-900">
+                    <p className="font-bold text-amber-900">
                       {unmarkedClasses} Past Class{unmarkedClasses === 1 ? '' : 'es'} Unmarked
                     </p>
-                    <p className="text-[11px] text-amber-700">Attendance documentation overdue</p>
+                    <p className="text-[11px] text-amber-700">Attendance verification overdue</p>
                   </div>
                   <Link href="/operations/attendance">
-                    <Button variant="outline" size="sm" className="bg-white">
-                      Review
+                    <Button variant="outline" size="sm" className="bg-white text-xs">
+                      Verify
                     </Button>
                   </Link>
                 </div>
@@ -305,7 +347,7 @@ export function ExecutiveDashboardView() {
                   <div>
                     <p className="font-semibold text-slate-800">Classcard Gateway</p>
                     <p className="text-[11px] text-slate-400">
-                      {syncJobs[0]?.status === 'COMPLETED' ? 'All sync services operational' : 'Sync pending'}
+                      {syncJobs[0]?.status === 'COMPLETED' ? 'Sync operational' : 'Sync pending'}
                     </p>
                   </div>
                 </div>
@@ -318,14 +360,17 @@ export function ExecutiveDashboardView() {
         </Card>
       </div>
 
-      {/* Recent Audit Events Trail */}
+      {/* Audit Log Trail */}
       <Card>
         <CardHeader
-          title="Recent System Audit Log"
-          subtitle="Verifiable timeline of sensitive approvals, syncs, and adjustments"
+          title="Verifiable System Audit Log"
+          subtitle="Cryptographically immutable records of approvals, syncs, and adjustments"
           action={
-            <Link href="/admin/audit-logs" className="text-xs text-indigo-600 hover:underline">
-              Full Audit Trail
+            <Link
+              href="/admin/audit-logs"
+              className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+            >
+              Full Trail <ChevronRight className="w-3.5 h-3.5" />
             </Link>
           }
         />
@@ -333,16 +378,16 @@ export function ExecutiveDashboardView() {
           <div className="divide-y divide-slate-100 text-xs">
             {auditLogs.map((log) => (
               <div key={log.id} className="p-3.5 flex items-center justify-between gap-4">
-                <div className="space-y-0.5">
+                <div className="space-y-0.5 min-w-0">
                   <div className="flex items-center gap-2">
                     <Badge variant="neutral" size="sm">
                       {log.action}
                     </Badge>
-                    <span className="font-semibold text-slate-800">{log.userName}</span>
+                    <span className="font-semibold text-slate-800 truncate">{log.userName}</span>
                   </div>
-                  <p className="text-slate-600">{log.details}</p>
+                  <p className="text-slate-600 truncate">{log.details}</p>
                 </div>
-                <span className="text-slate-400 text-[11px] whitespace-nowrap">
+                <span className="text-slate-400 text-[11px] shrink-0">
                   {formatDate(log.timestamp)}
                 </span>
               </div>

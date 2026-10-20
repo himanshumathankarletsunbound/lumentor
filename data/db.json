@@ -820,9 +820,9 @@
       "email": "chicago@academyapex.com",
       "isActive": true,
       "provenance": "LOCALLY_CREATED",
-      "id": "branch-1792442947453",
-      "createdAt": "2026-10-19T20:49:07.453Z",
-      "updatedAt": "2026-10-19T20:49:07.453Z"
+      "id": "branch-1792465070603",
+      "createdAt": "2026-10-20T02:57:50.603Z",
+      "updatedAt": "2026-10-20T02:57:50.603Z"
     }
   ],
   "subjects": [
@@ -932,9 +932,9 @@
       "isActive": true,
       "color": "#06b6d4",
       "provenance": "LOCALLY_CREATED",
-      "id": "subj-1792442947454",
-      "createdAt": "2026-10-19T20:49:07.454Z",
-      "updatedAt": "2026-10-19T20:49:07.454Z"
+      "id": "subj-1792465070604",
+      "createdAt": "2026-10-20T02:57:50.604Z",
+      "updatedAt": "2026-10-20T02:57:50.604Z"
     }
   ],
   "packages": [
@@ -1183,8 +1183,8 @@
   "payments": [],
   "auditLogs": [
     {
-      "id": "audit-1792442947469-1ryl0",
-      "timestamp": "2026-10-19T20:49:07.469Z",
+      "id": "audit-1792465070630-idepi",
+      "timestamp": "2026-10-20T02:57:50.630Z",
       "userId": "user-admin-1",
       "userName": "Alexandria Vance",
       "userRole": "ADMINISTRATOR",
@@ -1194,15 +1194,15 @@
       "details": "Updated Classcard Public API key"
     },
     {
-      "id": "audit-1792442947457-qi0dm",
-      "timestamp": "2026-10-19T20:49:07.457Z",
+      "id": "audit-1792465070610-6owrj",
+      "timestamp": "2026-10-20T02:57:50.610Z",
       "userId": "Admin",
       "userName": "Admin",
       "userRole": "ADMINISTRATOR",
       "action": "PAYROLL_LOCKED",
       "entityType": "PayrollBatch",
-      "entityId": "batch-1792442947456",
-      "details": "Locked payroll batch PAY-20261019-238 and generated 1 payslips."
+      "entityId": "batch-1792465070608",
+      "details": "Locked payroll batch PAY-20261020-955 and generated 1 payslips."
     },
     {
       "id": "audit-1",
@@ -1265,7 +1265,7 @@
     "apiKey": "cc_live_9f82a1740b2e88a",
     "isConfigured": true,
     "useMockMode": false,
-    "lastSuccessfulSync": "2026-10-19T20:49:07.452Z",
+    "lastSuccessfulSync": "2026-10-20T02:57:50.601Z",
     "syncIntervalMinutes": 60
   },
   "classcardEndpoints": [

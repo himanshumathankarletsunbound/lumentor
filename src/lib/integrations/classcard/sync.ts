@@ -120,6 +120,9 @@ export async function runClasscardSync(jobType: SyncJobType = 'ALL'): Promise<Sy
             job.recordsCreated++;
           }
         }
+      } else if (!res.success) {
+        job.recordsFailed++;
+        job.logSummary.push(`Warning: Failed fetching staff: ${res.errorMessage}`);
       }
     }
 
@@ -156,7 +159,7 @@ export async function runClasscardSync(jobType: SyncJobType = 'ALL'): Promise<Sy
               subjectId: subject?.id || 'subj-phys',
               subjectName: subject?.name || 'AP Physics C',
               mentorId: mentor?.id || 'mentor-1',
-              mentorName: `${mentor?.firstName} ${mentor?.lastName}`,
+              mentorName: `${mentor?.firstName || 'Faculty'} ${mentor?.lastName || 'Member'}`,
               branchId: branch?.id || 'branch-nyc',
               branchName: branch?.name || 'Manhattan Campus',
               startTime: String(item.start_time || new Date().toISOString()),
@@ -184,21 +187,36 @@ export async function runClasscardSync(jobType: SyncJobType = 'ALL'): Promise<Sy
             job.recordsCreated++;
           }
         }
+      } else if (!res.success) {
+        job.recordsFailed++;
+        job.logSummary.push(`Warning: Failed fetching events: ${res.errorMessage}`);
       }
     }
 
-    job.status = job.recordsFailed > 0 ? 'PARTIAL' : 'COMPLETED';
     job.completedAt = new Date().toISOString();
     job.durationMs = Date.now() - startTime;
-    job.logSummary.push(
-      `Sync finalized in ${(job.durationMs / 1000).toFixed(2)}s. Processed: ${job.recordsProcessed}, Created: ${job.recordsCreated}, Updated: ${job.recordsUpdated}, Failed: ${job.recordsFailed}.`
-    );
 
-    // Update config stats
-    db.updateClasscardConfig({
-      lastSuccessfulSync: new Date().toISOString(),
-      lastErrorMessage: undefined,
-    });
+    if (job.recordsCreated === 0 && job.recordsUpdated === 0 && job.recordsFailed > 0) {
+      job.status = 'FAILED';
+      const firstWarning = job.logSummary.find((l) => l.startsWith('Warning:'));
+      job.errorMessage = firstWarning ? firstWarning.replace('Warning: ', '') : 'Classcard API returned an error.';
+      job.logSummary.push(
+        `Sync aborted after ${(job.durationMs / 1000).toFixed(2)}s: ${job.errorMessage}`
+      );
+      db.updateClasscardConfig({
+        lastFailedSync: new Date().toISOString(),
+        lastErrorMessage: job.errorMessage,
+      });
+    } else {
+      job.status = job.recordsFailed > 0 ? 'PARTIAL' : 'COMPLETED';
+      job.logSummary.push(
+        `Sync finalized in ${(job.durationMs / 1000).toFixed(2)}s. Processed: ${job.recordsProcessed}, Created: ${job.recordsCreated}, Updated: ${job.recordsUpdated}, Failed: ${job.recordsFailed}.`
+      );
+      db.updateClasscardConfig({
+        lastSuccessfulSync: new Date().toISOString(),
+        lastErrorMessage: undefined,
+      });
+    }
 
     db.addSyncJob(job);
     return job;

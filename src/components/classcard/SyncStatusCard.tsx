@@ -19,12 +19,34 @@ export function SyncStatusCard({ onSyncCompleted }: { onSyncCompleted?: () => vo
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [newKey, setNewKey] = useState('');
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isSavingKey, setIsSavingKey] = useState(false);
+  const [keyError, setKeyError] = useState<string | null>(null);
+
+  // Refresh server status on mount
+  React.useEffect(() => {
+    fetch('/api/classcard/status')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.baseUrl) {
+          setConfig((prev) => ({
+            ...prev,
+            baseUrl: data.baseUrl,
+            apiKey: data.maskedApiKey,
+            lastSuccessfulSync: data.lastSuccessfulSync,
+            lastFailedSync: data.lastFailedSync,
+            lastErrorMessage: data.lastErrorMessage,
+          }));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleTestConnection = async () => {
     setIsTesting(true);
     setTestResult(null);
     try {
-      const result = await classcardClient.testConnection();
+      const res = await fetch('/api/classcard/test-connection', { method: 'POST' });
+      const result = await res.json();
       setTestResult(result);
     } catch (err: unknown) {
       setTestResult({
@@ -38,33 +60,89 @@ export function SyncStatusCard({ onSyncCompleted }: { onSyncCompleted?: () => vo
 
   const handleRunSync = async (jobType: 'ALL' | 'STUDENTS' | 'STAFF' | 'EVENTS') => {
     setIsSyncing(true);
+    setTestResult(null);
     try {
-      await runClasscardSync(jobType);
-      setConfig(db.getClasscardConfig());
+      const res = await fetch('/api/classcard/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobType }),
+      });
+      const job = await res.json();
+      if (job.status === 'COMPLETED') {
+        setTestResult({
+          success: true,
+          message: `Sync successful! Processed ${job.recordsProcessed || 0} records (${job.recordsCreated || 0} created, ${job.recordsUpdated || 0} updated).`,
+        });
+      } else if (job.status === 'FAILED') {
+        setTestResult({
+          success: false,
+          message: `Sync failed: ${job.errorMessage || 'Classcard rejected request (Unauthorized or invalid credentials).'}`
+        });
+      } else {
+        setTestResult({
+          success: true,
+          message: `Partial sync: Processed ${job.recordsProcessed || 0} records with ${job.recordsFailed || 0} warnings.`,
+        });
+      }
+
+      // Refresh status
+      const statusRes = await fetch('/api/classcard/status');
+      const statusData = await statusRes.json();
+      setConfig((prev) => ({
+        ...prev,
+        lastSuccessfulSync: statusData.lastSuccessfulSync,
+        lastFailedSync: statusData.lastFailedSync,
+        lastErrorMessage: statusData.lastErrorMessage,
+      }));
+
       if (onSyncCompleted) onSyncCompleted();
+    } catch (err: unknown) {
+      setTestResult({
+        success: false,
+        message: err instanceof Error ? err.message : 'Network error during sync',
+      });
     } finally {
       setIsSyncing(false);
     }
   };
 
-  const handleSaveKey = () => {
-    if (newKey.trim()) {
-      db.updateClasscardConfig({
-        apiKey: newKey.trim(),
-        isConfigured: true,
-        useMockMode: false,
+  const handleSaveKey = async () => {
+    if (!newKey.trim()) return;
+    setIsSavingKey(true);
+    setKeyError(null);
+    try {
+      const res = await fetch('/api/classcard/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: newKey.trim() }),
       });
-      setConfig(db.getClasscardConfig());
-      setShowKeyModal(false);
-      setNewKey('');
-      setSavedSuccess(true);
-      setTimeout(() => setSavedSuccess(false), 4000);
+      const data = await res.json();
+      if (data.success) {
+        setShowKeyModal(false);
+        setNewKey('');
+        setSavedSuccess(true);
+        if (data.testResult) {
+          setTestResult(data.testResult);
+        }
+        // Update local masked display
+        setConfig((prev) => ({
+          ...prev,
+          apiKey: data.maskedApiKey,
+        }));
+        setTimeout(() => setSavedSuccess(false), 5000);
+      } else {
+        setKeyError(data.error || 'Failed to save API key on server.');
+      }
+    } catch (err: unknown) {
+      setKeyError(err instanceof Error ? err.message : 'Network error saving API key.');
+    } finally {
+      setIsSavingKey(false);
     }
   };
 
   // Mask API key for client display: e.g. "cc_live_...40b"
   const maskedKey = config.apiKey
-    ? `${config.apiKey.slice(0, 8)}••••••••${config.apiKey.slice(-4)}`
+    ? (config.apiKey.includes('••••••••') ? config.apiKey : `${config.apiKey.slice(0, 8)}••••••••${config.apiKey.slice(-4)}`)
     : 'Not configured';
 
   return (
@@ -220,6 +298,13 @@ export function SyncStatusCard({ onSyncCompleted }: { onSyncCompleted?: () => vo
             <p className="text-slate-500 text-xs leading-relaxed">
               Paste your production Classcard API key obtained from your Classcard institution dashboard (Settings &gt; Public API &gt; API Keys). The key is stored securely in encrypted server storage and transmitted strictly via the <code className="bg-slate-100 text-indigo-600 px-1 py-0.5 rounded font-mono">api-key</code> header.
             </p>
+            {keyError && (
+              <Alert
+                type="error"
+                title="Configuration Error"
+                message={keyError}
+              />
+            )}
             <input
               type="password"
               placeholder="Paste live Classcard API key (e.g. cc_live_...)"
@@ -228,14 +313,15 @@ export function SyncStatusCard({ onSyncCompleted }: { onSyncCompleted?: () => vo
               className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono focus:ring-2 focus:ring-indigo-500 focus:outline-none"
             />
             <div className="flex justify-end gap-2 pt-1">
-              <Button variant="ghost" size="sm" onClick={() => setShowKeyModal(false)}>
+              <Button variant="ghost" size="sm" onClick={() => setShowKeyModal(false)} disabled={isSavingKey}>
                 Cancel
               </Button>
               <Button
                 variant="primary"
                 size="sm"
                 onClick={handleSaveKey}
-                disabled={!newKey.trim()}
+                disabled={!newKey.trim() || isSavingKey}
+                isLoading={isSavingKey}
                 leftIcon={<Check className="w-4 h-4" />}
               >
                 Save Production Key

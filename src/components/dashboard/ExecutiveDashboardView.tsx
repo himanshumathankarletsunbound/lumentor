@@ -54,16 +54,21 @@ export function ExecutiveDashboardView() {
         body: JSON.stringify({ jobType: 'ALL' }),
       });
       const data = await res.json();
-      if (data.status === 'COMPLETED' || data.success) {
+      if ((data.status === 'COMPLETED' || data.success) && (data.recordsProcessed > 0 || data.recordsCreated > 0)) {
         setSyncNotice({
           success: true,
-          message: `Synchronized ${data.recordsProcessed || 0} production records from Classcard.`,
+          message: `Successfully synchronized ${data.recordsProcessed || 0} production records from Classcard.`,
         });
         window.location.reload();
       } else {
+        const errorDetail =
+          data.errorMessage ||
+          data.error ||
+          (data.logSummary ? data.logSummary.filter((l: string) => l.includes('Warning:') || l.includes('Failed')).join('; ') : '') ||
+          'Failed to sync with Classcard API.';
         setSyncNotice({
           success: false,
-          message: data.errorMessage || data.error || 'Failed to sync with Classcard API.',
+          message: `${errorDetail} - Check and configure your live Classcard API key in Classcard Settings.`,
         });
       }
     } catch (err: unknown) {

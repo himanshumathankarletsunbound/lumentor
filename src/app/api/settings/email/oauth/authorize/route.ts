@@ -53,6 +53,14 @@ export async function GET(req: NextRequest) {
     });
     return response;
   } catch (error: unknown) {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'digest' in error &&
+      error.digest === 'NEXT_PRERENDER_INTERRUPTED'
+    ) {
+      throw error;
+    }
     console.error('Gmail OAuth authorization setup failed:', error);
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : 'Gmail OAuth setup failed on the server.' },

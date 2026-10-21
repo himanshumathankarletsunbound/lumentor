@@ -101,11 +101,14 @@ class DataStore {
   private initialized = false;
   private lastMtime = 0;
   private persistenceReady: Promise<void> = Promise.resolve();
+  private postgresLoadStarted = false;
 
   constructor() {
     this.data = this.getDefaultState();
     if (this.usesPostgres()) {
-      this.persistenceReady = this.loadFromPostgres();
+      // PostgreSQL is loaded lazily after Next.js server instrumentation registers
+      // the repository. Module evaluation must remain safe for prerendering.
+      this.persistenceReady = Promise.resolve();
     } else {
       this.loadFromDisk();
     }
@@ -137,6 +140,10 @@ class DataStore {
   }
 
   public async ready(): Promise<void> {
+    if (this.usesPostgres() && !this.postgresLoadStarted) {
+      this.postgresLoadStarted = true;
+      this.persistenceReady = this.loadFromPostgres();
+    }
     await this.persistenceReady;
   }
 

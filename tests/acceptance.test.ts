@@ -829,6 +829,107 @@ async function runAcceptanceTests() {
     assert(res.mocked === true, 'Must indicate mocked/simulated status when isEnabled is false');
   });
 
+  // --- 29. SMART SHEET SCHEMA DETECTION ---
+  test('Scenario 29: Sheet report engine detects schema and normalizes fuzzy columns', () => {
+    const { detectSchema, normCol, statusBucket, parseMoney } = require('../src/lib/analytics/sheetEngine');
+    
+    assert(normCol('  Teacher Joining Date!  ') === 'teacher joining date');
+    assert(statusBucket('Checked-in present') === 'Present');
+    assert(statusBucket('Absent due to illness') === 'Absent');
+    assert(statusBucket('15 min Late') === 'Late');
+    assert(parseMoney('$145.50') === 145.50);
+    assert(parseMoney('₹ 12,500.00') === 12500);
+
+    const testColumns = [
+      'Learner Name',
+      'Student ID',
+      'Tutor',
+      'Teacher Join Date',
+      'Course',
+      'Attendance Status',
+      'Session Date',
+      'Start Time',
+      'End Time',
+      'Amount',
+      'Invoice No',
+      'Invoice Status',
+    ];
+
+    const schema = detectSchema(testColumns);
+    assert(schema.student_name === 'Learner Name', 'Must match student name');
+    assert(schema.staff === 'Tutor', 'Must match staff');
+    assert(schema.staff_join_date === 'Teacher Join Date', 'Must match join date');
+    assert(schema.subject === 'Course', 'Must match subject');
+    assert(schema.status === 'Attendance Status', 'Must match status');
+    assert(schema.date === 'Session Date', 'Must match date');
+    assert(schema.fees === 'Amount', 'Must match fees');
+    assert(schema.invoice_no === 'Invoice No', 'Must match invoice number');
+  });
+
+  // --- 30. CLASS SESSION DEDUPLICATION & TEACHER METRICS ---
+  test('Scenario 30: Group classes are deduplicated so multi-student classes count as 1 session', () => {
+    const { detectSchema, prepareSheetData, generateTeacherTable } = require('../src/lib/analytics/sheetEngine');
+
+    // 4 attendance rows representing 1 group class with 4 students
+    const groupRows = [
+      { 'Date': '2026-10-15', 'Start Time': '10:00', 'End Time': '11:00', 'Subject': 'Math', 'Batch': 'Batch A', 'Location': 'Campus 1', 'Teacher Name': 'Dr. Smith', 'Student Name': 'Alice', 'Status': 'Present' },
+      { 'Date': '2026-10-15', 'Start Time': '10:00', 'End Time': '11:00', 'Subject': 'Math', 'Batch': 'Batch A', 'Location': 'Campus 1', 'Teacher Name': 'Dr. Smith', 'Student Name': 'Bob', 'Status': 'Present' },
+      { 'Date': '2026-10-15', 'Start Time': '10:00', 'End Time': '11:00', 'Subject': 'Math', 'Batch': 'Batch A', 'Location': 'Campus 1', 'Teacher Name': 'Dr. Smith', 'Student Name': 'Charlie', 'Status': 'Absent' },
+      { 'Date': '2026-10-15', 'Start Time': '10:00', 'End Time': '11:00', 'Subject': 'Math', 'Batch': 'Batch A', 'Location': 'Campus 1', 'Teacher Name': 'Dr. Smith', 'Student Name': 'David', 'Status': 'Late' },
+    ];
+
+    const columns = Object.keys(groupRows[0]);
+    const schema = detectSchema(columns);
+    const prepared = prepareSheetData(groupRows, schema);
+
+    const teacherSummary = generateTeacherTable(prepared, schema);
+    assert(teacherSummary.length === 1, 'Should have 1 teacher');
+    assert(teacherSummary[0].classSessions === 1, 'Group class must count as 1 session, not 4');
+    assert(teacherSummary[0].attendanceRecords === 4, 'Must have 4 attendance records');
+    assert(teacherSummary[0].students === 4, 'Must have 4 distinct students');
+    assert(teacherSummary[0].present === 3, 'Present includes Present and Late (Alice, Bob, David)');
+    assert(teacherSummary[0].absent === 1, '1 absent (Charlie)');
+    assert(Math.round(teacherSummary[0].studentAttendancePct) === 75, 'Attendance should be 75%');
+  });
+
+  // --- 31. STUDENT RISK CLASSIFICATION & QUALITY AUDITING ---
+  test('Scenario 31: Student attendance risk classification and dataset quality auditing', () => {
+    const { detectSchema, prepareSheetData, generateStudentTable, auditDataQuality } = require('../src/lib/analytics/sheetEngine');
+
+    const rows = [
+      // High risk student: 1 present, 3 absent = 25% (<75%)
+      { 'Student': 'Student Low', 'Status': 'Present', 'Staff': 'T1' },
+      { 'Student': 'Student Low', 'Status': 'Absent', 'Staff': 'T1' },
+      { 'Student': 'Student Low', 'Status': 'Absent', 'Staff': 'T1' },
+      { 'Student': 'Student Low', 'Status': 'Absent', 'Staff': 'T1' },
+      // Healthy student: 9 present, 1 absent = 90% (>=90%)
+      { 'Student': 'Student High', 'Status': 'Present', 'Staff': 'T1' },
+      { 'Student': 'Student High', 'Status': 'Present', 'Staff': 'T1' },
+      { 'Student': 'Student High', 'Status': 'Present', 'Staff': 'T1' },
+      { 'Student': 'Student High', 'Status': 'Present', 'Staff': 'T1' },
+      { 'Student': 'Student High', 'Status': 'Present', 'Staff': 'T1' },
+      { 'Student': 'Student High', 'Status': 'Present', 'Staff': 'T1' },
+      { 'Student': 'Student High', 'Status': 'Present', 'Staff': 'T1' },
+      { 'Student': 'Student High', 'Status': 'Present', 'Staff': 'T1' },
+      { 'Student': 'Student High', 'Status': 'Present', 'Staff': 'T1' },
+      { 'Student': 'Student High', 'Status': 'Absent', 'Staff': 'T1' },
+    ];
+
+    const schema = detectSchema(Object.keys(rows[0]));
+    const prepared = prepareSheetData(rows, schema);
+    const students = generateStudentTable(prepared, schema);
+
+    const lowRiskStu = students.find((s: any) => s.studentName === 'Student Low');
+    const highRiskStu = students.find((s: any) => s.studentName === 'Student High');
+
+    assert(lowRiskStu.risk === 'High Risk', 'Must be classified as High Risk (<75%)');
+    assert(highRiskStu.risk === 'Healthy', 'Must be classified as Healthy (>=90%)');
+
+    const audit = auditDataQuality(rows);
+    assert(audit.totalRows === 14, 'Must count 14 total rows');
+    assert(audit.cellCompletenessPct === 100, 'All cells present in this set');
+  });
+
   // Post-test cleanup: ensure consistent baseline data in store
   db.resetToSeed();
 

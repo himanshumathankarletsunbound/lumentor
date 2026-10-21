@@ -21,6 +21,7 @@ import {
   Calculator,
   ShieldAlert,
   FileText,
+  FileSpreadsheet,
   CreditCard,
   BarChart3,
   TrendingUp,
@@ -182,6 +183,12 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
               href: '/analytics/attendance',
               icon: <BarChart3 className="w-4 h-4" />,
             },
+            {
+              name: 'Smart Sheet Analytics',
+              href: '/analytics/sheet-report',
+              icon: <FileSpreadsheet className="w-4 h-4" />,
+              badge: 'New',
+            },
           ],
         },
       ];
@@ -308,6 +315,13 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
       {
         groupName: 'Analytics',
         items: [
+          {
+            name: 'Smart Sheet Analytics',
+            href: '/analytics/sheet-report',
+            icon: <FileSpreadsheet className="w-4 h-4" />,
+            module: 'analytics',
+            badge: 'Smart',
+          },
           {
             name: 'Attendance Analytics',
             href: '/analytics/attendance',

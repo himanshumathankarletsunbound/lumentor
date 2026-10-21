@@ -1,2 +1,204 @@
-# lumentor
-test
+# Classcard Operations, Scheduling & Payroll Management System
+
+A high-performance SaaS management platform built for tutoring and education businesses that use **Classcard** as their operational data source.
+
+This system provides a unified operational and financial layer: bi-directional synchronisation with Classcard Public API v2, role-based access control (RBAC), multi-view unified calendar, attendance marking, an anti-tamper multi-model mentor payroll calculation engine, dispute and penalty management, and audit logging.
+
+---
+
+## 🌟 Key Features
+
+### 1. Classcard Public API v2 Integration
+- **Gateway**: Integrates directly with Classcard's Public API v2 (`https://api.classcardapp.com/api/v2/public/`).
+- **Security**: The API key is securely stored server-side. Frontend requests only receive a masked representation (e.g. `sk_live_••••••••xyz9`).
+- **Endpoint Matrix**: Covers all 27 documented endpoints across Students, Leads, Staff, Invoices, Payments, Enrolments, Categories/Items, Coupons/Events, Attendance, Credit Notes, and Guardians.
+- **Idempotent Sync**: Ingests students, staff/mentors, classes/events, invoices, and attendance without duplicate creations via external ID and email upserts.
+- **Resilience**: Automatic retry with exponential backoff, circuit-breaker awareness, timeout handling, empty-body HTTP 200/204 response normalization, and full provenance tagging (`CLASSCARD_SOURCED`).
+- **Sandbox Fallback**: Built-in mock/sandbox mode allows full end-to-end testing and demo operations even when external credentials are not yet provisioned.
+
+### 2. Fine-Grained Role-Based Access Control (RBAC)
+- **Personas Supported**:
+  - **Administrator**: Complete control over system configuration, user/role permissions, Classcard credentials, payroll locking, approvals, and audit trails.
+  - **Operations Specialist**: Day-to-day scheduling, calendar overview, attendance exceptions, class completion, and penalty recording (with anti-self-approval protection).
+  - **Mentor**: Isolated personal portal showing only their assigned classes, calendar, attendance records, earnings breakdown, penalties, disputes, and finalized payslips.
+  - **Custom Roles**: Configurable permissions by module (View, Create, Edit, Delete, Approve, Export, Manage Settings, View Sensitive Payroll) with optional branch-level scoping.
+- **Interactive Persona Switcher**: Instantly switch roles and branches in the UI header to audit permissions, views, and authorization enforcement in real time.
+
+### 3. Unified Operations Calendar
+- **Views**: Month, Week, Day, and Agenda list views.
+- **Filters**: Filter by Branch, Subject, Mentor, Class Status (`SCHEDULED`, `COMPLETED`, `CANCELLED`, `LATE_CANCELLED`), and Attendance Status.
+- **Interactive Event Modal**: View student rosters, class details, source provenance, and mark/update attendance directly in the calendar.
+
+### 4. Configurable Multi-Model Payroll Engine
+Calculates mentor compensations with precision arithmetic (2 decimal places) across six distinct models:
+1. **Per-Class Rate**: Fixed fee per completed class session.
+2. **Duration-Based (Hourly)**: Compensation proportional to session duration with custom rounding intervals and minimum duration thresholds.
+3. **Per-Student Rate**: Scaled by the number of students marked `PRESENT` or `LATE`.
+4. **Fixed Monthly Salary**: Prorated or flat recurring base retainer.
+5. **Percentage-Based (Revenue Share)**: Commission tied to invoice or enrolled package value.
+6. **Hybrid**: Base retainer plus tiered per-class or duration bonuses.
+
+- **Immutability & Plan Versioning**: Historical payroll batches freeze the active plan version snapshot. Future rate or policy adjustments will never silently mutate past paid cycles.
+- **Late Cancellation Compensation**: Configurable rules to compensate mentors when students cancel late.
+- **Separation of Concerns**: Calculating, Approving, Locking, and Payment Confirmation are separate, sequential state transitions.
+
+### 5. Penalties, Adjustments & Anti-Tamper Workflow
+- **Four-Eyes Principle / Anti-Self-Approval**: Operations staff cannot approve penalties they submitted.
+- **Deduction Safety**: Only `APPROVED` penalties reduce payable amounts. Draft or pending submitted penalties are quarantined.
+- **Audit Logging & Reversal**: Deletion is prohibited on approved penalties; authorized reversals create credit adjustment records with mandatory justification reasons.
+- **Mentor Dispute Flow**: Mentors can flag deductions or discrepancies directly from their dashboard.
+
+### 6. Official Finalized Payslips
+- Formatted for print or PDF export.
+- Itemizes earnings, bonuses, approved penalties, tax withholdings, and net payable amounts.
+- Includes signature lines, generated date stamps, and encrypted verification hash.
+
+---
+
+## 🛠️ Technology Stack
+
+- **Framework**: [Next.js 16.4.2](https://nextjs.org/) (App Router, Turbopack, Partial Prerendering)
+- **Runtime**: Node.js v24.14+ / pnpm v11.5+
+- **UI Library**: [React 19](https://react.dev/), [Tailwind CSS v4](https://tailwindcss.com/)
+- **Icons**: [Lucide React](https://lucide.dev/)
+- **Date Utilities**: [date-fns](https://date-fns.org/)
+- **Database Schema**: [Prisma ORM](https://www.prisma.io/) (`prisma/schema.prisma` targeting PostgreSQL)
+- **Local Persistence Layer**: Atomic ACID-safe JSON file store (`data/app-db.json`) with in-memory caching and isomorphic Node runtime bindings.
+
+---
+
+## 📁 Project Structure
+
+```
+.
+├── prisma/
+│   └── schema.prisma           # Complete PostgreSQL schema (Users, Roles, Branches, Mentors, Payroll, etc.)
+├── src/
+│   ├── app/                    # Next.js App Router (41 routes)
+│   │   ├── admin/              # User/role management, Classcard API settings, audit logs, system config
+│   │   ├── analytics/          # Attendance, class utilization, mentor/branch performance, sync reports
+│   │   ├── api/                # Classcard sync, status, test connection, payroll processing & penalties
+│   │   ├── finance/            # Payroll dashboard, rules editor, processing, penalties, payslips, reports
+│   │   ├── operations/         # Calendar, classes, attendance roster, exceptions, mentors, students
+│   │   └── overview/           # Executive, Operations, and Mentor dashboards
+│   ├── components/
+│   │   ├── calendar/           # UnifiedCalendar, CalendarFilterBar, CalendarEventModal
+│   │   ├── charts/             # SVG BarChart and DonutChart
+│   │   ├── classcard/          # SyncStatusCard, EndpointMatrix (27 endpoints), SyncHistoryTable
+│   │   ├── layout/             # AppShell, Sidebar, Header, RoleSwitcher
+│   │   ├── payroll/            # PayslipViewer, PenaltyModal
+│   │   └── ui/                 # Button, Badge, Card, StatCard, Modal, Drawer, Tabs, Alert, Table
+│   └── lib/
+│       ├── auth/               # AuthContext, permissions matrix, RBAC utilities
+│       ├── db/                 # Transactional atomic store, seed data
+│       ├── integrations/       # Classcard client, sync orchestrator, endpoint types
+│       ├── payroll/            # Multi-model compensation engine, rule evaluator
+│       └── types/              # Comprehensive TypeScript interfaces
+└── tests/
+    └── acceptance.test.ts      # 18 automated acceptance & security scenarios
+```
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Node.js `v20.0.0` or higher (tested on Node v24.14.0)
+- pnpm `v9.0.0` or higher (tested on pnpm v11.5.3)
+
+### 1. Installation
+Clone repository and install dependencies:
+```bash
+git clone <repository-url>
+cd Website_MVA
+pnpm install
+```
+
+### 2. Environment Configuration
+Create a `.env.local` file in the root directory (optional, mock mode will activate automatically if unset):
+```env
+# Classcard Public API v2 Credentials
+CLASSCARD_API_KEY=your_classcard_api_key_here
+CLASSCARD_API_BASE_URL=https://api.classcardapp.com/api/v2/public/
+
+# Database (for production PostgreSQL deployment via Prisma)
+DATABASE_URL="postgresql://user:password@localhost:5432/mva_operations?schema=public"
+```
+
+### 3. Run Development Server
+Start the Next.js development server with Turbopack:
+```bash
+pnpm dev
+```
+Open [http://localhost:3000](http://localhost:3000) in your browser. The application will automatically route based on the selected persona (Executive Dashboard by default).
+
+### 4. Build for Production
+Create an optimized production build:
+```bash
+pnpm build
+```
+Start the production server:
+```bash
+pnpm start
+```
+
+---
+
+## 🧪 Automated Testing & Verification
+
+The project includes an acceptance test suite (`tests/acceptance.test.ts`) that verifies 18 critical scenarios:
+```bash
+pnpm test
+```
+
+### Verified Scenarios:
+1. **Scenario 1**: Classcard credentials are kept secure and masked for client visibility (`sk_live_••••••••xyz9`).
+2. **Scenario 2**: Connection test verifies status against live gateway or sandbox fallback.
+3. **Scenario 3**: Supported Classcard records synchronize idempotently without duplicate records.
+4. **Scenario 4**: Safe handling of empty body HTTP 200/204 endpoints and response normalization.
+5. **Scenario 5**: RBAC enforcement: Users see only authorized modules and actions.
+6. **Scenario 6**: Administrator configuration of branches, subjects, and packages with proper schemas.
+7. **Scenario 7**: Calendar filters dynamically update events and status summaries.
+8. **Scenario 8**: Attendance marking updates student roster and computes class completion status.
+9. **Scenario 9**: Multi-model mentor payroll configuration (all 6 models supported).
+10. **Scenario 10**: Reproducible payroll calculations preserving frozen plan version snapshots.
+11. **Scenario 11**: Quarantined penalties (`SUBMITTED`/`DRAFT`) do NOT reduce payable amounts.
+12. **Scenario 12**: Approved penalties are applied once and flagged to prevent double-deduction.
+13. **Scenario 13**: Anti-self-approval rule: Operations specialists cannot approve their own submitted penalties.
+14. **Scenario 14**: Authorized reversal replaces silent deletion and logs audit rationale.
+15. **Scenario 15**: Mentor isolation: Mentors access only their own payroll, penalties, and payslips.
+16. **Scenario 16**: Strict separation between Payroll Approval and Payment Confirmation states.
+17. **Scenario 17**: Decimal monetary precision arithmetic prevents floating-point rounding errors.
+18. **Scenario 18**: Persistent audit logging records all sensitive administrative and financial actions.
+
+---
+
+## 🗄️ Database & Production Deployment Path
+
+### Current Storage:
+Out of the box, the app uses an atomic, transactional JSON store (`data/app-db.json`) backed by `src/lib/db/store.ts`. It provides zero-dependency setup for testing, local evaluation, and demonstrations.
+
+### Migrating to Production PostgreSQL:
+1. Review the Prisma schema in [`prisma/schema.prisma`](file:///Users/himanshumathankar/Documents/CS/Website_MVA/prisma/schema.prisma), which defines full models for:
+   - `User`, `Role`, `AuditLog`
+   - `Branch`, `Subject`, `Package`
+   - `Mentor`, `PayrollPlan`, `PayrollBatch`, `Payslip`, `Penalty`
+   - `Student`, `ClassSession`, `AttendanceRecord`
+   - `ClasscardSyncLog`, `Invoice`, `Payment`
+2. Connect to your PostgreSQL instance in `.env`:
+   ```bash
+   DATABASE_URL="postgresql://username:password@db.yourhost.com:5432/production_db?schema=public"
+   ```
+3. Run Prisma migration:
+   ```bash
+   npx prisma migrate dev --name init_mva_production
+   ```
+4. Generate the Prisma client:
+   ```bash
+   npx prisma generate
+   ```
+
+---
+
+## 📄 License
+Internal proprietary license for education and tutoring business operations. All rights reserved.

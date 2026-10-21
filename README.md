@@ -63,7 +63,8 @@ Calculates mentor compensations with precision arithmetic (2 decimal places) acr
 - **Icons**: [Lucide React](https://lucide.dev/)
 - **Date Utilities**: [date-fns](https://date-fns.org/)
 - **Database Schema**: [Prisma ORM](https://www.prisma.io/) (`prisma/schema.prisma` targeting PostgreSQL)
-- **Local Persistence Layer**: Atomic ACID-safe JSON file store (`data/app-db.json`) with in-memory caching and isomorphic Node runtime bindings.
+- **Production Persistence Layer**: PostgreSQL through Prisma. The server store hydrates from and persists to PostgreSQL `AppState`; encrypted credentials use `EncryptedSecret`.
+- **Demo Persistence Layer**: Atomic JSON seed store, used only when `DEMO_MODE=true`.
 
 ---
 
@@ -116,7 +117,7 @@ pnpm install
 
 ### 2. Environment Configuration
 
-Copy [`.env.example`](./.env.example) to a server-only environment file. Never expose secrets through `NEXT_PUBLIC_*` variables. Production requires PostgreSQL, live Classcard credentials, and real email credentials; simulated integrations are only available with explicit `DEMO_MODE=true`.
+Copy [`.env.example`](./.env.example) to a server-only environment file. Never expose secrets through `NEXT_PUBLIC_*` variables. Production requires PostgreSQL, live Classcard credentials, an application encryption key, and real email credentials; simulated integrations are only available with explicit `DEMO_MODE=true`.
 Create a `.env.local` file in the root directory (optional, mock mode will activate automatically if unset):
 ```env
 # Classcard Public API v2 Credentials
@@ -124,6 +125,12 @@ CLASSCARD_API_KEY=your_classcard_api_key_here
 CLASSCARD_API_BASE_URL=https://api.classcardapp.com/api/v2/public/
 
 # Database (for production PostgreSQL deployment via Prisma)
+APP_ENCRYPTION_KEY="generate-a-long-random-secret"
+
+# Gmail OAuth (server-only)
+GOOGLE_OAUTH_CLIENT_ID=""
+GOOGLE_OAUTH_CLIENT_SECRET=""
+GOOGLE_OAUTH_REDIRECT_URI="https://your-domain.example/api/settings/email/oauth/callback"
 DATABASE_URL="postgresql://user:password@localhost:5432/mva_operations?schema=public"
 ```
 
@@ -177,8 +184,10 @@ pnpm test
 
 ## 🗄️ Database & Production Deployment Path
 
-### Current Storage:
-Out of the box, the app uses an atomic, transactional JSON store (`data/app-db.json`) backed by `src/lib/db/store.ts`. It provides zero-dependency setup for testing, local evaluation, and demonstrations.
+### Persistence modes:
+- **Production**: `DEMO_MODE=false` and a valid `DATABASE_URL`. Prisma loads and persists application state in PostgreSQL. `data/db.json` is not read or written.
+- **Demo/tests**: `DEMO_MODE=true`. The JSON store and seeded data are used deliberately so acceptance tests and demonstrations do not need a database.
+- `APP_ENCRYPTION_KEY` is required for encrypted OAuth refresh-token storage. Never reuse a development key in production.
 
 ### Migrating to Production PostgreSQL:
 1. Review the Prisma schema in [`prisma/schema.prisma`](file:///Users/himanshumathankar/Developer/LUmentor/prisma/schema.prisma), which defines full models for:
@@ -191,9 +200,9 @@ Out of the box, the app uses an atomic, transactional JSON store (`data/app-db.j
    ```bash
    DATABASE_URL="postgresql://username:password@db.yourhost.com:5432/production_db?schema=public"
    ```
-3. Run Prisma migration:
+3. Run the checked-in Prisma migrations:
    ```bash
-   npx prisma migrate dev --name init_lumentor_production
+   pnpm db:migrate
    ```
 4. Generate the Prisma client:
    ```bash
@@ -220,6 +229,10 @@ The documented Classcard endpoints currently integrated are:
 Inventory ordering is allow-listed to `product_id`, `name`, or `status`, and the documented empty response from lead creation is treated as a valid successful response when Classcard returns a successful status.
 
 Set `EMAIL_SMTP_PASSWORD`, `EMAIL_OAUTH_CLIENT_SECRET`, and/or `EMAIL_OAUTH_REFRESH_TOKEN` only on the server. Email secrets are not persisted by the settings API. In production, missing or invalid email configuration is an explicit failure, not a simulated success.
+
+### Gmail OAuth
+
+Configure a Google OAuth Web application with the exact callback URL in `GOOGLE_OAUTH_REDIRECT_URI`, then set `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, and `APP_ENCRYPTION_KEY` on the server. In **Admin → Settings → Email**, choose Google OAuth and select **Connect Gmail securely**. The callback exchanges the authorization code server-side and stores only an AES-256-GCM encrypted refresh token in PostgreSQL; it is never sent to browser code or written to JSON. The Gmail account must grant the `https://mail.google.com/` scope. Run the email test after connecting and enabling outbound email.
 
 `DEMO_MODE=true` is restricted to local acceptance tests and demonstrations. It is the only mode that enables simulated Classcard responses, JSON seed behavior, or simulated email. Production must use `DEMO_MODE=false`.
 

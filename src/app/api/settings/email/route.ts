@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../../lib/db/store';
 import { EmailConfig } from '../../../../lib/types/email';
-import { serverEmailSecrets } from '../../../../lib/config/server';
+import { getServerEmailSecrets } from '../../../../lib/config/server';
 import { authorizationError } from '../../../../lib/auth/server';
 
 function sanitizeEmailConfig(config: EmailConfig) {
@@ -49,11 +49,12 @@ export async function POST(req: NextRequest) {
     const user = String(body.user ?? current.user).trim();
     
     // Preserve existing password if user didn't change it or sent empty
-    const pass = serverEmailSecrets().pass;
+    const secrets = await getServerEmailSecrets();
+    const pass = secrets.pass;
 
     const oauthClientId = String(body.oauthClientId ?? current.oauthClientId ?? '').trim();
-    const oauthClientSecret = serverEmailSecrets().oauthClientSecret;
-    const oauthRefreshToken = serverEmailSecrets().oauthRefreshToken;
+    const oauthClientSecret = secrets.oauthClientSecret;
+    const oauthRefreshToken = secrets.oauthRefreshToken;
 
     const fromEmail = String(body.fromEmail ?? current.fromEmail).trim();
     const fromName = String(body.fromName ?? current.fromName).trim();

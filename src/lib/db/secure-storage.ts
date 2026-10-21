@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { prisma } from './prisma';
 
 const ALGORITHM = 'aes-256-gcm';
@@ -12,9 +12,7 @@ function encryptionKey(): Buffer {
 }
 
 function createHashKey(value: string): Buffer {
-  const key = Buffer.alloc(32);
-  Buffer.from(value).copy(key);
-  return key;
+  return createHash('sha256').update(value).digest();
 }
 
 export function encryptSecret(value: string): string {

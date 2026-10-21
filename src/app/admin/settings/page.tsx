@@ -2,13 +2,12 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { AppShell } from '../../../components/layout/AppShell';
-import { db } from '../../../lib/db/store';
 import { Card, CardHeader, CardContent, CardFooter } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
 import { Alert } from '../../../components/ui/Alert';
 import { Badge } from '../../../components/ui/Badge';
 import { Modal } from '../../../components/ui/Modal';
-import { EmailConfig, EmailSecurity, OrganizationSettings } from '../../../lib/types/email';
+import { EmailConfig } from '../../../lib/types/email';
 import {
   Save,
   RefreshCw,
@@ -16,17 +15,12 @@ import {
   Building2,
   CheckCircle2,
   AlertCircle,
-  Clock,
   Send,
-  Lock,
   Eye,
   EyeOff,
   ShieldCheck,
   Server,
   Sparkles,
-  Zap,
-  Globe,
-  Sliders,
 } from 'lucide-react';
 import { formatDate } from '../../../lib/utils/formatters';
 
@@ -83,11 +77,10 @@ export default function SettingsPage() {
         setCutoffDay(orgData.orgSettings.cutoffDay || 15);
       }
     } catch {
-      const fallback = db.getOrgSettings();
-      setOrgName(fallback.orgName);
-      setCurrency(fallback.currency);
-      setTimezone(fallback.timezone);
-      setCutoffDay(fallback.cutoffDay);
+      setOrgName('LUmentor Educational Services');
+      setCurrency('USD');
+      setTimezone('America/New_York');
+      setCutoffDay(15);
     }
 
     try {
@@ -104,15 +97,14 @@ export default function SettingsPage() {
         setHasStoredOAuthSecret(Boolean(emailData.emailConfig.hasOAuthSecret));
       }
     } catch {
-      const fallbackEmail = db.getEmailConfig();
-      setEmailConfig({ ...fallbackEmail, pass: '', oauthClientSecret: '' });
-      setHasStoredPassword(Boolean(fallbackEmail.pass));
-      setHasStoredOAuthSecret(Boolean(fallbackEmail.oauthClientSecret));
+      setHasStoredPassword(false);
+      setHasStoredOAuthSecret(false);
     }
   }, []);
 
   useEffect(() => {
-    loadSettings();
+    const timer = window.setTimeout(() => void loadSettings(), 0);
+    return () => window.clearTimeout(timer);
   }, [loadSettings]);
 
   // Handle General Settings Save
@@ -130,8 +122,8 @@ export default function SettingsPage() {
         setGeneralSaved(true);
         setTimeout(() => setGeneralSaved(false), 4000);
       }
-    } catch (err: any) {
-      alert(err.message || 'Failed to save organization preferences.');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to save organization preferences.');
     } finally {
       setIsSavingGeneral(false);
     }
@@ -165,8 +157,8 @@ export default function SettingsPage() {
       } else {
         setEmailError(data.error || 'Failed to save email configuration.');
       }
-    } catch (err: any) {
-      setEmailError(err.message || 'Network error saving email configuration.');
+    } catch (err: unknown) {
+      setEmailError(err instanceof Error ? err.message : 'Network error saving email configuration.');
     } finally {
       setIsSavingEmail(false);
     }
@@ -218,11 +210,11 @@ export default function SettingsPage() {
           lastTestMessage: data.error,
         }));
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setIsTestingEmail(false);
       setTestResult({
         success: false,
-        message: err.message || 'Network error executing SMTP test.',
+        message: err instanceof Error ? err.message : 'Network error executing SMTP test.',
       });
     }
   };
@@ -297,10 +289,7 @@ export default function SettingsPage() {
   };
 
   const handleResetData = () => {
-    if (confirm('Are you sure you want to reset all records to the default seed state?')) {
-      db.resetToSeed();
-      window.location.reload();
-    }
+    alert('Reset is available only through the server-side demo environment.');
   };
 
   return (
@@ -757,14 +746,22 @@ export default function SettingsPage() {
                           <ShieldCheck className="w-4 h-4 text-indigo-600" />
                           Google Cloud OAuth 2.0 Credentials
                         </span>
-                        <a
-                          href="https://developers.google.com/oauthplayground"
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-[11px] text-indigo-600 hover:text-indigo-800 font-semibold underline flex items-center gap-1"
-                        >
-                          Open OAuth Playground ↗
-                        </a>
+                        <div className="flex items-center gap-3">
+                          <a
+                            href="/api/settings/email/oauth/authorize"
+                            className="text-[11px] text-indigo-600 hover:text-indigo-800 font-semibold underline"
+                          >
+                            Connect Gmail securely
+                          </a>
+                          <a
+                            href="https://console.cloud.google.com/apis/credentials"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[11px] text-indigo-600 hover:text-indigo-800 font-semibold underline flex items-center gap-1"
+                          >
+                            Google Cloud credentials ↗
+                          </a>
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -827,12 +824,11 @@ export default function SettingsPage() {
 
                         <div>
                           <label className="font-semibold text-slate-700 block mb-1">
-                            OAuth Refresh Token <span className="text-rose-500">*</span>
+                            OAuth Refresh Token
                           </label>
                           <input
                             type="text"
-                            required
-                            placeholder="1//04xxxxxxxxxxxxxxxxxx"
+                            placeholder="Connect Gmail above to store this securely"
                             value={emailConfig.oauthRefreshToken || ''}
                             onChange={(e) => setEmailConfig({ ...emailConfig, oauthRefreshToken: e.target.value })}
                             className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"

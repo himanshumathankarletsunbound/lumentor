@@ -561,7 +561,10 @@
       "passwordHash": "435d06d2937015006c74079f799d0b92fe8fbd29d24600faffd4b474a6a0177146e7e2bd0b45eae1f1c688512d5448539b63807c2384b256a20a9efaea7cd616",
       "salt": "4bdf413f8a507f6e5046b89627425ad4",
       "status": "ACTIVE",
-      "createdAt": "2026-01-01T00:00:00Z"
+      "createdAt": "2026-01-01T00:00:00Z",
+      "sessionToken": "b3cf33553b933f1c71bf68db57e90470dd769799c24999b65cd8dc10f3dfa8fd",
+      "sessionExpiry": "2026-11-20T16:47:06.540Z",
+      "lastLoginAt": "2026-10-21T16:47:06.541Z"
     }
   ],
   "branches": [],
@@ -726,7 +729,19 @@
   "payslips": [],
   "invoices": [],
   "payments": [],
-  "auditLogs": [],
+  "auditLogs": [
+    {
+      "id": "audit-1792601226542-lmwy4",
+      "timestamp": "2026-10-21T16:47:06.542Z",
+      "userId": "user-super-admin",
+      "userName": "Himanshu Mathankar",
+      "userRole": "ADMINISTRATOR",
+      "action": "LOGIN_SUCCESS",
+      "entityType": "User",
+      "entityId": "user-super-admin",
+      "details": "User himanshu.m@letsunbound.com logged in successfully"
+    }
+  ],
   "classcardConfig": {
     "baseUrl": "https://api.classcardapp.com/api/v2/public/",
     "apiKey": "",
@@ -1109,7 +1124,9 @@
     "replyTo": "support@letsunbound.com",
     "allowSelfSignedCert": false,
     "isEnabled": false,
-    "lastTestStatus": "UNTESTED"
+    "lastTestStatus": "UNTESTED",
+    "oauthClientSecret": "",
+    "oauthRefreshToken": ""
   },
   "orgSettings": {
     "orgName": "LUmentor Educational Services",

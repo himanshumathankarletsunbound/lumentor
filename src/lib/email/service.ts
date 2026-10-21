@@ -2,10 +2,10 @@ import nodemailer from 'nodemailer';
 import type SMTPTransport from 'nodemailer/lib/smtp-transport';
 import { EmailConfig } from '../types/email';
 import { db } from '../db/store';
-import { serverEmailSecrets } from '../config/server';
+import { getServerEmailSecrets } from '../config/server';
 
-function resolveEmailSecrets(config: EmailConfig): EmailConfig {
-  const secrets = serverEmailSecrets();
+async function resolveEmailSecrets(config: EmailConfig): Promise<EmailConfig> {
+  const secrets = await getServerEmailSecrets();
   return {
     ...config,
     pass: secrets.pass || config.pass,
@@ -59,7 +59,7 @@ export function createTransporter(config: EmailConfig) {
 }
 
 export async function verifySmtpConnection(config: EmailConfig): Promise<{ success: boolean; message: string }> {
-  config = resolveEmailSecrets(config);
+  config = await resolveEmailSecrets(config);
   if (config.authType === 'OAUTH2') {
     if (!config.oauthClientId || !config.oauthClientSecret || !config.oauthRefreshToken) {
       return { success: false, message: 'Google OAuth Client ID, Secret, and Refresh Token are required.' };
@@ -94,7 +94,7 @@ export async function sendEmail(
   },
   customConfig?: EmailConfig
 ): Promise<{ success: boolean; messageId?: string; error?: string; mocked?: boolean }> {
-  const config = resolveEmailSecrets(customConfig || db.getEmailConfig());
+  const config = await resolveEmailSecrets(customConfig || db.getEmailConfig());
 
   const hasValidAuth =
     config.authType === 'OAUTH2'

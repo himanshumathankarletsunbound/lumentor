@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../../../lib/db/store';
 import { verifySmtpConnection, sendTestEmail } from '../../../../../lib/email/service';
 import { EmailConfig } from '../../../../../lib/types/email';
-import { serverEmailSecrets } from '../../../../../lib/config/server';
+import { getServerEmailSecrets } from '../../../../../lib/config/server';
 import { authorizationError } from '../../../../../lib/auth/server';
 
 export async function POST(req: NextRequest) {
@@ -20,11 +20,12 @@ export async function POST(req: NextRequest) {
     const authRequired = body.authRequired !== false;
     const user = String(body.user || current.user || '').trim();
 
-    const pass = serverEmailSecrets().pass;
+    const secrets = await getServerEmailSecrets();
+    const pass = secrets.pass;
 
     const oauthClientId = String(body.oauthClientId || current.oauthClientId || '').trim();
-    const oauthClientSecret = serverEmailSecrets().oauthClientSecret;
-    const oauthRefreshToken = serverEmailSecrets().oauthRefreshToken;
+    const oauthClientSecret = secrets.oauthClientSecret;
+    const oauthRefreshToken = secrets.oauthRefreshToken;
 
     const rawFrom = String(body.fromEmail || current.fromEmail || '').trim();
     const fromEmail = rawFrom.includes('@') ? rawFrom : user;

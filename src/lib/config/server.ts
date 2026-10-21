@@ -15,3 +15,27 @@ export function serverEmailSecrets() {
     oauthRefreshToken: process.env.EMAIL_OAUTH_REFRESH_TOKEN || '',
   };
 }
+
+export async function getServerEmailSecrets() {
+  const configured = serverEmailSecrets();
+  if (configured.oauthRefreshToken || isDemoMode) return configured;
+
+  try {
+    const { getEncryptedSecret } = await import('../db/secure-storage');
+    return {
+      ...configured,
+      oauthRefreshToken: await getEncryptedSecret('email.oauth.refresh_token'),
+    };
+  } catch (error) {
+    if (!isDemoMode) throw error;
+    return configured;
+  }
+}
+
+export function googleOAuthConfig() {
+  return {
+    clientId: process.env.GOOGLE_OAUTH_CLIENT_ID?.trim() || '',
+    clientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET?.trim() || '',
+    redirectUri: process.env.GOOGLE_OAUTH_REDIRECT_URI?.trim() || '',
+  };
+}

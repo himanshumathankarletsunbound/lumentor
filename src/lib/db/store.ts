@@ -34,7 +34,6 @@ import {
   SEED_PENALTIES,
   SEED_ADJUSTMENTS,
   SEED_PAYROLL_PERIODS,
-  SEED_PAYROLL_BATCH,
   SEED_PAYSLIPS,
   SEED_INVOICES,
   SEED_PAYMENTS,
@@ -47,8 +46,6 @@ import {
   INITIAL_ORG_SETTINGS,
 } from './seedData';
 import { EmailConfig, OrganizationSettings } from '../types/email';
-import { isDemoMode } from '../config/server';
-import { loadAppState, saveAppState } from './state-repository';
 
 export interface AppDatabase {
   roles: UserRole[];
@@ -84,6 +81,7 @@ function getNodeFsAndPath() {
       return {
         fs: req('fs'),
         path: req('path'),
+        require: req,
       };
     } catch {
       return null;
@@ -108,16 +106,19 @@ class DataStore {
   }
 
   private usesPostgres(): boolean {
-    return !isDemoMode && Boolean(process.env.DATABASE_URL?.trim());
+    return process.env.DEMO_MODE !== 'true' && Boolean(process.env.DATABASE_URL?.trim());
   }
 
   private async loadFromPostgres(): Promise<void> {
     try {
-      const state = await loadAppState();
+      const node = getNodeFsAndPath();
+      if (!node) throw new Error('PostgreSQL persistence is only available on the server.');
+      const repository = node.require?.('./state-repository') as typeof import('./state-repository');
+      const state = await repository.loadAppState();
       if (state) {
         this.data = { ...this.getDefaultState(), ...state };
       } else {
-        await saveAppState(this.data);
+        await repository.saveAppState(this.data);
       }
       this.initialized = true;
     } catch (err) {
@@ -223,7 +224,9 @@ class DataStore {
 
   private saveToDisk(): void {
     if (this.usesPostgres()) {
-      void saveAppState(this.data).catch((err: unknown) => {
+      const node = getNodeFsAndPath();
+      const repository = node?.require?.('./state-repository') as typeof import('./state-repository') | undefined;
+      void repository?.saveAppState(this.data).catch((err: unknown) => {
         console.error('Failed to persist application state to PostgreSQL:', err);
       });
       return;

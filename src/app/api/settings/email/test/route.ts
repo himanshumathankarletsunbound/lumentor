@@ -9,16 +9,24 @@ export async function POST(req: NextRequest) {
     db.reloadIfModified();
     const current = db.getEmailConfig();
 
-    const host = String(body.host || current.host).trim();
+    const host = String(body.host || current.host || 'smtp.gmail.com').trim();
     const port = Number(body.port || current.port) || 587;
     const security = body.security || current.security || 'STARTTLS';
+    const authType = body.authType === 'OAUTH2' ? 'OAUTH2' : (current.authType === 'OAUTH2' ? 'OAUTH2' : 'PASSWORD');
     const authRequired = body.authRequired !== false;
-    const user = String(body.user || current.user).trim();
+    const user = String(body.user || current.user || '').trim();
 
     let pass = current.pass;
     if (typeof body.pass === 'string' && body.pass.trim().length > 0 && body.pass !== '••••••••••••') {
       pass = body.pass.trim();
     }
+
+    const oauthClientId = String(body.oauthClientId || current.oauthClientId || '').trim();
+    let oauthClientSecret = current.oauthClientSecret || '';
+    if (typeof body.oauthClientSecret === 'string' && body.oauthClientSecret.trim().length > 0 && body.oauthClientSecret !== '••••••••••••') {
+      oauthClientSecret = body.oauthClientSecret.trim();
+    }
+    const oauthRefreshToken = String(body.oauthRefreshToken || current.oauthRefreshToken || '').trim();
 
     const rawFrom = String(body.fromEmail || current.fromEmail || '').trim();
     const fromEmail = rawFrom.includes('@') ? rawFrom : user;
@@ -27,24 +35,37 @@ export async function POST(req: NextRequest) {
     const allowSelfSignedCert = Boolean(body.allowSelfSignedCert ?? current.allowSelfSignedCert);
     const recipient = String(body.to || user || fromEmail || 'himanshu.m@letsunbound.com').trim();
 
-    if (!host) {
-      return NextResponse.json({ success: false, error: 'SMTP Host is required.' }, { status: 400 });
-    }
+    if (authType === 'OAUTH2') {
+      if (!oauthClientId || !oauthClientSecret || !oauthRefreshToken) {
+        return NextResponse.json(
+          { success: false, error: 'Google OAuth Client ID, Client Secret, and Refresh Token are required.' },
+          { status: 400 }
+        );
+      }
+    } else {
+      if (!host) {
+        return NextResponse.json({ success: false, error: 'SMTP Host is required.' }, { status: 400 });
+      }
 
-    if (authRequired && (!user || !pass)) {
-      return NextResponse.json(
-        { success: false, error: 'SMTP Username and Password are required to test authentication.' },
-        { status: 400 }
-      );
+      if (authRequired && (!user || !pass)) {
+        return NextResponse.json(
+          { success: false, error: 'SMTP Username and Password are required to test authentication.' },
+          { status: 400 }
+        );
+      }
     }
 
     const testConfig: EmailConfig = {
       host,
       port,
       security,
+      authType,
       authRequired,
       user,
       pass,
+      oauthClientId,
+      oauthClientSecret,
+      oauthRefreshToken,
       fromEmail,
       fromName,
       replyTo: replyTo || undefined,

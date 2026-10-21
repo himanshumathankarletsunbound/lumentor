@@ -3,6 +3,25 @@ import { EmailConfig } from '../types/email';
 import { db } from '../db/store';
 
 export function createTransporter(config: EmailConfig) {
+  // Handle Google OAuth 2.0
+  if (config.authType === 'OAUTH2' && config.oauthClientId && config.oauthClientSecret && config.oauthRefreshToken) {
+    return nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        type: 'OAuth2',
+        user: config.user || config.fromEmail,
+        clientId: config.oauthClientId,
+        clientSecret: config.oauthClientSecret,
+        refreshToken: config.oauthRefreshToken,
+      },
+      tls: {
+        rejectUnauthorized: !config.allowSelfSignedCert,
+      },
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+    });
+  }
+
   const isSecure = config.security === 'SSL_TLS' || config.port === 465;
 
   const transportOptions: any = {
@@ -28,16 +47,21 @@ export function createTransporter(config: EmailConfig) {
 }
 
 export async function verifySmtpConnection(config: EmailConfig): Promise<{ success: boolean; message: string }> {
-  if (!config.host) {
+  if (config.authType === 'OAUTH2') {
+    if (!config.oauthClientId || !config.oauthClientSecret || !config.oauthRefreshToken) {
+      return { success: false, message: 'Google OAuth Client ID, Secret, and Refresh Token are required.' };
+    }
+  } else if (!config.host) {
     return { success: false, message: 'SMTP host is not configured.' };
   }
 
   try {
     const transporter = createTransporter(config);
     await transporter.verify();
+    const target = config.authType === 'OAUTH2' ? 'Google OAuth 2.0 Relay' : `${config.host}:${config.port}`;
     return {
       success: true,
-      message: `Successfully connected and authenticated with SMTP server at ${config.host}:${config.port}.`,
+      message: `Successfully connected and authenticated with ${target}.`,
     };
   } catch (err: any) {
     return {
@@ -59,8 +83,13 @@ export async function sendEmail(
 ): Promise<{ success: boolean; messageId?: string; error?: string; mocked?: boolean }> {
   const config = customConfig || db.getEmailConfig();
 
+  const hasValidAuth =
+    config.authType === 'OAUTH2'
+      ? Boolean(config.oauthClientId && config.oauthClientSecret && config.oauthRefreshToken)
+      : Boolean(config.host && config.user && config.pass);
+
   // If email dispatch is disabled or credentials not provided, log and mock
-  if (!config.isEnabled || !config.host || !config.user || !config.pass) {
+  if (!config.isEnabled || !hasValidAuth) {
     console.log(`[SIMULATED EMAIL] To: ${options.to} | Subject: "${options.subject}"`);
     return {
       success: true,

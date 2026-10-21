@@ -58,6 +58,8 @@ export default function SettingsPage() {
   });
   const [hasStoredPassword, setHasStoredPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [hasStoredOAuthSecret, setHasStoredOAuthSecret] = useState(false);
+  const [showOAuthSecret, setShowOAuthSecret] = useState(false);
   const [emailSaved, setEmailSaved] = useState(false);
   const [isSavingEmail, setIsSavingEmail] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
@@ -96,13 +98,16 @@ export default function SettingsPage() {
         setEmailConfig({
           ...emailData.emailConfig,
           pass: '', // Keep client password field blank for safety
+          oauthClientSecret: '',
         });
         setHasStoredPassword(Boolean(emailData.emailConfig.hasPassword));
+        setHasStoredOAuthSecret(Boolean(emailData.emailConfig.hasOAuthSecret));
       }
     } catch {
       const fallbackEmail = db.getEmailConfig();
-      setEmailConfig({ ...fallbackEmail, pass: '' });
+      setEmailConfig({ ...fallbackEmail, pass: '', oauthClientSecret: '' });
       setHasStoredPassword(Boolean(fallbackEmail.pass));
+      setHasStoredOAuthSecret(Boolean(fallbackEmail.oauthClientSecret));
     }
   }, []);
 
@@ -223,8 +228,17 @@ export default function SettingsPage() {
   };
 
   // Presets Helper
-  const applyPreset = (preset: 'company_587' | 'company_465' | 'zoho' | 'exchange' | 'google' | 'brevo' | 'resend') => {
-    if (preset === 'brevo') {
+  const applyPreset = (preset: 'company_587' | 'company_465' | 'zoho' | 'exchange' | 'google' | 'google_oauth' | 'brevo' | 'resend') => {
+    if (preset === 'google_oauth') {
+      setEmailConfig((prev) => ({
+        ...prev,
+        authType: 'OAUTH2',
+        host: 'smtp.gmail.com',
+        port: 465,
+        security: 'SSL_TLS',
+        authRequired: true,
+      }));
+    } else if (preset === 'brevo') {
       setEmailConfig((prev) => ({
         ...prev,
         host: 'smtp-relay.brevo.com',
@@ -507,6 +521,14 @@ export default function SettingsPage() {
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
+                  onClick={() => applyPreset('google_oauth')}
+                  className="px-2.5 py-1 rounded-lg text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-xs flex items-center gap-1.5 transition-colors"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Google OAuth 2.0 (Official Cloud Relay)
+                </button>
+                <button
+                  type="button"
                   onClick={() => applyPreset('brevo')}
                   className="px-2.5 py-1 rounded-lg text-xs font-medium bg-white hover:bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold transition-colors"
                 >
@@ -662,65 +684,222 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
-                  {/* Username & Password */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200/80">
-                    <div>
-                      <label className="font-semibold text-slate-700 block mb-1">
-                        SMTP Username / Account Email <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. recruitment@letsunbound.com"
-                        value={emailConfig.user}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setEmailConfig((prev) => ({
-                            ...prev,
-                            user: val,
-                            fromEmail: !prev.fromEmail || prev.fromEmail === '587' || !prev.fromEmail.includes('@') ? val : prev.fromEmail,
-                          }));
-                        }}
-                        className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="font-semibold text-slate-700 block mb-1">
-                        SMTP Password / Secret <span className="text-rose-500">*</span>
-                      </label>
-                      <div className="relative">
+                  {/* Authentication Protocol Selector */}
+                  <div className="pt-2 border-t border-slate-200/80">
+                    <label className="font-semibold text-slate-700 block mb-2">
+                      Authentication Protocol & Credentials Type
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <label
+                        className={`flex items-start gap-2.5 p-3 rounded-lg border cursor-pointer transition-all ${
+                          emailConfig.authType !== 'OAUTH2'
+                            ? 'bg-indigo-50/70 border-indigo-400 text-indigo-950 font-semibold shadow-2xs'
+                            : 'bg-white border-slate-200 text-slate-700'
+                        }`}
+                      >
                         <input
-                          type={showPassword ? 'text' : 'password'}
-                          placeholder={hasStoredPassword ? '•••••••••••• (Leave blank to keep existing)' : 'Enter SMTP password'}
-                          value={emailConfig.pass}
-                          onChange={(e) => setEmailConfig({ ...emailConfig, pass: e.target.value })}
-                          className="w-full pl-3 pr-9 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                          type="radio"
+                          name="authType"
+                          value="PASSWORD"
+                          checked={emailConfig.authType !== 'OAUTH2'}
+                          onChange={() => setEmailConfig({ ...emailConfig, authType: 'PASSWORD' })}
+                          className="text-indigo-600 mt-0.5"
                         />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
-                        >
-                          {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                        </button>
-                      </div>
-                      {hasStoredPassword && (
-                        <p className="text-[11px] text-emerald-600 mt-1 flex items-center gap-1 font-medium">
-                          <CheckCircle2 className="w-3 h-3" />
-                          Password is encrypted in store. Enter a new value only to update.
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Google App Password Requirement Notice */}
-                    {(emailConfig.host.toLowerCase().includes('gmail') || emailConfig.host.toLowerCase().includes('google')) && (
-                      <div className="col-span-1 sm:col-span-2 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 space-y-2">
-                        <div className="flex items-center gap-2 font-bold text-xs text-amber-900">
-                          <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                          <span>Google Account Notice: 16-Character App Password Required</span>
+                        <div>
+                          <span className="block text-xs font-semibold">Standard SMTP Password / App Password</span>
+                          <span className="block text-[11px] text-slate-500 font-normal mt-0.5">
+                            Traditional mail server password or Google App Password
+                          </span>
                         </div>
-                        <p className="text-[11px] text-amber-900 leading-relaxed">
+                      </label>
+
+                      <label
+                        className={`flex items-start gap-2.5 p-3 rounded-lg border cursor-pointer transition-all ${
+                          emailConfig.authType === 'OAUTH2'
+                            ? 'bg-indigo-50/70 border-indigo-400 text-indigo-950 font-semibold shadow-2xs'
+                            : 'bg-white border-slate-200 text-slate-700'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="authType"
+                          value="OAUTH2"
+                          checked={emailConfig.authType === 'OAUTH2'}
+                          onChange={() =>
+                            setEmailConfig({
+                              ...emailConfig,
+                              authType: 'OAUTH2',
+                              host: 'smtp.gmail.com',
+                              port: 465,
+                              security: 'SSL_TLS',
+                            })
+                          }
+                          className="text-indigo-600 mt-0.5"
+                        />
+                        <div>
+                          <span className="block text-xs font-semibold flex items-center gap-1.5">
+                            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                            Google OAuth 2.0 (No 2-Step Verification Needed)
+                          </span>
+                          <span className="block text-[11px] text-slate-500 font-normal mt-0.5">
+                            Official Google Cloud Client ID, Secret & Refresh Token
+                          </span>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* GOOGLE OAUTH 2.0 CREDENTIALS INPUTS */}
+                  {emailConfig.authType === 'OAUTH2' ? (
+                    <div className="space-y-3 pt-2 border-t border-slate-200/80 bg-indigo-50/30 p-4 rounded-xl border border-indigo-100">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
+                          <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                          Google Cloud OAuth 2.0 Credentials
+                        </span>
+                        <a
+                          href="https://developers.google.com/oauthplayground"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[11px] text-indigo-600 hover:text-indigo-800 font-semibold underline flex items-center gap-1"
+                        >
+                          Open OAuth Playground ↗
+                        </a>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1">
+                            Google Account Email <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="email"
+                            required
+                            placeholder="e.g. recruitment@letsunbound.com"
+                            value={emailConfig.user}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setEmailConfig((prev) => ({
+                                ...prev,
+                                user: val,
+                                fromEmail: !prev.fromEmail || prev.fromEmail === '587' || !prev.fromEmail.includes('@') ? val : prev.fromEmail,
+                              }));
+                            }}
+                            className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1">
+                            Google OAuth Client ID <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="xxxx-xxxxxxxx.apps.googleusercontent.com"
+                            value={emailConfig.oauthClientId || ''}
+                            onChange={(e) => setEmailConfig({ ...emailConfig, oauthClientId: e.target.value })}
+                            className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1">
+                            Google OAuth Client Secret <span className="text-rose-500">*</span>
+                          </label>
+                          <div className="relative">
+                            <input
+                              type={showOAuthSecret ? 'text' : 'password'}
+                              placeholder={hasStoredOAuthSecret ? '•••••••••••• (Leave blank to keep existing)' : 'GOCSPX-xxxxxxxx'}
+                              value={emailConfig.oauthClientSecret || ''}
+                              onChange={(e) => setEmailConfig({ ...emailConfig, oauthClientSecret: e.target.value })}
+                              className="w-full pl-3 pr-9 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowOAuthSecret(!showOAuthSecret)}
+                              className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                            >
+                              {showOAuthSecret ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1">
+                            OAuth Refresh Token <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="1//04xxxxxxxxxxxxxxxxxx"
+                            value={emailConfig.oauthRefreshToken || ''}
+                            onChange={(e) => setEmailConfig({ ...emailConfig, oauthRefreshToken: e.target.value })}
+                            className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    /* STANDARD PASSWORD INPUTS */
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200/80">
+                      <div>
+                        <label className="font-semibold text-slate-700 block mb-1">
+                          SMTP Username / Account Email <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. recruitment@letsunbound.com"
+                          value={emailConfig.user}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setEmailConfig((prev) => ({
+                              ...prev,
+                              user: val,
+                              fromEmail: !prev.fromEmail || prev.fromEmail === '587' || !prev.fromEmail.includes('@') ? val : prev.fromEmail,
+                            }));
+                          }}
+                          className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="font-semibold text-slate-700 block mb-1">
+                          SMTP Password / Secret <span className="text-rose-500">*</span>
+                        </label>
+                        <div className="relative">
+                          <input
+                            type={showPassword ? 'text' : 'password'}
+                            placeholder={hasStoredPassword ? '•••••••••••• (Leave blank to keep existing)' : 'Enter SMTP password'}
+                            value={emailConfig.pass}
+                            onChange={(e) => setEmailConfig({ ...emailConfig, pass: e.target.value })}
+                            className="w-full pl-3 pr-9 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                          >
+                            {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                        {hasStoredPassword && (
+                          <p className="text-[11px] text-emerald-600 mt-1 flex items-center gap-1 font-medium">
+                            <CheckCircle2 className="w-3 h-3" />
+                            Password is encrypted in store. Enter a new value only to update.
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Google App Password Requirement Notice */}
+                      {(emailConfig.host.toLowerCase().includes('gmail') || emailConfig.host.toLowerCase().includes('google')) && (
+                        <div className="col-span-1 sm:col-span-2 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 space-y-2">
+                          <div className="flex items-center gap-2 font-bold text-xs text-amber-900">
+                            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                            <span>Google Account Notice: 16-Character App Password Required</span>
+                          </div>
+                          <p className="text-[11px] text-amber-900 leading-relaxed">
                           Google blocks standard account passwords on SMTP with error <strong>535-5.7.8 (BadCredentials)</strong>. You <strong>cannot</strong> use your personal login password. You must generate a <strong>Google App Password</strong>:
                         </p>
                         <ol className="list-decimal pl-4 text-[11px] text-amber-900 space-y-1">
@@ -753,6 +932,7 @@ export default function SettingsPage() {
                       </div>
                     )}
                   </div>
+                )}
 
                   {/* Sender Identity */}
                   <div className="pt-2 border-t border-slate-200/80 space-y-3">

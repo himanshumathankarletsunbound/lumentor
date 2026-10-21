@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../../lib/db/store';
 import { EmailConfig } from '../../../../lib/types/email';
+import { serverEmailSecrets } from '../../../../lib/config/server';
+import { authorizationError } from '../../../../lib/auth/server';
 
 function sanitizeEmailConfig(config: EmailConfig) {
   const { pass, oauthClientSecret, ...safeConfig } = config;
@@ -13,7 +15,9 @@ function sanitizeEmailConfig(config: EmailConfig) {
   };
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const denied = authorizationError(req, 'settings', 'manage_settings');
+  if (denied) return denied;
   try {
     db.reloadIfModified();
     const config = db.getEmailConfig();
@@ -21,15 +25,17 @@ export async function GET() {
       success: true,
       emailConfig: sanitizeEmailConfig(config),
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return NextResponse.json(
-      { success: false, error: err.message || 'Failed to fetch email settings' },
+      { success: false, error: err instanceof Error ? err.message : 'Failed to fetch email settings' },
       { status: 500 }
     );
   }
 }
 
 export async function POST(req: NextRequest) {
+  const denied = authorizationError(req, 'settings', 'manage_settings');
+  if (denied) return denied;
   try {
     const body = await req.json().catch(() => ({}));
     db.reloadIfModified();
@@ -43,17 +49,11 @@ export async function POST(req: NextRequest) {
     const user = String(body.user ?? current.user).trim();
     
     // Preserve existing password if user didn't change it or sent empty
-    let pass = current.pass;
-    if (typeof body.pass === 'string' && body.pass.trim().length > 0 && body.pass !== '••••••••••••') {
-      pass = body.pass.trim();
-    }
+    const pass = serverEmailSecrets().pass;
 
     const oauthClientId = String(body.oauthClientId ?? current.oauthClientId ?? '').trim();
-    let oauthClientSecret = current.oauthClientSecret ?? '';
-    if (typeof body.oauthClientSecret === 'string' && body.oauthClientSecret.trim().length > 0 && body.oauthClientSecret !== '••••••••••••') {
-      oauthClientSecret = body.oauthClientSecret.trim();
-    }
-    const oauthRefreshToken = String(body.oauthRefreshToken ?? current.oauthRefreshToken ?? '').trim();
+    const oauthClientSecret = serverEmailSecrets().oauthClientSecret;
+    const oauthRefreshToken = serverEmailSecrets().oauthRefreshToken;
 
     const fromEmail = String(body.fromEmail ?? current.fromEmail).trim();
     const fromName = String(body.fromName ?? current.fromName).trim();
@@ -128,9 +128,9 @@ export async function POST(req: NextRequest) {
       emailConfig: sanitizeEmailConfig(updated),
       message: 'Email configuration saved successfully.',
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return NextResponse.json(
-      { success: false, error: err.message || 'Failed to save email settings' },
+      { success: false, error: err instanceof Error ? err.message : 'Failed to save email settings' },
       { status: 500 }
     );
   }

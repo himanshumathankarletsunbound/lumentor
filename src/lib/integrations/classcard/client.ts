@@ -1,4 +1,5 @@
 import { db } from '../../db/store';
+import { requireServerSecret, isDemoMode } from '../../config/server';
 
 export interface ClasscardApiResponse<T> {
   success: boolean;
@@ -14,15 +15,11 @@ export class ClasscardApiClient {
   private apiKey: string;
   private useMockMode: boolean = false;
 
-  private isHermeticTestMode(): boolean {
-    return process.env.NODE_ENV === 'test' && !process.env.CLASSCARD_API_KEY;
-  }
-
   constructor() {
     const config = db.getClasscardConfig();
     this.baseUrl = (config.baseUrl || 'https://api.classcardapp.com/api/v2/public/').replace(/\/+$/, '');
-    this.apiKey = process.env.CLASSCARD_API_KEY || config.apiKey;
-    this.useMockMode = false;
+    this.apiKey = requireServerSecret('CLASSCARD_API_KEY');
+    this.useMockMode = isDemoMode;
   }
 
   /**
@@ -35,13 +32,22 @@ export class ClasscardApiClient {
     retries: number = 2
   ): Promise<ClasscardApiResponse<T>> {
     const config = db.getClasscardConfig();
-    const effectiveApiKey = process.env.CLASSCARD_API_KEY || config.apiKey;
+    const effectiveApiKey = requireServerSecret('CLASSCARD_API_KEY');
     const effectiveBaseUrl = (config.baseUrl || 'https://api.classcardapp.com/api/v2/public/').replace(/\/+$/, '');
-    const isMock = this.isHermeticTestMode() || config.useMockMode;
+    const isMock = isDemoMode && config.useMockMode;
 
     // If mock mode is enabled or running in test runner without live key, return simulated response
     if (isMock) {
       return this.handleMockRequest<T>(endpoint, method, body);
+    }
+    if (!effectiveApiKey) {
+      return {
+        success: false,
+        statusCode: 503,
+        errorMessage: 'CLASSCARD_API_KEY is not configured on the server.',
+        isMock: false,
+        emptyBody: true,
+      };
     }
 
     const cleanPath = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
@@ -229,7 +235,7 @@ export class ClasscardApiClient {
 
   public async testConnection(): Promise<{ success: boolean; message: string; isMock: boolean }> {
     const config = db.getClasscardConfig();
-    const isMock = this.isHermeticTestMode() || config.useMockMode;
+    const isMock = isDemoMode && config.useMockMode;
 
     if (isMock) {
       return {

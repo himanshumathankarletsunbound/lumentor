@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../../lib/db/store';
 import { classcardClient } from '../../../../lib/integrations/classcard/client';
+import { authorizationError } from '../../../../lib/auth/server';
+import { requireServerSecret } from '../../../../lib/config/server';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const denied = authorizationError(req, 'classcard_integration', 'view');
+  if (denied) return denied;
   const config = db.getClasscardConfig();
   // Return masked configuration to protect API key
   const maskedKey = config.apiKey
@@ -23,32 +27,10 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = authorizationError(req, 'classcard_integration', 'manage_settings');
+  if (denied) return denied;
   try {
-    const body = await req.json().catch(() => ({}));
-    const { apiKey, baseUrl } = body;
-
-    if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'A valid API key must be provided.' },
-        { status: 400 }
-      );
-    }
-
-    const cleanKey = apiKey.trim();
-    const cleanBaseUrl = (baseUrl && typeof baseUrl === 'string' && baseUrl.trim().length > 0)
-      ? baseUrl.trim()
-      : 'https://api.classcardapp.com/api/v2/public/';
-
-    // Update server-side persistent database
-    db.updateClasscardConfig({
-      apiKey: cleanKey,
-      baseUrl: cleanBaseUrl,
-      isConfigured: true,
-      useMockMode: false,
-    });
-
-    // Also update runtime process.env if applicable
-    process.env.CLASSCARD_API_KEY = cleanKey;
+    requireServerSecret('CLASSCARD_API_KEY');
 
     // Test the new credentials immediately
     const testResult = await classcardClient.testConnection();
@@ -56,7 +38,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       testResult,
-      maskedApiKey: `${cleanKey.slice(0, 8)}••••••••${cleanKey.slice(-4)}`,
+      message: 'Classcard credentials are configured through the server environment.',
     });
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
@@ -66,4 +48,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-

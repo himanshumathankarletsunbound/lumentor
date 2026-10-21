@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { payrollEngine } from '../../../../lib/payroll/engine';
 import { enforceRateLimit } from '../../../../lib/rate-limit/limiter';
+import { authorizationError } from '../../../../lib/auth/server';
 
 export async function POST(req: NextRequest) {
+  const denied = authorizationError(req, 'payroll_processing', 'create');
+  if (denied) return denied;
   const rateLimitError = enforceRateLimit(req, { limit: 15, windowSeconds: 60, identifierPrefix: 'payroll-calculate' });
   if (rateLimitError) return rateLimitError;
 

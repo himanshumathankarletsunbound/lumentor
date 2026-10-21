@@ -77,7 +77,7 @@ export interface AppDatabase {
 function getNodeFsAndPath() {
   if (typeof window === 'undefined') {
     try {
-      const g = globalThis as unknown as { require?: (mod: string) => any };
+      const g = globalThis as unknown as { require?: (mod: string) => unknown };
       const req = typeof g.require === 'function' ? g.require : eval('require');
       return {
         fs: req('fs'),
@@ -141,6 +141,10 @@ class DataStore {
           const raw = node.fs.readFileSync(dbFile, 'utf-8');
           const parsed = JSON.parse(raw);
           this.data = { ...this.getDefaultState(), ...parsed };
+          this.data.classcardConfig.apiKey = '';
+          this.data.emailConfig.pass = '';
+          this.data.emailConfig.oauthClientSecret = '';
+          this.data.emailConfig.oauthRefreshToken = '';
           this.lastMtime = stat.mtimeMs;
         }
       }
@@ -198,7 +202,17 @@ class DataStore {
           node.fs.mkdirSync(dataDir, { recursive: true });
         }
         // Atomic write: write to temp file then renameSync
-        const jsonContent = JSON.stringify(this.data, null, 2);
+        const persistedData = {
+          ...this.data,
+          classcardConfig: { ...this.data.classcardConfig, apiKey: '' },
+          emailConfig: {
+            ...this.data.emailConfig,
+            pass: '',
+            oauthClientSecret: '',
+            oauthRefreshToken: '',
+          },
+        };
+        const jsonContent = JSON.stringify(persistedData, null, 2);
         node.fs.writeFileSync(tmpFile, jsonContent, 'utf-8');
         node.fs.renameSync(tmpFile, dbFile);
         this.lastMtime = Date.now();

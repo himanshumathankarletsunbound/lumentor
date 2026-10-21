@@ -1,20 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../../lib/db/store';
+import { authorizationError } from '../../../../lib/auth/server';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const denied = authorizationError(req, 'settings', 'view');
+  if (denied) return denied;
   try {
     db.reloadIfModified();
     const orgSettings = db.getOrgSettings();
     return NextResponse.json({ success: true, orgSettings });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return NextResponse.json(
-      { success: false, error: err.message || 'Failed to fetch organization settings' },
+      { success: false, error: err instanceof Error ? err.message : 'Failed to fetch organization settings' },
       { status: 500 }
     );
   }
 }
 
 export async function POST(req: NextRequest) {
+  const denied = authorizationError(req, 'settings', 'manage_settings');
+  if (denied) return denied;
   try {
     const body = await req.json().catch(() => ({}));
     db.reloadIfModified();
@@ -46,9 +51,9 @@ export async function POST(req: NextRequest) {
       orgSettings: updated,
       message: 'Organization preferences saved successfully.',
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return NextResponse.json(
-      { success: false, error: err.message || 'Failed to save organization settings' },
+      { success: false, error: err instanceof Error ? err.message : 'Failed to save organization settings' },
       { status: 500 }
     );
   }

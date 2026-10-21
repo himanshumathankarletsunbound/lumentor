@@ -7,9 +7,14 @@
     "build": "next build",
     "start": "next start -p 3005",
     "lint": "eslint",
-    "test": "tsx tests/acceptance.test.ts"
+    "test": "DEMO_MODE=true tsx tests/acceptance.test.ts",
+    "test:api-auth": "DEMO_MODE=true tsx tests/api-auth.test.ts",
+    "db:generate": "prisma generate",
+    "db:validate": "prisma validate",
+    "db:migrate": "prisma migrate deploy"
   },
   "dependencies": {
+    "@prisma/client": "^7.10.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "lucide-react": "^1.59.0",
@@ -28,6 +33,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
+    "prisma": "7.10.0",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
     "typescript": "^5"

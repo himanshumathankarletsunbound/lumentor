@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../lib/db/store';
+import { authorizationError } from '../../../lib/auth/server';
 import { AttendanceStatus, ClassEvent } from '../../../lib/types/models';
 
 export async function POST(req: NextRequest) {
+  const denied = authorizationError(req);
+  if (denied) return denied;
   try {
     const body = await req.json();
     const { classId, roster, markedBy = 'Staff Administrator' } = body;

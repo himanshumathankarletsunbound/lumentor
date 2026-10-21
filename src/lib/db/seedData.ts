@@ -298,8 +298,8 @@ export const SEED_AUDIT_LOGS: AuditEvent[] = [];
 
 export const INITIAL_CLASSCARD_CONFIG: ClasscardConfig = {
   baseUrl: 'https://api.classcardapp.com/api/v2/public/',
-  apiKey: 'cc_live_9f82a1740b2e88a',
-  isConfigured: true,
+  apiKey: '',
+  isConfigured: false,
   useMockMode: true,
   lastSuccessfulSync: undefined,
   lastFailedSync: undefined,

@@ -115,6 +115,8 @@ pnpm install
 ```
 
 ### 2. Environment Configuration
+
+Copy [`.env.example`](./.env.example) to a server-only environment file. Never expose secrets through `NEXT_PUBLIC_*` variables. Production requires PostgreSQL, live Classcard credentials, and real email credentials; simulated integrations are only available with explicit `DEMO_MODE=true`.
 Create a `.env.local` file in the root directory (optional, mock mode will activate automatically if unset):
 ```env
 # Classcard Public API v2 Credentials
@@ -202,3 +204,15 @@ Out of the box, the app uses an atomic, transactional JSON store (`data/app-db.j
 
 ## 📄 License
 Internal proprietary license for education and tutoring business operations. All rights reserved.
+
+## Production deployment requirements
+
+Production deployments use PostgreSQL through Prisma. Set `DATABASE_URL` only in the server environment, run `pnpm db:generate`, then run `pnpm db:migrate` against the deployment database. Do not expose it through a `NEXT_PUBLIC_*` variable.
+
+Set `CLASSCARD_API_KEY` only on the server. Live synchronization sends this key only in the server-side `api-key` header; it is never persisted in the application store or returned to browser code.
+
+Set `EMAIL_SMTP_PASSWORD`, `EMAIL_OAUTH_CLIENT_SECRET`, and/or `EMAIL_OAUTH_REFRESH_TOKEN` only on the server. Email secrets are not persisted by the settings API. In production, missing or invalid email configuration is an explicit failure, not a simulated success.
+
+`DEMO_MODE=true` is restricted to local acceptance tests and demonstrations. It is the only mode that enables simulated Classcard responses, JSON seed behavior, or simulated email. Production must use `DEMO_MODE=false`.
+
+Protected API routes validate the HTTP-only session cookie or bearer token, enforce session expiry and account status, and apply server-side role permissions. Client `localStorage` is not an authentication source. Run `pnpm test:api-auth` to verify unauthenticated and expired-session behavior.

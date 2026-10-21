@@ -1,6 +1,18 @@
 import nodemailer from 'nodemailer';
+import type SMTPTransport from 'nodemailer/lib/smtp-transport';
 import { EmailConfig } from '../types/email';
 import { db } from '../db/store';
+import { serverEmailSecrets } from '../config/server';
+
+function resolveEmailSecrets(config: EmailConfig): EmailConfig {
+  const secrets = serverEmailSecrets();
+  return {
+    ...config,
+    pass: secrets.pass || config.pass,
+    oauthClientSecret: secrets.oauthClientSecret || config.oauthClientSecret,
+    oauthRefreshToken: secrets.oauthRefreshToken || config.oauthRefreshToken,
+  };
+}
 
 export function createTransporter(config: EmailConfig) {
   // Handle Google OAuth 2.0
@@ -24,7 +36,7 @@ export function createTransporter(config: EmailConfig) {
 
   const isSecure = config.security === 'SSL_TLS' || config.port === 465;
 
-  const transportOptions: any = {
+  const transportOptions: SMTPTransport.Options = {
     host: config.host,
     port: config.port,
     secure: isSecure,
@@ -47,6 +59,7 @@ export function createTransporter(config: EmailConfig) {
 }
 
 export async function verifySmtpConnection(config: EmailConfig): Promise<{ success: boolean; message: string }> {
+  config = resolveEmailSecrets(config);
   if (config.authType === 'OAUTH2') {
     if (!config.oauthClientId || !config.oauthClientSecret || !config.oauthRefreshToken) {
       return { success: false, message: 'Google OAuth Client ID, Secret, and Refresh Token are required.' };
@@ -63,10 +76,10 @@ export async function verifySmtpConnection(config: EmailConfig): Promise<{ succe
       success: true,
       message: `Successfully connected and authenticated with ${target}.`,
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     return {
       success: false,
-      message: err.message || 'Failed to establish connection with SMTP server.',
+      message: err instanceof Error ? err.message : 'Failed to establish connection with SMTP server.',
     };
   }
 }
@@ -81,15 +94,21 @@ export async function sendEmail(
   },
   customConfig?: EmailConfig
 ): Promise<{ success: boolean; messageId?: string; error?: string; mocked?: boolean }> {
-  const config = customConfig || db.getEmailConfig();
+  const config = resolveEmailSecrets(customConfig || db.getEmailConfig());
 
   const hasValidAuth =
     config.authType === 'OAUTH2'
       ? Boolean(config.oauthClientId && config.oauthClientSecret && config.oauthRefreshToken)
       : Boolean(config.host && config.user && config.pass);
 
-  // If email dispatch is disabled or credentials not provided, log and mock
+  const allowSimulation = process.env.DEMO_MODE === 'true' || process.env.NODE_ENV === 'development';
   if (!config.isEnabled || !hasValidAuth) {
+    if (!allowSimulation) {
+      return {
+        success: false,
+        error: 'Outbound email is not configured. Set the server-side SMTP or OAuth environment variables.',
+      };
+    }
     console.log(`[SIMULATED EMAIL] To: ${options.to} | Subject: "${options.subject}"`);
     return {
       success: true,
@@ -116,11 +135,11 @@ export async function sendEmail(
       messageId: info.messageId,
       mocked: false,
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('SMTP sendEmail error:', err);
     return {
       success: false,
-      error: err.message || 'SMTP transmission failure',
+      error: err instanceof Error ? err.message : 'SMTP transmission failure',
     };
   }
 }

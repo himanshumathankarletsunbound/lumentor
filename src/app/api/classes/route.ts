@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../lib/db/store';
+import { authorizationError } from '../../../lib/auth/server';
 import { ClassEvent, ClassStudentRoster } from '../../../lib/types/models';
 
 export async function GET(req: NextRequest) {
+  const denied = authorizationError(req);
+  if (denied) return denied;
   try {
     const { searchParams } = new URL(req.url);
     const mentorId = searchParams.get('mentorId') || undefined;
@@ -31,6 +34,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = authorizationError(req);
+  if (denied) return denied;
   try {
     const body = await req.json();
     const {
@@ -128,6 +133,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  const denied = authorizationError(req);
+  if (denied) return denied;
   try {
     const body = await req.json();
     const { id, status, cancellationReason, cancelledBy, notes, room } = body;

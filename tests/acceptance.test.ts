@@ -1,4 +1,5 @@
 (process.env as Record<string, string | undefined>).NODE_ENV = 'test';
+(process.env as Record<string, string | undefined>).DEMO_MODE = 'true';
 
 import assert from 'assert';
 import { db } from '../src/lib/db/store';
@@ -37,10 +38,8 @@ async function runAcceptanceTests() {
   // --- 1. CREDENTIAL SECURITY ---
   test('Scenario 1: Classcard credentials are kept secure and masked for client visibility', () => {
     const config = db.getClasscardConfig();
-    assert(config.apiKey, 'API key should be configured in store');
-    const maskedKey = `${config.apiKey.slice(0, 8)}••••••••${config.apiKey.slice(-4)}`;
-    assert(maskedKey.includes('••••••••'), 'Masked key must mask the majority of secret characters');
-    assert(!maskedKey.includes('cc_live_9f82a1740b2e88a'), 'Raw key must never be shown unmasked');
+    assert.equal(config.apiKey, '', 'Classcard API keys must not be persisted in the store');
+    assert(!JSON.stringify(config).includes('cc_live_'), 'Raw keys must never be present in runtime config');
   });
 
   // --- 2. CONNECTION TEST ---

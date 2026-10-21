@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../lib/db/store';
 import { enforceRateLimit } from '../../../lib/rate-limit/limiter';
+import { authorizationError } from '../../../lib/auth/server';
 
 export async function GET(req: NextRequest) {
   const rateLimitError = enforceRateLimit(req, { limit: 60, windowSeconds: 60, identifierPrefix: 'dashboard-get' });
   if (rateLimitError) return rateLimitError;
 
   try {
+    const denied = authorizationError(req, 'overview', 'view');
+    if (denied) return denied;
     const { searchParams } = new URL(req.url);
     const branchId = searchParams.get('branchId') || undefined;
 

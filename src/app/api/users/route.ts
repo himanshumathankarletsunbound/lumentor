@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../lib/db/store';
 import { hashPassword, generateResetToken } from '../../../lib/auth/crypto';
-import { SystemRole, UserStatus, RolePermission } from '../../../lib/types/auth';
+import { SystemRole, UserStatus, RolePermission, CurrentUser } from '../../../lib/types/auth';
 import { sendPasswordSetupEmail } from '../../../lib/email/service';
+import { authorizationError } from '../../../lib/auth/server';
 
-function sanitizeUser(u: any) {
-  const { passwordHash: _h, salt: _s, resetToken: _rt, ...safeUser } = u;
+function sanitizeUser(u: CurrentUser) {
+  const safeUser = { ...u };
+  delete safeUser.passwordHash;
+  delete safeUser.salt;
+  delete safeUser.resetToken;
   return {
     ...safeUser,
     status: (u.status || 'ACTIVE') as UserStatus,
@@ -13,20 +17,24 @@ function sanitizeUser(u: any) {
   };
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const denied = authorizationError(req, 'users_roles', 'view');
+  if (denied) return denied;
   try {
     db.reloadIfModified();
     const users = db.getUsers().map(sanitizeUser);
     return NextResponse.json({ success: true, users });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return NextResponse.json(
-      { success: false, error: err.message || 'Failed to fetch users' },
+      { success: false, error: err instanceof Error ? err.message : 'Failed to fetch users' },
       { status: 500 }
     );
   }
 }
 
 export async function POST(req: NextRequest) {
+  const denied = authorizationError(req, 'users_roles', 'create');
+  if (denied) return denied;
   try {
     const body = await req.json().catch(() => ({}));
     const name = String(body.name || '').trim();
@@ -128,15 +136,17 @@ export async function POST(req: NextRequest) {
         ? `User created successfully. Password verification link generated.`
         : `User created successfully with active credentials.`,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return NextResponse.json(
-      { success: false, error: err.message || 'Failed to create user.' },
+      { success: false, error: err instanceof Error ? err.message : 'Failed to create user.' },
       { status: 500 }
     );
   }
 }
 
 export async function PATCH(req: NextRequest) {
+  const denied = authorizationError(req, 'users_roles', 'edit');
+  if (denied) return denied;
   try {
     const body = await req.json().catch(() => ({}));
     const id = String(body.id || '').trim();
@@ -235,15 +245,17 @@ export async function PATCH(req: NextRequest) {
       user: sanitizeUser(user),
       message: 'User updated successfully.',
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return NextResponse.json(
-      { success: false, error: err.message || 'Failed to update user.' },
+      { success: false, error: err instanceof Error ? err.message : 'Failed to update user.' },
       { status: 500 }
     );
   }
 }
 
 export async function DELETE(req: NextRequest) {
+  const denied = authorizationError(req, 'users_roles', 'delete');
+  if (denied) return denied;
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
@@ -279,9 +291,9 @@ export async function DELETE(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true, message: `User ${user.email} has been removed.` });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return NextResponse.json(
-      { success: false, error: err.message || 'Failed to delete user.' },
+      { success: false, error: err instanceof Error ? err.message : 'Failed to delete user.' },
       { status: 500 }
     );
   }

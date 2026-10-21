@@ -28,7 +28,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<CurrentUser>(SEED_USERS[0]);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [selectedBranch, setSelectedBranch] = useState<string>('ALL');
 
@@ -47,24 +47,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Offline or network error
     }
 
-    // Fallback: Check localStorage
-    try {
-      const saved = localStorage.getItem('lumentor_user');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && parsed.email) {
-          setCurrentUser(parsed);
-          setIsAuthenticated(true);
-        }
-      }
-    } catch {
-      // Ignore parsing errors
-    } finally {
-      setIsLoading(false);
-    }
+    localStorage.removeItem('lumentor_user');
+    setIsAuthenticated(false);
+    setIsLoading(false);
   }, []);
 
   useEffect(() => {
+    // Session validation is an external synchronization, not a render-derived update.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     checkActiveSession();
   }, [checkActiveSession]);
 

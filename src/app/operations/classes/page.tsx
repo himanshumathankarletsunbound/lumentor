@@ -22,6 +22,25 @@ export default function ClassesPage() {
 
   const branches = db.getBranches();
 
+  const refreshClasses = async () => {
+    try {
+      const res = await fetch('/api/dashboard');
+      const json = await res.json();
+      if (json.success && json.data && json.data.classes) {
+        setClasses(json.data.classes);
+        if (typeof db.initClient === 'function') {
+          db.initClient({ ...db.getSnapshot(), classes: json.data.classes });
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to refresh classes from API:', e);
+    }
+  };
+
+  React.useEffect(() => {
+    refreshClasses();
+  }, []);
+
   const handleSyncEvents = async () => {
     setIsSyncing(true);
     try {
@@ -31,8 +50,8 @@ export default function ClassesPage() {
         body: JSON.stringify({ jobType: 'EVENTS' }),
       });
       const data = await res.json();
-      if (data.status === 'COMPLETED' || data.success) {
-        setClasses(db.getClasses());
+      if (data.status === 'COMPLETED' || data.success || data.recordsProcessed > 0) {
+        await refreshClasses();
       }
     } finally {
       setIsSyncing(false);

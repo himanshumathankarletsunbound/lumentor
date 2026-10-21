@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../lib/auth/AuthContext';
 import { db } from '../../lib/db/store';
 import { StatCard } from '../ui/StatCard';
@@ -23,19 +23,49 @@ import {
   Users,
   Search,
   Check,
+  RefreshCw,
 } from 'lucide-react';
 import { formatTime, formatDate } from '../../lib/utils/formatters';
 import Link from 'next/link';
-import { ClassEvent } from '../../lib/types/models';
+import { ClassEvent, Student, Mentor } from '../../lib/types/models';
+import { Penalty } from '../../lib/types/payroll';
 
 export function OperationsDashboardView() {
   const { selectedBranch } = useAuth();
   const [penaltyModalOpen, setPenaltyModalOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<ClassEvent | null>(null);
   const [activeTab, setActiveTab] = useState<'discrepancies' | 'schedule' | 'incidents'>('discrepancies');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const classes = db.getClasses({ branchId: selectedBranch });
-  const penalties = db.getPenalties();
+  const [classes, setClasses] = useState<ClassEvent[]>(() => db.getClasses({ branchId: selectedBranch }));
+  const [penalties, setPenalties] = useState<Penalty[]>(() => db.getPenalties());
+  const [students, setStudents] = useState<Student[]>(() => db.getStudents(selectedBranch));
+  const [mentors, setMentors] = useState<Mentor[]>(() => db.getMentors(selectedBranch));
+
+  const refreshData = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      const res = await fetch(`/api/dashboard?branchId=${encodeURIComponent(selectedBranch)}`);
+      const json = await res.json();
+      if (json.success && json.data) {
+        if (json.data.classes) setClasses(json.data.classes);
+        if (json.data.penalties) setPenalties(json.data.penalties);
+        if (json.data.students) setStudents(json.data.students);
+        if (json.data.mentors) setMentors(json.data.mentors);
+        if (typeof db.initClient === 'function') {
+          db.initClient({ ...db.getSnapshot(), ...json.data });
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to refresh operations telemetry:', err);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [selectedBranch]);
+
+  useEffect(() => {
+    refreshData();
+  }, [refreshData]);
 
   const totalClasses = classes.length;
   const completedClasses = classes.filter((c) => c.status === 'COMPLETED').length;
@@ -82,6 +112,16 @@ export function OperationsDashboardView() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={refreshData}
+              isLoading={isRefreshing}
+              className="bg-slate-900/80 border-slate-700 text-slate-200 hover:bg-slate-800"
+              leftIcon={<RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />}
+            >
+              Refresh
+            </Button>
             <Button
               variant="outline"
               size="sm"

@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { payrollEngine } from '../../../../lib/payroll/engine';
+import { enforceRateLimit } from '../../../../lib/rate-limit/limiter';
 
 export async function POST(req: NextRequest) {
+  const rateLimitError = enforceRateLimit(req, { limit: 15, windowSeconds: 60, identifierPrefix: 'payroll-calculate' });
+  if (rateLimitError) return rateLimitError;
+
   try {
     const body = await req.json();
     const { periodId, startDate, endDate, branchId, mentorIds } = body;

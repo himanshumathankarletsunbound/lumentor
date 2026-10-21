@@ -1,15 +1,19 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { CurrentUser, PermissionModule, PermissionAction } from '../types/auth';
 import { SEED_USERS } from '../db/seedData';
 import { hasPermission as checkPermission, canAccessModule } from './permissions';
 
 interface AuthContextType {
   currentUser: CurrentUser;
+  isAuthenticated: boolean;
+  isLoading: boolean;
   switchUser: (userId: string) => void;
-  login: (email: string, password?: string) => Promise<{ success: boolean; user?: CurrentUser; error?: string }>;
-  logout: () => void;
+  login: (usernameOrEmail: string, password?: string) => Promise<{ success: boolean; user?: CurrentUser; error?: string }>;
+  logout: () => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<{ success: boolean; message?: string; error?: string; resetUrl?: string }>;
+  resetPassword: (token: string, newPassword: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   availableUsers: CurrentUser[];
   selectedBranch: string; // 'ALL' or branchId
   setSelectedBranch: (branchId: string) => void;
@@ -23,69 +27,136 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<CurrentUser>(SEED_USERS[0]); // Default to Administrator
+  const [currentUser, setCurrentUser] = useState<CurrentUser>(SEED_USERS[0]);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [selectedBranch, setSelectedBranch] = useState<string>('ALL');
 
-  useEffect(() => {
-    const savedUserId = localStorage.getItem('classcard_mva_user_id');
-    if (savedUserId) {
-      const found = SEED_USERS.find((u) => u.id === savedUserId);
-      if (found) setCurrentUser(found);
+  // Check active session on mount
+  const checkActiveSession = useCallback(async () => {
+    try {
+      const res = await fetch('/api/auth/me');
+      const data = await res.json();
+      if (data.success && data.user) {
+        setCurrentUser(data.user);
+        setIsAuthenticated(true);
+        localStorage.setItem('lumentor_user', JSON.stringify(data.user));
+        return;
+      }
+    } catch {
+      // Offline or network error
+    }
+
+    // Fallback: Check localStorage
+    try {
+      const saved = localStorage.getItem('lumentor_user');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.email) {
+          setCurrentUser(parsed);
+          setIsAuthenticated(true);
+        }
+      }
+    } catch {
+      // Ignore parsing errors
+    } finally {
+      setIsLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    checkActiveSession();
+  }, [checkActiveSession]);
+
+  const login = async (
+    usernameOrEmail: string,
+    password?: string
+  ): Promise<{ success: boolean; user?: CurrentUser; error?: string }> => {
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: usernameOrEmail, password }),
+      });
+      const data = await res.json();
+
+      if (data.success && data.user) {
+        setCurrentUser(data.user);
+        setIsAuthenticated(true);
+        localStorage.setItem('lumentor_user', JSON.stringify(data.user));
+        return { success: true, user: data.user };
+      }
+
+      return {
+        success: false,
+        error: data.error || 'Authentication failed. Please check your credentials.',
+      };
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Network error during login.',
+      };
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch {
+      // Ignore network errors on logout
+    } finally {
+      localStorage.removeItem('lumentor_user');
+      localStorage.removeItem('classcard_mva_user_id');
+      setIsAuthenticated(false);
+      window.location.href = '/login';
+    }
+  };
+
+  const requestPasswordReset = async (
+    email: string
+  ): Promise<{ success: boolean; message?: string; error?: string; resetUrl?: string }> => {
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        return { success: true, message: data.message, resetUrl: data.resetUrl };
+      }
+      return { success: false, error: data.error || 'Failed to request password reset.' };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'Network error.' };
+    }
+  };
+
+  const resetPassword = async (
+    token: string,
+    newPassword: string
+  ): Promise<{ success: boolean; message?: string; error?: string }> => {
+    try {
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, newPassword }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        return { success: true, message: data.message };
+      }
+      return { success: false, error: data.error || 'Failed to reset password.' };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'Network error.' };
+    }
+  };
 
   const switchUser = (userId: string) => {
     const found = SEED_USERS.find((u) => u.id === userId);
     if (found) {
       setCurrentUser(found);
-      localStorage.setItem('classcard_mva_user_id', found.id);
+      localStorage.setItem('lumentor_user', JSON.stringify(found));
     }
-  };
-
-  const login = async (email: string, _password?: string): Promise<{ success: boolean; user?: CurrentUser; error?: string }> => {
-    const cleanEmail = email.trim().toLowerCase();
-    
-    // Quick role aliases
-    if (cleanEmail === 'admin' || cleanEmail === 'admin@academyapex.com') {
-      const adminUser = SEED_USERS.find((u) => u.role === 'ADMINISTRATOR') || SEED_USERS[0];
-      setCurrentUser(adminUser);
-      localStorage.setItem('classcard_mva_user_id', adminUser.id);
-      return { success: true, user: adminUser };
-    }
-
-    if (cleanEmail === 'ops' || cleanEmail === 'operations' || cleanEmail === 'operations@academyapex.com') {
-      const opsUser = SEED_USERS.find((u) => u.role === 'OPERATIONS') || SEED_USERS[1];
-      setCurrentUser(opsUser);
-      localStorage.setItem('classcard_mva_user_id', opsUser.id);
-      return { success: true, user: opsUser };
-    }
-
-    if (cleanEmail === 'mentor' || cleanEmail === 'elena.rostova@academyapex.com') {
-      const mentorUser = SEED_USERS.find((u) => u.role === 'MENTOR') || SEED_USERS[2];
-      setCurrentUser(mentorUser);
-      localStorage.setItem('classcard_mva_user_id', mentorUser.id);
-      return { success: true, user: mentorUser };
-    }
-
-    const matched = SEED_USERS.find(
-      (u) => u.email.toLowerCase() === cleanEmail || u.name.toLowerCase().includes(cleanEmail)
-    );
-
-    if (matched) {
-      setCurrentUser(matched);
-      localStorage.setItem('classcard_mva_user_id', matched.id);
-      return { success: true, user: matched };
-    }
-
-    return {
-      success: false,
-      error: 'Invalid credentials. Please select one of the demonstration personas or use a valid email.',
-    };
-  };
-
-  const logout = () => {
-    localStorage.removeItem('classcard_mva_user_id');
-    setCurrentUser(SEED_USERS[0]);
   };
 
   const hasPerm = (module: PermissionModule, action: PermissionAction, branchId?: string) => {
@@ -104,9 +175,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider
       value={{
         currentUser,
+        isAuthenticated,
+        isLoading,
         switchUser,
         login,
         logout,
+        requestPasswordReset,
+        resetPassword,
         availableUsers: SEED_USERS,
         selectedBranch,
         setSelectedBranch,

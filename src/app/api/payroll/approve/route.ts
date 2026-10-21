@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../../lib/db/store';
+import { enforceRateLimit } from '../../../../lib/rate-limit/limiter';
 
 export async function POST(req: NextRequest) {
+  const rateLimitError = enforceRateLimit(req, { limit: 10, windowSeconds: 60, identifierPrefix: 'payroll-approve' });
+  if (rateLimitError) return rateLimitError;
+
   try {
     const body = await req.json();
     const { batchId, approverId, approverName, action, rejectionReason } = body;

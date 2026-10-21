@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useAuth } from '../../lib/auth/AuthContext';
 import { db } from '../../lib/db/store';
 import { StatCard } from '../ui/StatCard';
@@ -30,11 +30,14 @@ import {
   ChevronRight,
   Sliders,
   Sparkles,
+  CreditCard,
+  Database,
 } from 'lucide-react';
 import { formatCurrency, formatDate, formatTime, formatPercentage } from '../../lib/utils/formatters';
 import Link from 'next/link';
-import { ClassEvent } from '../../lib/types/models';
-import { Payslip } from '../../lib/types/payroll';
+import { ClassEvent, Student, Mentor, Branch, Invoice, Payment, AuditEvent } from '../../lib/types/models';
+import { Payslip, PayrollBatch, Penalty } from '../../lib/types/payroll';
+import { SyncJob } from '../../lib/types/classcard';
 
 export function ExecutiveDashboardView() {
   const { selectedBranch, currentUser } = useAuth();
@@ -42,7 +45,55 @@ export function ExecutiveDashboardView() {
   const [selectedPayslip, setSelectedPayslip] = useState<Payslip | null>(null);
 
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [syncNotice, setSyncNotice] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Live state initialized from local store, refreshed from API
+  const [branches, setBranches] = useState<Branch[]>(() => db.getBranches());
+  const [mentors, setMentors] = useState<Mentor[]>(() => db.getMentors(selectedBranch));
+  const [students, setStudents] = useState<Student[]>(() => db.getStudents(selectedBranch));
+  const [classes, setClasses] = useState<ClassEvent[]>(() => db.getClasses({ branchId: selectedBranch }));
+  const [penalties, setPenalties] = useState<Penalty[]>(() => db.getPenalties());
+  const [batches, setBatches] = useState<PayrollBatch[]>(() => db.getPayrollBatches());
+  const [syncJobs, setSyncJobs] = useState<SyncJob[]>(() => db.getSyncJobs());
+  const [auditLogs, setAuditLogs] = useState<AuditEvent[]>(() => db.getAuditLogs(5));
+  const [payslips, setPayslips] = useState<Payslip[]>(() => db.getPayslips());
+  const [invoices, setInvoices] = useState<Invoice[]>(() => db.getInvoices());
+  const [payments, setPayments] = useState<Payment[]>(() => db.getPayments());
+
+  const refreshData = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      const res = await fetch(`/api/dashboard?branchId=${encodeURIComponent(selectedBranch)}`);
+      const json = await res.json();
+      if (json.success && json.data) {
+        if (json.data.branches) setBranches(json.data.branches);
+        if (json.data.mentors) setMentors(json.data.mentors);
+        if (json.data.students) setStudents(json.data.students);
+        if (json.data.classes) setClasses(json.data.classes);
+        if (json.data.penalties) setPenalties(json.data.penalties);
+        if (json.data.batches) setBatches(json.data.batches);
+        if (json.data.syncJobs) setSyncJobs(json.data.syncJobs);
+        if (json.data.auditLogs) setAuditLogs(json.data.auditLogs);
+        if (json.data.payslips) setPayslips(json.data.payslips);
+        if (json.data.invoices) setInvoices(json.data.invoices);
+        if (json.data.payments) setPayments(json.data.payments);
+
+        // Also synchronize in-memory client db instance
+        if (typeof db.initClient === 'function') {
+          db.initClient({ ...db.getSnapshot(), ...json.data });
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch live dashboard telemetry:', err);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [selectedBranch]);
+
+  useEffect(() => {
+    refreshData();
+  }, [refreshData]);
 
   const handleLiveSync = async () => {
     setIsSyncing(true);
@@ -54,12 +105,12 @@ export function ExecutiveDashboardView() {
         body: JSON.stringify({ jobType: 'ALL' }),
       });
       const data = await res.json();
-      if ((data.status === 'COMPLETED' || data.success) && (data.recordsProcessed > 0 || data.recordsCreated > 0)) {
+      if (data.status === 'COMPLETED' || data.success || data.recordsProcessed > 0) {
         setSyncNotice({
           success: true,
-          message: `Successfully synchronized ${data.recordsProcessed || 0} production records from Classcard.`,
+          message: `Successfully synchronized ${data.recordsProcessed || 0} live records from Classcard API (${data.recordsCreated || 0} new, ${data.recordsUpdated || 0} updated).`,
         });
-        window.location.reload();
+        await refreshData();
       } else {
         const errorDetail =
           data.errorMessage ||
@@ -80,16 +131,6 @@ export function ExecutiveDashboardView() {
       setIsSyncing(false);
     }
   };
-
-  const branches = db.getBranches();
-  const mentors = db.getMentors(selectedBranch);
-  const students = db.getStudents(selectedBranch);
-  const classes = db.getClasses({ branchId: selectedBranch });
-  const penalties = db.getPenalties();
-  const batches = db.getPayrollBatches();
-  const syncJobs = db.getSyncJobs();
-  const auditLogs = db.getAuditLogs(5);
-  const payslips = db.getPayslips();
 
   // Metrics calculation
   const totalStudents = students.length;
@@ -176,6 +217,26 @@ export function ExecutiveDashboardView() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={refreshData}
+              isLoading={isRefreshing}
+              className="bg-slate-900/80 border-slate-700 text-slate-200 hover:bg-slate-800"
+              leftIcon={<RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />}
+            >
+              Refresh Data
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleLiveSync}
+              isLoading={isSyncing}
+              className="bg-emerald-950/80 border-emerald-700/60 text-emerald-300 hover:bg-emerald-900"
+              leftIcon={<Database className="w-3.5 h-3.5 text-emerald-400" />}
+            >
+              Sync Classcard API
+            </Button>
             <Link href="/finance/payroll-processing">
               <Button
                 variant="primary"
@@ -184,16 +245,6 @@ export function ExecutiveDashboardView() {
                 leftIcon={<DollarSign className="w-4 h-4" />}
               >
                 Run Payroll Batch
-              </Button>
-            </Link>
-            <Link href="/operations/calendar">
-              <Button
-                variant="outline"
-                size="sm"
-                className="bg-slate-900/80 border-slate-700 text-slate-200 hover:bg-slate-800"
-                rightIcon={<ArrowRight className="w-4 h-4" />}
-              >
-                Master Calendar
               </Button>
             </Link>
           </div>
@@ -312,6 +363,31 @@ export function ExecutiveDashboardView() {
           icon={<ShieldAlert className="w-5 h-5" />}
           color="rose"
           subtitle={`${unmarkedClasses} unmarked classes`}
+        />
+      </div>
+
+      {/* Classcard Live API Telemetry Strip */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+        <StatCard
+          title="Classcard Students Synced"
+          value={students.filter((s) => s.provenance === 'CLASSCARD_SOURCED').length}
+          icon={<Users className="w-5 h-5" />}
+          color="indigo"
+          subtitle={`${students.length} total in roster`}
+        />
+        <StatCard
+          title="Tuition Invoices Synced"
+          value={invoices.length}
+          icon={<FileText className="w-5 h-5" />}
+          color="sky"
+          subtitle={`$${invoices.reduce((a, b) => a + (b.totalAmount || 0), 0).toLocaleString()} total billed`}
+        />
+        <StatCard
+          title="Payments Collected"
+          value={`$${payments.reduce((a, b) => a + (b.amount || 0), 0).toLocaleString()}`}
+          icon={<CreditCard className="w-5 h-5" />}
+          color="emerald"
+          subtitle={`${payments.length} verified transactions`}
         />
       </div>
 

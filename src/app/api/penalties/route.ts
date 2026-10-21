@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../lib/db/store';
+import { enforceRateLimit } from '../../../lib/rate-limit/limiter';
 
 export async function GET(req: NextRequest) {
+  const rateLimitError = enforceRateLimit(req, { limit: 60, windowSeconds: 60, identifierPrefix: 'penalties-get' });
+  if (rateLimitError) return rateLimitError;
+
   const searchParams = req.nextUrl.searchParams;
   const mentorId = searchParams.get('mentorId') || undefined;
   const penalties = db.getPenalties(mentorId);
@@ -9,6 +13,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const rateLimitError = enforceRateLimit(req, { limit: 20, windowSeconds: 60, identifierPrefix: 'penalties-post' });
+  if (rateLimitError) return rateLimitError;
+
   try {
     const body = await req.json();
     const { mentorId, branchId, category, reason, amount, evidenceNote, createdBy, createdByName } = body;

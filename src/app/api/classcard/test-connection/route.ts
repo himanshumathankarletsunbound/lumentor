@@ -1,7 +1,11 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { classcardClient } from '../../../../lib/integrations/classcard/client';
+import { enforceRateLimit } from '../../../../lib/rate-limit/limiter';
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  const rateLimitError = enforceRateLimit(req, { limit: 20, windowSeconds: 60, identifierPrefix: 'classcard-test-connection' });
+  if (rateLimitError) return rateLimitError;
+
   try {
     const result = await classcardClient.testConnection();
     return NextResponse.json(result);

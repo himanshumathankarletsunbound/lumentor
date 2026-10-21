@@ -1,5 +1,7 @@
 export type SystemRole = 'ADMINISTRATOR' | 'OPERATIONS' | 'MENTOR' | 'CUSTOM';
 
+export type UserStatus = 'ACTIVE' | 'SENT_PASSWORD_VERIFICATION' | 'SUSPENDED' | 'DISABLED';
+
 export type PermissionModule =
   | 'overview'
   | 'calendar'
@@ -59,4 +61,14 @@ export interface CurrentUser {
   assignedBranchIds: string[]; // empty = all branches
   avatarUrl?: string;
   permissions: RolePermission[];
+  passwordHash?: string;
+  salt?: string;
+  resetToken?: string;
+  resetTokenExpiry?: string;
+  sessionToken?: string;
+  sessionExpiry?: string;
+  status?: UserStatus;
+  createdAt?: string;
+  updatedAt?: string;
+  lastLoginAt?: string;
 }

@@ -106,8 +106,20 @@ export class PayrollEngine {
       // 4. Percentage Based Revenue Share Component
       if (plan.compensationModel === 'PERCENTAGE_BASED' || plan.compensationModel === 'HYBRID') {
         if (plan.revenuePercentage > 0) {
-          // Approximate session package revenue basis (e.g. $120/session)
-          const sessionRevenueBasis = 120.0;
+          // Dynamically compute session package revenue basis:
+          // 1. From class package (price / sessions)
+          // 2. From plan-configured sessionRevenueBasis
+          // 3. Fallback to baseClassRate or plan default
+          let sessionRevenueBasis = plan.sessionRevenueBasis;
+          if (!sessionRevenueBasis && cls.packageId) {
+            const pkg = db.getPackageById(cls.packageId);
+            if (pkg && pkg.totalSessions > 0) {
+              sessionRevenueBasis = pkg.price / pkg.totalSessions;
+            }
+          }
+          if (!sessionRevenueBasis || sessionRevenueBasis <= 0) {
+            sessionRevenueBasis = baseClassRate > 0 ? baseClassRate : 120.0;
+          }
           const revShare = sessionRevenueBasis * (plan.revenuePercentage / 100) * lateMultiplier;
           revenueShareEarnings += revShare;
         }
@@ -309,7 +321,7 @@ export class PayrollEngine {
           category: pen?.category || 'Deduction',
           reason: pen?.reason || 'Approved penalty deduction',
           amount: pen?.amount || 0,
-          date: pen?.createdAt ? pen.createdAt.slice(0, 10) : '2026-10-15',
+          date: pen?.createdAt ? pen.createdAt.slice(0, 10) : new Date().toISOString().slice(0, 10),
         };
       });
 

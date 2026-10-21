@@ -1,14 +1,14 @@
 'use client';
 
 import React from 'react';
-import { Menu, Building2, Bell, RefreshCw, LogOut } from 'lucide-react';
+import { Menu, Building2, Bell, RefreshCw, LogOut, User, Shield } from 'lucide-react';
 import { useAuth } from '../../lib/auth/AuthContext';
 import { RoleSwitcher } from './RoleSwitcher';
 import { SEED_BRANCHES } from '../../lib/db/seedData';
 import Link from 'next/link';
 
 export function Header({ onMenuClick }: { onMenuClick: () => void }) {
-  const { selectedBranch, setSelectedBranch, isMentor } = useAuth();
+  const { selectedBranch, setSelectedBranch, isMentor, currentUser, logout } = useAuth();
 
   return (
     <header className="h-16 bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between gap-4 sticky top-0 z-30 shadow-2xs">
@@ -63,17 +63,28 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
 
         <div className="h-6 w-px bg-slate-200 hidden sm:block" />
 
+        {/* User Badge / Profile */}
+        <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-xl bg-slate-50 border border-slate-200">
+          <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xs font-bold shrink-0">
+            {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
+          </div>
+          <div className="text-left">
+            <p className="text-xs font-semibold text-slate-800 leading-tight">{currentUser.name}</p>
+            <p className="text-[10px] text-slate-500 truncate max-w-[140px]">{currentUser.email}</p>
+          </div>
+        </div>
+
         {/* Role Switcher Pill */}
         <RoleSwitcher />
 
-        {/* Sign Out / Login */}
-        <Link
-          href="/login"
-          title="Sign out / Switch account"
+        {/* Sign Out Button */}
+        <button
+          onClick={() => logout()}
+          title="Sign out"
           className="p-2 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
         >
           <LogOut className="w-4 h-4" />
-        </Link>
+        </button>
       </div>
     </header>
   );

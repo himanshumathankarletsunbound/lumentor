@@ -20,6 +20,7 @@ export interface PayrollPlan {
   hourlyRate: number;
   perStudentRate: number;
   revenuePercentage: number;
+  sessionRevenueBasis?: number; // Configurable per-session revenue basis for percentage-based models
   minEligibleDurationMinutes: number;
   payableClassStatuses: ClassStatus[];
   lateCancellationPayPercent: number; // e.g. 50%

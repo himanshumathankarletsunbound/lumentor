@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runClasscardSync } from '../../../../lib/integrations/classcard/sync';
 import { SyncJobType } from '../../../../lib/types/classcard';
+import { enforceRateLimit } from '../../../../lib/rate-limit/limiter';
 
 export async function POST(req: NextRequest) {
+  const rateLimitError = enforceRateLimit(req, { limit: 12, windowSeconds: 60, identifierPrefix: 'classcard-sync' });
+  if (rateLimitError) return rateLimitError;
+
   try {
     const body = await req.json().catch(() => ({}));
     const jobType: SyncJobType = body.jobType || 'ALL';

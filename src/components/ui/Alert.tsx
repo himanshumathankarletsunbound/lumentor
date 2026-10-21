@@ -3,14 +3,17 @@ import { AlertCircle, CheckCircle, Info, AlertTriangle } from 'lucide-react';
 import { cn } from '../../lib/utils/cn';
 
 export interface AlertProps {
-  type?: 'info' | 'success' | 'warning' | 'error';
+  type?: 'info' | 'success' | 'warning' | 'error' | 'danger';
+  variant?: 'info' | 'success' | 'warning' | 'error' | 'danger';
   title?: string;
   message?: React.ReactNode;
+  children?: React.ReactNode;
   action?: React.ReactNode;
   className?: string;
 }
 
-export function Alert({ type = 'info', title, message, action, className }: AlertProps) {
+export function Alert({ type, variant, title, message, children, action, className }: AlertProps) {
+  const resolvedType = (variant === 'danger' ? 'error' : variant) || (type === 'danger' ? 'error' : type) || 'info';
   const styles = {
     info: {
       bg: 'bg-sky-50 border-sky-200/80 text-sky-900',
@@ -30,14 +33,15 @@ export function Alert({ type = 'info', title, message, action, className }: Aler
     },
   };
 
-  const current = styles[type];
+  const current = styles[resolvedType as 'info' | 'success' | 'warning' | 'error'] || styles.info;
+  const content = children !== undefined ? children : message;
 
   return (
     <div className={cn('p-4 rounded-xl border flex items-start gap-3.5', current.bg, className)}>
       <div className="mt-0.5">{current.icon}</div>
       <div className="flex-1 text-sm">
         {title && <h4 className="font-semibold mb-0.5">{title}</h4>}
-        <div className="text-slate-700 leading-relaxed text-xs sm:text-sm">{message}</div>
+        {content && <div className="text-slate-700 leading-relaxed text-xs sm:text-sm">{content}</div>}
       </div>
       {action && <div className="shrink-0 ml-2">{action}</div>}
     </div>

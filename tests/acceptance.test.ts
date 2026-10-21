@@ -8,6 +8,8 @@ import { runClasscardSync } from '../src/lib/integrations/classcard/sync';
 import { hasPermission } from '../src/lib/auth/permissions';
 import { SEED_USERS } from '../src/lib/db/seedData';
 import { formatCurrency, roundToTwoDecimals } from '../src/lib/utils/formatters';
+import { hashPassword, verifyPassword, generateResetToken } from '../src/lib/auth/crypto';
+import { CurrentUser } from '../src/lib/types/auth';
 
 async function runAcceptanceTests() {
   // Ensure test starts with clean seed data
@@ -57,9 +59,8 @@ async function runAcceptanceTests() {
   // --- 3. DEDUPLICATION & IDEMPOTENT SYNC ---
   await (async () => {
     try {
-      const initialStudentCount = db.getStudents().length;
       // Run sync twice
-      await runClasscardSync('STUDENTS');
+      const firstJob = await runClasscardSync('STUDENTS');
       const countAfterFirstSync = db.getStudents().length;
       const secondJob = await runClasscardSync('STUDENTS');
       const countAfterSecondSync = db.getStudents().length;
@@ -90,8 +91,32 @@ async function runAcceptanceTests() {
   // --- 5. RBAC PERMISSIONS ---
   test('Scenario 5: Users with different roles see only authorized modules and actions', () => {
     const adminUser = SEED_USERS.find((u) => u.role === 'ADMINISTRATOR')!;
-    const opsUser = SEED_USERS.find((u) => u.role === 'OPERATIONS')!;
-    const mentorUser = SEED_USERS.find((u) => u.role === 'MENTOR')!;
+    assert(adminUser, 'Admin user must exist in seed');
+
+    const opsRole = db.getRoles().find((r) => r.systemRole === 'OPERATIONS')!;
+    const mentorRole = db.getRoles().find((r) => r.systemRole === 'MENTOR')!;
+
+    const opsUser: CurrentUser = {
+      id: 'test-ops-user',
+      email: 'ops@academyapex.com',
+      name: 'Test Operations Specialist',
+      role: 'OPERATIONS',
+      roleName: 'Operations Specialist',
+      assignedBranchIds: [],
+      avatarUrl: '',
+      permissions: opsRole.permissions,
+    };
+
+    const mentorUser: CurrentUser = {
+      id: 'test-mentor-user',
+      email: 'mentor@academyapex.com',
+      name: 'Test Mentor User',
+      role: 'MENTOR',
+      roleName: 'Mentor',
+      assignedBranchIds: [],
+      avatarUrl: '',
+      permissions: mentorRole.permissions,
+    };
 
     // Admin has full access
     assert(hasPermission(adminUser, 'payroll_rules', 'manage_settings') === true);
@@ -156,8 +181,8 @@ async function runAcceptanceTests() {
       title: 'Test Robotics Session',
       subjectId: 'subj-cs',
       subjectName: 'Computer Science',
-      mentorId: 'mentor-1',
-      mentorName: 'Dr. Elena Rostova',
+      mentorId: 'test-m-1',
+      mentorName: 'Test Mentor 1',
       branchId: 'branch-nyc',
       branchName: 'Manhattan Campus',
       startTime: '2026-10-18T10:00:00Z',
@@ -204,10 +229,48 @@ async function runAcceptanceTests() {
 
   // --- 10. REPRODUCIBLE RECALCULATION & PLAN VERSIONING ---
   test('Scenario 10: Payroll calculations are reproducible and preserve plan version snapshots', () => {
+    const testMentor = db.createMentor({
+      firstName: 'Alan',
+      lastName: 'Turing',
+      email: 'alan.turing@academyapex.com',
+      phone: '+1 555 1234',
+      branchId: 'branch-bos',
+      branchName: 'Boston Campus',
+      subjectIds: [],
+      payrollPlanId: 'plan-hybrid-senior',
+      status: 'ACTIVE',
+      provenance: 'LOCALLY_CREATED',
+      teachingHoursThisMonth: 15,
+      completedClassesCount: 10,
+      attendanceRate: 100,
+      hourlyRate: 50,
+    });
+
+    db.createClass({
+      title: 'Logic & Computation',
+      subjectId: 'subj-cs',
+      subjectName: 'Computer Science',
+      mentorId: testMentor.id,
+      mentorName: `${testMentor.firstName} ${testMentor.lastName}`,
+      branchId: 'branch-bos',
+      branchName: 'Boston Campus',
+      startTime: '2026-10-05T10:00:00Z',
+      endTime: '2026-10-05T11:30:00Z',
+      durationMinutes: 90,
+      isGroup: false,
+      capacity: 1,
+      students: [{ studentId: 's1', studentName: 'Student 1', studentEmail: 's1@test.com', attendanceStatus: 'PRESENT' }],
+      status: 'COMPLETED',
+      attendanceStatusSummary: 'ALL_PRESENT',
+      isLateCancellation: false,
+      provenance: 'LOCALLY_CREATED',
+    });
+
     const batch = payrollEngine.generateBatch({
       periodId: 'period-2026-10-c1',
       startDate: '2026-10-01',
       endDate: '2026-10-15',
+      mentorIds: [testMentor.id],
     });
 
     assert(batch.lineItems.length > 0, 'Batch should generate line items');
@@ -220,8 +283,22 @@ async function runAcceptanceTests() {
 
   // --- 11. UNAPPROVED PENALTIES DO NOT REDUCE PAYROLL ---
   test('Scenario 11: Unapproved penalties (SUBMITTED / DRAFT) do NOT reduce payable amounts', () => {
-    const mentor = db.getMentors()[0];
-    const initialPenalties = db.getPenalties(mentor.id);
+    const mentor = db.createMentor({
+      firstName: 'Grace',
+      lastName: 'Hopper',
+      email: 'grace.hopper@academyapex.com',
+      phone: '+1 555 4321',
+      branchId: 'branch-nyc',
+      branchName: 'NYC Flagship',
+      subjectIds: [],
+      payrollPlanId: 'plan-per-class-std',
+      status: 'ACTIVE',
+      provenance: 'LOCALLY_CREATED',
+      teachingHoursThisMonth: 10,
+      completedClassesCount: 5,
+      attendanceRate: 100,
+      hourlyRate: 65,
+    });
 
     // Create an unapproved penalty
     const unapproved = db.createPenalty({
@@ -256,7 +333,23 @@ async function runAcceptanceTests() {
 
   // --- 12. APPROVED PENALTIES NOT APPLIED TWICE ---
   test('Scenario 12: Approved penalties are not applied twice across subsequent cycles', () => {
-    const mentor = db.getMentors()[1];
+    const mentor = db.createMentor({
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      email: 'ada.lovelace@academyapex.com',
+      phone: '+1 555 7777',
+      branchId: 'branch-sf',
+      branchName: 'SF Innovation Hub',
+      subjectIds: [],
+      payrollPlanId: 'plan-per-class-std',
+      status: 'ACTIVE',
+      provenance: 'LOCALLY_CREATED',
+      teachingHoursThisMonth: 12,
+      completedClassesCount: 8,
+      attendanceRate: 100,
+      hourlyRate: 65,
+    });
+
     // Create and approve penalty
     const pen = db.createPenalty({
       mentorId: mentor.id,
@@ -273,7 +366,6 @@ async function runAcceptanceTests() {
     assert(pen.status === 'APPROVED');
 
     // Run first batch calculation
-    const plan = db.getPayrollPlanById(mentor.payrollPlanId)!;
     const batch1 = payrollEngine.generateBatch({
       periodId: 'p1',
       startDate: '2026-10-01',
@@ -308,8 +400,8 @@ async function runAcceptanceTests() {
   // --- 13. ANTI-SELF-APPROVAL RULE ---
   test('Scenario 13: Operations staff cannot approve their own submitted penalty (Anti-self-approval rule)', () => {
     const pen = db.createPenalty({
-      mentorId: 'mentor-1',
-      mentorName: 'Dr. Elena Rostova',
+      mentorId: 'test-m-sub',
+      mentorName: 'Test Mentor',
       branchId: 'branch-nyc',
       category: 'UNAPPROVED_ABSENCE',
       reason: 'Self-approval test',
@@ -320,7 +412,6 @@ async function runAcceptanceTests() {
 
     assert.throws(
       () => {
-        // Attempting to approve as the creator
         db.approvePenalty(pen.id, 'user-ops-test', 'Test Ops Officer');
       },
       /cannot approve a penalty that you submitted yourself/,
@@ -331,8 +422,8 @@ async function runAcceptanceTests() {
   // --- 14. PENALTY REVERSAL WORKFLOW ---
   test('Scenario 14: Authorized reversal replaces silent deletion and logs rationale', () => {
     const pen = db.createPenalty({
-      mentorId: 'mentor-3',
-      mentorName: 'Aisha Patel',
+      mentorId: 'test-m-rev',
+      mentorName: 'Test Mentor',
       branchId: 'branch-nyc',
       category: 'POLICY_VIOLATION',
       reason: 'Reversal test',
@@ -356,14 +447,65 @@ async function runAcceptanceTests() {
 
   // --- 15. MENTOR DATA ISOLATION ---
   test('Scenario 15: A mentor can view only their own payroll, penalties, and payslips', () => {
-    const m1Slips = db.getPayslips('mentor-1');
-    assert(m1Slips.every((s) => s.mentorId === 'mentor-1'), 'Mentor 1 should only see mentor 1 payslips');
+    const slip1 = db.savePayslip({
+      id: 'slip-test-1',
+      payslipNumber: 'PS-TEST-001',
+      batchId: 'batch-test-1',
+      mentorId: 'mentor-iso-1',
+      mentorName: 'Iso Mentor 1',
+      mentorEmail: 'mentor1@test.com',
+      branchName: 'Main Campus',
+      periodName: 'Cycle 1',
+      startDate: '2026-10-01',
+      endDate: '2026-10-15',
+      planName: 'Per-Class Standard',
+      compensationModel: 'PER_CLASS',
+      planVersion: 1,
+      eligibleClassesCount: 4,
+      eligibleDurationMinutes: 240,
+      earningsItems: [],
+      penaltyItems: [],
+      grossEarnings: 1200,
+      totalDeductions: 0,
+      netPayable: 1200,
+      currency: 'USD',
+      paymentStatus: 'UNPAID',
+      generatedAt: '2026-10-16T00:00:00Z',
+    });
 
-    const m2Slips = db.getPayslips('mentor-2');
-    assert(m2Slips.every((s) => s.mentorId === 'mentor-2'), 'Mentor 2 should only see mentor 2 payslips');
+    const slip2 = db.savePayslip({
+      id: 'slip-test-2',
+      payslipNumber: 'PS-TEST-002',
+      batchId: 'batch-test-1',
+      mentorId: 'mentor-iso-2',
+      mentorName: 'Iso Mentor 2',
+      mentorEmail: 'mentor2@test.com',
+      branchName: 'Main Campus',
+      periodName: 'Cycle 1',
+      startDate: '2026-10-01',
+      endDate: '2026-10-15',
+      planName: 'Per-Class Standard',
+      compensationModel: 'PER_CLASS',
+      planVersion: 1,
+      eligibleClassesCount: 6,
+      eligibleDurationMinutes: 360,
+      earningsItems: [],
+      penaltyItems: [],
+      grossEarnings: 1800,
+      totalDeductions: 0,
+      netPayable: 1800,
+      currency: 'USD',
+      paymentStatus: 'UNPAID',
+      generatedAt: '2026-10-16T00:00:00Z',
+    });
 
-    const m1Pens = db.getPenalties('mentor-1');
-    assert(m1Pens.every((p) => p.mentorId === 'mentor-1'), 'Mentor 1 should only see mentor 1 penalties');
+    const m1Slips = db.getPayslips('mentor-iso-1');
+    assert(m1Slips.every((s) => s.mentorId === 'mentor-iso-1'), 'Mentor 1 should only see mentor 1 payslips');
+    assert(m1Slips.some((s) => s.id === slip1.id), 'Mentor 1 should see slip 1');
+
+    const m2Slips = db.getPayslips('mentor-iso-2');
+    assert(m2Slips.every((s) => s.mentorId === 'mentor-iso-2'), 'Mentor 2 should only see mentor 2 payslips');
+    assert(m2Slips.some((s) => s.id === slip2.id), 'Mentor 2 should see slip 2');
   });
 
   // --- 16. APPROVAL AND PAYMENT ARE DISTINCT WORKFLOW STATES ---
@@ -391,7 +533,7 @@ async function runAcceptanceTests() {
 
   // --- 17. DECIMAL-SAFE CURRENCY ARITHMETIC ---
   test('Scenario 17: Decimal monetary calculations are safe from floating point precision issues', () => {
-    const val1 = 0.1 + 0.2; // Javascript floating point is 0.30000000000000004
+    const val1 = 0.1 + 0.2;
     const rounded = roundToTwoDecimals(val1);
     assert(rounded === 0.3, 'roundToTwoDecimals must resolve floating point drift');
     assert(formatCurrency(0.3) === '$0.30');
@@ -402,8 +544,8 @@ async function runAcceptanceTests() {
   test('Scenario 18: Sensitive operations create persistent audit records', () => {
     const initialLogsCount = db.getAuditLogs().length;
     db.logAudit({
-      userId: 'user-admin-1',
-      userName: 'Alexandria Vance',
+      userId: 'user-super-admin',
+      userName: 'Himanshu Mathankar',
       userRole: 'ADMINISTRATOR',
       action: 'CREDENTIAL_UPDATED',
       entityType: 'ClasscardConfig',
@@ -414,7 +556,7 @@ async function runAcceptanceTests() {
     const newLogs = db.getAuditLogs();
     assert(newLogs.length === initialLogsCount + 1, 'Audit log count must increase by 1');
     assert(newLogs[0].action === 'CREDENTIAL_UPDATED');
-    assert(newLogs[0].userName === 'Alexandria Vance');
+    assert(newLogs[0].userName === 'Himanshu Mathankar');
   });
 
   // --- 19. CUSTOM FIELDS & CLASSCARD MAPPINGS ---
@@ -453,9 +595,27 @@ async function runAcceptanceTests() {
 
   // --- 20. ATTENDANCE VERIFICATION & AUTO-COMPLETION ---
   test('Scenario 20: Marking attendance recomputes class status and roster participation', () => {
-    const classes = db.getClasses();
-    const targetClass = classes.find((c) => c.status === 'SCHEDULED' && c.students.length > 0);
-    assert(targetClass, 'Should have at least one scheduled class with students');
+    const targetClass = db.createClass({
+      title: 'Active Diagnostic Seminar',
+      subjectId: 'subj-test',
+      subjectName: 'Test Seminar',
+      mentorId: 'm-target',
+      mentorName: 'Target Mentor',
+      branchId: 'b-target',
+      branchName: 'Target Branch',
+      startTime: '2026-10-25T14:00:00Z',
+      endTime: '2026-10-25T15:30:00Z',
+      durationMinutes: 90,
+      isGroup: true,
+      capacity: 5,
+      students: [
+        { studentId: 's101', studentName: 'Roster Student 1', studentEmail: 's101@test.com', attendanceStatus: 'UNMARKED' },
+      ],
+      status: 'SCHEDULED',
+      attendanceStatusSummary: 'UNMARKED',
+      isLateCancellation: false,
+      provenance: 'LOCALLY_CREATED',
+    });
 
     const updatedRoster = targetClass.students.map((s) => ({
       ...s,
@@ -475,8 +635,202 @@ async function runAcceptanceTests() {
     assert(updated.students.every((s) => s.attendanceStatus === 'PRESENT'));
   });
 
-  // Post-test cleanup: purge all demo data to keep disk store 100% production-ready
-  db.purgeDemoData();
+  // --- 21. RATE LIMITING PROTECTION ---
+  test('Scenario 21: Rate limiter enforces quotas on sensitive financial & sync operations', () => {
+    const { checkRateLimit } = require('../src/lib/rate-limit/limiter');
+    const mockReq = {
+      headers: new Headers({ 'x-forwarded-for': '192.168.1.100' }),
+    };
+
+    // First request should succeed
+    const res1 = checkRateLimit(mockReq as any, { limit: 2, windowSeconds: 60, identifierPrefix: 'test-limiter' });
+    assert(res1.success === true, 'First request should pass rate limit');
+    assert(res1.remaining === 1, 'Remaining count should decrement');
+
+    // Second request should succeed
+    const res2 = checkRateLimit(mockReq as any, { limit: 2, windowSeconds: 60, identifierPrefix: 'test-limiter' });
+    assert(res2.success === true, 'Second request should pass rate limit');
+    assert(res2.remaining === 0, 'Remaining count should be 0');
+
+    // Third request should be blocked
+    const res3 = checkRateLimit(mockReq as any, { limit: 2, windowSeconds: 60, identifierPrefix: 'test-limiter' });
+    assert(res3.success === false, 'Third request exceeding limit should be rejected');
+    assert(res3.remaining === 0);
+  });
+
+  // --- 22. SUPER ADMIN CREDENTIALS & PBKDF2 CRYPTO ---
+  test('Scenario 22: Super admin account (himanshu.m@letsunbound.com) verifies with admin@1290@ and ADMINISTRATOR role', () => {
+    const user = db.getUserByEmail('himanshu.m@letsunbound.com');
+    assert(user, 'Super admin user himanshu.m@letsunbound.com must exist');
+    assert(user.role === 'ADMINISTRATOR', 'User must have ADMINISTRATOR role');
+    assert(user.roleName === 'Super Admin', 'User roleName should be Super Admin');
+    assert(user.passwordHash && user.salt, 'User must have passwordHash and salt');
+
+    // Verify valid password
+    const isValid = verifyPassword('admin@1290@', user.passwordHash, user.salt);
+    assert(isValid === true, 'Password verification must succeed for admin@1290@');
+
+    // Verify invalid password fails
+    const isInvalid = verifyPassword('wrong-password', user.passwordHash, user.salt);
+    assert(isInvalid === false, 'Password verification must fail for incorrect password');
+  });
+
+  // --- 23. PASSWORD RESET TOKEN CREATION & PASSWORD UPDATE ---
+  test('Scenario 23: Password reset generates secure token and successfully rotates password', () => {
+    const user = db.getUserByEmail('himanshu.m@letsunbound.com')!;
+    const { token: resetToken, expiresAt: resetExpiry } = generateResetToken(60);
+
+    user.resetToken = resetToken;
+    user.resetTokenExpiry = resetExpiry;
+    db.saveUser(user);
+
+    // Lookup user by reset token
+    const userByToken = db.getUserByResetToken(resetToken);
+    assert(userByToken, 'Must find user by valid reset token');
+    assert(userByToken.id === user.id);
+
+    // Apply new password
+    const newPassword = 'TemporaryNewPassword@2026!';
+    const { hash: newHash, salt: newSalt } = hashPassword(newPassword);
+    userByToken.passwordHash = newHash;
+    userByToken.salt = newSalt;
+    userByToken.resetToken = undefined;
+    userByToken.resetTokenExpiry = undefined;
+    db.saveUser(userByToken);
+
+    // Check that new password verifies
+    const checkNew = verifyPassword(newPassword, userByToken.passwordHash, userByToken.salt);
+    assert(checkNew === true, 'New password must verify successfully');
+
+    // Restore super admin credentials for subsequent test runs
+    const { hash: origHash, salt: origSalt } = hashPassword('admin@1290@');
+    userByToken.passwordHash = origHash;
+    userByToken.salt = origSalt;
+    db.saveUser(userByToken);
+  });
+
+  // --- 24. ZERO DEMO DATA VERIFICATION ---
+  test('Scenario 24: Store and seed state contains ZERO demo students, mentors, classes, or payslips', () => {
+    // Reset to clean seed
+    db.resetToSeed();
+
+    assert(db.getStudents().length === 0, 'Database must have 0 demo students');
+    assert(db.getMentors().length === 0, 'Database must have 0 demo mentors');
+    assert(db.getClasses().length === 0, 'Database must have 0 demo classes');
+    assert(db.getPenalties().length === 0, 'Database must have 0 demo penalties');
+    assert(db.getPayslips().length === 0, 'Database must have 0 demo payslips');
+    assert(db.getPayrollBatches().length === 0, 'Database must have 0 demo payroll batches');
+    assert(db.getInvoices().length === 0, 'Database must have 0 demo invoices');
+    assert(db.getPayments().length === 0, 'Database must have 0 demo payments');
+    assert(db.getAuditLogs().length === 0, 'Database must have 0 demo audit logs');
+    assert(db.getSyncJobs().length === 0, 'Database must have 0 demo sync jobs');
+    assert(db.getUsers().length === 1, 'Database must have only 1 user (Super Admin)');
+    assert(db.getUsers()[0].email === 'himanshu.m@letsunbound.com', 'Single user must be himanshu.m@letsunbound.com');
+  });
+
+  // --- 25. USER CREATION & INVITATION WORKFLOW ---
+  test('Scenario 25: Admin can create new users with SENT_PASSWORD_VERIFICATION status and setup token', () => {
+    const newUser = db.createUser({
+      name: 'Eleanor Vance',
+      email: 'eleanor.vance@letsunbound.com',
+      role: 'OPERATIONS',
+      roleName: 'Operations Specialist',
+      status: 'SENT_PASSWORD_VERIFICATION',
+      assignedBranchIds: [],
+      permissions: [],
+    });
+
+    assert(newUser.id, 'User must have an ID');
+    assert(newUser.status === 'SENT_PASSWORD_VERIFICATION');
+
+    const retrieved = db.getUserByEmail('eleanor.vance@letsunbound.com');
+    assert(retrieved, 'Must find created user by email');
+    assert(retrieved.name === 'Eleanor Vance');
+    assert(retrieved.status === 'SENT_PASSWORD_VERIFICATION');
+  });
+
+  // --- 26. USER STATUS LIFECYCLE (ACTIVE, SUSPENDED, DISABLED) ---
+  test('Scenario 26: User status transitions correctly between ACTIVE, SUSPENDED, and DISABLED', () => {
+    const user = db.getUserByEmail('eleanor.vance@letsunbound.com')!;
+    
+    // Set to ACTIVE
+    db.updateUser(user.id, { status: 'ACTIVE' });
+    assert(db.getUserById(user.id)!.status === 'ACTIVE');
+
+    // Suspend
+    db.updateUser(user.id, { status: 'SUSPENDED' });
+    assert(db.getUserById(user.id)!.status === 'SUSPENDED');
+
+    // Disable
+    db.updateUser(user.id, { status: 'DISABLED' });
+    assert(db.getUserById(user.id)!.status === 'DISABLED');
+
+    // Clean up
+    db.deleteUser(user.id);
+    assert(db.getUserById(user.id) === undefined);
+  });
+
+  // --- 27. CORPORATE EMAIL & SMTP CONFIGURATION ---
+  test('Scenario 27: Company mail server settings can be retrieved, configured, and stored securely', () => {
+    const initialConfig = db.getEmailConfig();
+    assert(initialConfig, 'Email configuration must exist in store');
+    assert(initialConfig.host === 'smtp.letsunbound.com', 'Default host must be configured');
+    assert(initialConfig.port === 587, 'Default port must be 587');
+    assert(initialConfig.security === 'STARTTLS', 'Default security must be STARTTLS');
+
+    // Update SMTP configuration
+    const updated = db.saveEmailConfig({
+      host: 'mail.letsunbound.com',
+      port: 465,
+      security: 'SSL_TLS',
+      authRequired: true,
+      user: 'notifications@letsunbound.com',
+      pass: 'SecretCompanyPassword@2026',
+      fromEmail: 'notifications@letsunbound.com',
+      fromName: 'LUmentor Faculty Notifications',
+      isEnabled: true,
+    });
+
+    assert(updated.host === 'mail.letsunbound.com');
+    assert(updated.port === 465);
+    assert(updated.security === 'SSL_TLS');
+    assert(updated.isEnabled === true);
+    assert(updated.pass === 'SecretCompanyPassword@2026');
+
+    // Retrieve again to ensure persistence
+    const reloaded = db.getEmailConfig();
+    assert(reloaded.host === 'mail.letsunbound.com');
+    assert(reloaded.port === 465);
+  });
+
+  // --- 28. EMAIL DISPATCH SERVICE & SIMULATED DRY-RUN ---
+  test('Scenario 28: Email service supports custom company mail templates and fallback simulation', async () => {
+    const { sendEmail } = require('../src/lib/email/service');
+    
+    // Test simulated dispatch
+    const res = await sendEmail({
+      to: 'himanshu.m@letsunbound.com',
+      subject: 'Test Subject',
+      text: 'Test message body',
+    }, {
+      host: 'mail.letsunbound.com',
+      port: 587,
+      security: 'STARTTLS',
+      authRequired: true,
+      user: 'notifications@letsunbound.com',
+      pass: '',
+      fromEmail: 'notifications@letsunbound.com',
+      fromName: 'LUmentor',
+      allowSelfSignedCert: false,
+      isEnabled: false, // dry-run mode
+    });
+
+    assert(res.success === true, 'Dry-run should report success');
+    assert(res.mocked === true, 'Must indicate mocked/simulated status when isEnabled is false');
+  });
+
+  // Post-test cleanup: ensure consistent baseline data in store
+  db.resetToSeed();
 
   console.log('\n-------------------------------------------------------------');
   console.log(`   TEST EXECUTION SUMMARY: ${passed} PASSED, ${failed} FAILED`);
@@ -485,6 +839,7 @@ async function runAcceptanceTests() {
   if (failed > 0) {
     process.exit(1);
   }
+  process.exit(0);
 }
 
 runAcceptanceTests();

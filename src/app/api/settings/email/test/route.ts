@@ -1,0 +1,110 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { db } from '../../../../../lib/db/store';
+import { verifySmtpConnection, sendTestEmail } from '../../../../../lib/email/service';
+import { EmailConfig } from '../../../../../lib/types/email';
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json().catch(() => ({}));
+    db.reloadIfModified();
+    const current = db.getEmailConfig();
+
+    const host = String(body.host || current.host).trim();
+    const port = Number(body.port || current.port) || 587;
+    const security = body.security || current.security || 'STARTTLS';
+    const authRequired = body.authRequired !== false;
+    const user = String(body.user || current.user).trim();
+
+    let pass = current.pass;
+    if (typeof body.pass === 'string' && body.pass.trim().length > 0 && body.pass !== '••••••••••••') {
+      pass = body.pass.trim();
+    }
+
+    const rawFrom = String(body.fromEmail || current.fromEmail || '').trim();
+    const fromEmail = rawFrom.includes('@') ? rawFrom : user;
+    const fromName = String(body.fromName || current.fromName || 'LUmentor Notifications').trim();
+    const replyTo = String(body.replyTo || current.replyTo || '').trim();
+    const allowSelfSignedCert = Boolean(body.allowSelfSignedCert ?? current.allowSelfSignedCert);
+    const recipient = String(body.to || user || fromEmail || 'himanshu.m@letsunbound.com').trim();
+
+    if (!host) {
+      return NextResponse.json({ success: false, error: 'SMTP Host is required.' }, { status: 400 });
+    }
+
+    if (authRequired && (!user || !pass)) {
+      return NextResponse.json(
+        { success: false, error: 'SMTP Username and Password are required to test authentication.' },
+        { status: 400 }
+      );
+    }
+
+    const testConfig: EmailConfig = {
+      host,
+      port,
+      security,
+      authRequired,
+      user,
+      pass,
+      fromEmail,
+      fromName,
+      replyTo: replyTo || undefined,
+      allowSelfSignedCert,
+      isEnabled: true, // test as enabled
+    };
+
+    // Step 1: Verify SMTP Handshake & Credentials
+    const handshakeResult = await verifySmtpConnection(testConfig);
+    if (!handshakeResult.success) {
+      let friendlyError = handshakeResult.message;
+      if (handshakeResult.message.includes('535') || handshakeResult.message.includes('BadCredentials')) {
+        friendlyError = `Google Authentication Failed (535-5.7.8 BadCredentials). Google requires a dedicated 16-character App Password instead of your standard login password. Please generate an App Password at https://myaccount.google.com/apppasswords and enter it in the SMTP Password field.`;
+      }
+
+      db.saveEmailConfig({
+        lastTestStatus: 'FAILED',
+        lastTestedAt: new Date().toISOString(),
+        lastTestMessage: friendlyError,
+      });
+
+      return NextResponse.json({
+        success: false,
+        error: `SMTP Handshake Failed: ${friendlyError}`,
+        rawError: handshakeResult.message,
+        isGoogleAppPasswordError: handshakeResult.message.includes('535') || handshakeResult.message.includes('BadCredentials'),
+      }, { status: 400 });
+    }
+
+    // Step 2: Send test email to verify end-to-end delivery
+    const sendResult = await sendTestEmail(recipient, testConfig);
+
+    const testStatus = sendResult.success ? 'SUCCESS' : 'FAILED';
+    const testMessage = sendResult.message;
+
+    db.saveEmailConfig({
+      lastTestStatus: testStatus,
+      lastTestedAt: new Date().toISOString(),
+      lastTestMessage: testMessage,
+    });
+
+    db.logAudit({
+      userId: 'user-admin',
+      userName: 'Administrator',
+      userRole: 'ADMINISTRATOR',
+      action: 'EMAIL_TEST_PERFORMED',
+      entityType: 'EmailConfig',
+      entityId: 'email-smtp-config',
+      details: `Tested SMTP configuration to ${recipient}: ${testStatus} (${testMessage})`,
+    });
+
+    return NextResponse.json({
+      success: sendResult.success,
+      message: testMessage,
+      testedRecipient: recipient,
+    });
+  } catch (err: any) {
+    return NextResponse.json(
+      { success: false, error: err.message || 'SMTP diagnostic execution failed' },
+      { status: 500 }
+    );
+  }
+}

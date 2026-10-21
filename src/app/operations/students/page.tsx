@@ -11,10 +11,29 @@ import { formatDate } from '../../../lib/utils/formatters';
 import Link from 'next/link';
 
 export default function StudentsPage() {
-  const [students, setStudents] = useState(db.getStudents());
+  const [students, setStudents] = useState(() => db.getStudents());
   const [search, setSearch] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
   const branches = db.getBranches();
+
+  const refreshStudents = async () => {
+    try {
+      const res = await fetch('/api/dashboard');
+      const json = await res.json();
+      if (json.success && json.data && json.data.students) {
+        setStudents(json.data.students);
+        if (typeof db.initClient === 'function') {
+          db.initClient({ ...db.getSnapshot(), students: json.data.students });
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to refresh students from API:', e);
+    }
+  };
+
+  React.useEffect(() => {
+    refreshStudents();
+  }, []);
 
   const handleSyncStudents = async () => {
     setIsSyncing(true);
@@ -25,8 +44,8 @@ export default function StudentsPage() {
         body: JSON.stringify({ jobType: 'STUDENTS' }),
       });
       const data = await res.json();
-      if (data.status === 'COMPLETED' || data.success) {
-        setStudents(db.getStudents());
+      if (data.status === 'COMPLETED' || data.success || data.recordsProcessed > 0) {
+        await refreshStudents();
       }
     } finally {
       setIsSyncing(false);

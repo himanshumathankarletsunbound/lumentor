@@ -354,13 +354,13 @@
   ],
   "users": [
     {
-      "id": "user-admin-1",
-      "email": "alex.director@academyapex.com",
-      "name": "Alexandria Vance",
+      "id": "user-super-admin",
+      "email": "himanshu.m@letsunbound.com",
+      "name": "Himanshu Mathankar",
       "role": "ADMINISTRATOR",
-      "roleName": "Managing Director & Super Admin",
+      "roleName": "Super Admin",
       "assignedBranchIds": [],
-      "avatarUrl": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150",
+      "avatarUrl": "",
       "permissions": [
         {
           "module": "overview",
@@ -557,454 +557,16 @@
             "manage_settings"
           ]
         }
-      ]
-    },
-    {
-      "id": "user-ops-1",
-      "email": "jordan.ops@academyapex.com",
-      "name": "Jordan Miller",
-      "role": "OPERATIONS",
-      "roleName": "Operations Lead",
-      "assignedBranchIds": [
-        "branch-nyc",
-        "branch-sf"
       ],
-      "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
-      "permissions": [
-        {
-          "module": "overview",
-          "actions": [
-            "view"
-          ]
-        },
-        {
-          "module": "calendar",
-          "actions": [
-            "view",
-            "create",
-            "edit"
-          ]
-        },
-        {
-          "module": "classes",
-          "actions": [
-            "view",
-            "create",
-            "edit"
-          ]
-        },
-        {
-          "module": "attendance",
-          "actions": [
-            "view",
-            "create",
-            "edit"
-          ]
-        },
-        {
-          "module": "exceptions",
-          "actions": [
-            "view",
-            "edit"
-          ]
-        },
-        {
-          "module": "mentors",
-          "actions": [
-            "view"
-          ]
-        },
-        {
-          "module": "students",
-          "actions": [
-            "view",
-            "create",
-            "edit"
-          ]
-        },
-        {
-          "module": "branches",
-          "actions": [
-            "view"
-          ]
-        },
-        {
-          "module": "subjects",
-          "actions": [
-            "view"
-          ]
-        },
-        {
-          "module": "packages",
-          "actions": [
-            "view"
-          ]
-        },
-        {
-          "module": "penalties",
-          "actions": [
-            "view",
-            "create"
-          ]
-        },
-        {
-          "module": "reports",
-          "actions": [
-            "view",
-            "export"
-          ]
-        },
-        {
-          "module": "analytics",
-          "actions": [
-            "view"
-          ]
-        }
-      ]
-    },
-    {
-      "id": "user-mentor-1",
-      "email": "elena.rostova@academyapex.com",
-      "name": "Dr. Elena Rostova",
-      "role": "MENTOR",
-      "roleName": "Senior Physics Mentor",
-      "mentorId": "mentor-1",
-      "assignedBranchIds": [
-        "branch-nyc"
-      ],
-      "avatarUrl": "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150",
-      "permissions": [
-        {
-          "module": "overview",
-          "actions": [
-            "view"
-          ]
-        },
-        {
-          "module": "calendar",
-          "actions": [
-            "view"
-          ]
-        },
-        {
-          "module": "classes",
-          "actions": [
-            "view"
-          ]
-        },
-        {
-          "module": "attendance",
-          "actions": [
-            "view"
-          ]
-        },
-        {
-          "module": "penalties",
-          "actions": [
-            "view"
-          ]
-        },
-        {
-          "module": "payslips",
-          "actions": [
-            "view",
-            "export"
-          ]
-        }
-      ]
-    },
-    {
-      "id": "user-mentor-2",
-      "email": "marcus.chen@academyapex.com",
-      "name": "Marcus Chen",
-      "role": "MENTOR",
-      "roleName": "Mathematics Specialist",
-      "mentorId": "mentor-2",
-      "assignedBranchIds": [
-        "branch-sf"
-      ],
-      "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
-      "permissions": [
-        {
-          "module": "overview",
-          "actions": [
-            "view"
-          ]
-        },
-        {
-          "module": "calendar",
-          "actions": [
-            "view"
-          ]
-        },
-        {
-          "module": "classes",
-          "actions": [
-            "view"
-          ]
-        },
-        {
-          "module": "attendance",
-          "actions": [
-            "view"
-          ]
-        },
-        {
-          "module": "penalties",
-          "actions": [
-            "view"
-          ]
-        },
-        {
-          "module": "payslips",
-          "actions": [
-            "view",
-            "export"
-          ]
-        }
-      ]
+      "passwordHash": "435d06d2937015006c74079f799d0b92fe8fbd29d24600faffd4b474a6a0177146e7e2bd0b45eae1f1c688512d5448539b63807c2384b256a20a9efaea7cd616",
+      "salt": "4bdf413f8a507f6e5046b89627425ad4",
+      "status": "ACTIVE",
+      "createdAt": "2026-01-01T00:00:00Z"
     }
   ],
-  "branches": [
-    {
-      "id": "branch-nyc",
-      "name": "Manhattan Flagship Campus",
-      "code": "NYC-MHT",
-      "address": "450 Lexington Avenue, Suite 1200",
-      "city": "New York",
-      "timezone": "America/New_York",
-      "phone": "+1 (212) 555-0198",
-      "email": "manhattan@academyapex.com",
-      "isActive": true,
-      "provenance": "CLASSCARD_SOURCED",
-      "externalId": "cc-loc-101",
-      "createdAt": "2026-01-10T10:00:00Z",
-      "updatedAt": "2026-01-10T10:00:00Z"
-    },
-    {
-      "id": "branch-sf",
-      "name": "San Francisco Innovation Hub",
-      "code": "SF-SOMA",
-      "address": "680 Folsom Street, 3rd Floor",
-      "city": "San Francisco",
-      "timezone": "America/Los_Angeles",
-      "phone": "+1 (415) 555-0142",
-      "email": "sf@academyapex.com",
-      "isActive": true,
-      "provenance": "CLASSCARD_SOURCED",
-      "externalId": "cc-loc-102",
-      "createdAt": "2026-01-12T10:00:00Z",
-      "updatedAt": "2026-01-12T10:00:00Z"
-    },
-    {
-      "id": "branch-bos",
-      "name": "Boston STEM Academy",
-      "code": "BOS-BACKBAY",
-      "address": "200 Clarendon Street, 18th Floor",
-      "city": "Boston",
-      "timezone": "America/New_York",
-      "phone": "+1 (617) 555-0177",
-      "email": "boston@academyapex.com",
-      "isActive": true,
-      "provenance": "LOCALLY_CREATED",
-      "createdAt": "2026-02-01T10:00:00Z",
-      "updatedAt": "2026-02-01T10:00:00Z"
-    },
-    {
-      "name": "Chicago Loop Academy",
-      "code": "CHI-LOOP",
-      "address": "111 W Jackson Blvd",
-      "city": "Chicago",
-      "timezone": "America/Chicago",
-      "phone": "+1 (312) 555-0199",
-      "email": "chicago@academyapex.com",
-      "isActive": true,
-      "provenance": "LOCALLY_CREATED",
-      "id": "branch-1792465070603",
-      "createdAt": "2026-10-20T02:57:50.603Z",
-      "updatedAt": "2026-10-20T02:57:50.603Z"
-    }
-  ],
-  "subjects": [
-    {
-      "id": "subj-phys",
-      "name": "AP Physics C (Mechanics & E&M)",
-      "code": "PHYS-AP-C",
-      "category": "Science",
-      "description": "Calculus-based university level physics course with lab preparation.",
-      "defaultDurationMinutes": 90,
-      "availableDurations": [
-        60,
-        90,
-        120
-      ],
-      "isActive": true,
-      "color": "#6366f1",
-      "provenance": "CLASSCARD_SOURCED",
-      "externalId": "cc-sub-201",
-      "createdAt": "2026-01-15T09:00:00Z",
-      "updatedAt": "2026-01-15T09:00:00Z"
-    },
-    {
-      "id": "subj-calc",
-      "name": "Advanced Calculus & Linear Algebra",
-      "code": "MATH-CALC-BC",
-      "category": "Mathematics",
-      "description": "Multivariable calculus, differential equations, and linear algebra foundations.",
-      "defaultDurationMinutes": 60,
-      "availableDurations": [
-        45,
-        60,
-        90
-      ],
-      "isActive": true,
-      "color": "#0284c7",
-      "provenance": "CLASSCARD_SOURCED",
-      "externalId": "cc-sub-202",
-      "createdAt": "2026-01-15T09:00:00Z",
-      "updatedAt": "2026-01-15T09:00:00Z"
-    },
-    {
-      "id": "subj-sat",
-      "name": "Digital SAT & ACT Masterclass",
-      "code": "TEST-SAT-DIGITAL",
-      "category": "Standardized Prep",
-      "description": "Comprehensive test taking strategy, math drills, and reading/writing analytics.",
-      "defaultDurationMinutes": 60,
-      "availableDurations": [
-        60,
-        90
-      ],
-      "isActive": true,
-      "color": "#059669",
-      "provenance": "CLASSCARD_SOURCED",
-      "externalId": "cc-sub-203",
-      "createdAt": "2026-01-15T09:00:00Z",
-      "updatedAt": "2026-01-15T09:00:00Z"
-    },
-    {
-      "id": "subj-cs",
-      "name": "Computer Science & Algorithms (Python / Java)",
-      "code": "CS-ALGO-101",
-      "category": "Technology",
-      "description": "Data structures, algorithm complexity, dynamic programming, and USACO contest prep.",
-      "defaultDurationMinutes": 60,
-      "availableDurations": [
-        60,
-        90,
-        120
-      ],
-      "isActive": true,
-      "color": "#8b5cf6",
-      "provenance": "LOCALLY_CREATED",
-      "createdAt": "2026-02-10T09:00:00Z",
-      "updatedAt": "2026-02-10T09:00:00Z"
-    },
-    {
-      "id": "subj-chem",
-      "name": "Organic & Inorganic Chemistry",
-      "code": "CHEM-AP-HONORS",
-      "category": "Science",
-      "description": "Thermodynamics, chemical equilibrium, organic reaction mechanisms, and kinetics.",
-      "defaultDurationMinutes": 60,
-      "availableDurations": [
-        60,
-        90
-      ],
-      "isActive": true,
-      "color": "#f59e0b",
-      "provenance": "CLASSCARD_SOURCED",
-      "externalId": "cc-sub-204",
-      "createdAt": "2026-01-15T09:00:00Z",
-      "updatedAt": "2026-01-15T09:00:00Z"
-    },
-    {
-      "name": "AP Statistics & Probability",
-      "code": "STAT-AP-101",
-      "category": "Mathematics",
-      "description": "Hypothesis testing, regression, distributions",
-      "defaultDurationMinutes": 60,
-      "availableDurations": [
-        45,
-        60,
-        90
-      ],
-      "isActive": true,
-      "color": "#06b6d4",
-      "provenance": "LOCALLY_CREATED",
-      "id": "subj-1792465070604",
-      "createdAt": "2026-10-20T02:57:50.604Z",
-      "updatedAt": "2026-10-20T02:57:50.604Z"
-    }
-  ],
-  "packages": [
-    {
-      "id": "pkg-stem-20",
-      "name": "20-Session STEM Mastery Package",
-      "code": "PKG-STEM-20",
-      "price": 2400,
-      "currency": "USD",
-      "totalSessions": 20,
-      "validityDays": 120,
-      "subjectIds": [
-        "subj-phys",
-        "subj-calc",
-        "subj-chem"
-      ],
-      "branchIds": [
-        "branch-nyc",
-        "branch-sf",
-        "branch-bos"
-      ],
-      "isActive": true,
-      "provenance": "CLASSCARD_SOURCED",
-      "externalId": "cc-pkg-301",
-      "createdAt": "2026-01-20T11:00:00Z",
-      "updatedAt": "2026-01-20T11:00:00Z"
-    },
-    {
-      "id": "pkg-sat-10",
-      "name": "10-Session Elite SAT Intensive",
-      "code": "PKG-SAT-10",
-      "price": 1350,
-      "currency": "USD",
-      "totalSessions": 10,
-      "validityDays": 60,
-      "subjectIds": [
-        "subj-sat"
-      ],
-      "branchIds": [
-        "branch-nyc",
-        "branch-sf"
-      ],
-      "isActive": true,
-      "provenance": "CLASSCARD_SOURCED",
-      "externalId": "cc-pkg-302",
-      "createdAt": "2026-01-20T11:00:00Z",
-      "updatedAt": "2026-01-20T11:00:00Z"
-    },
-    {
-      "id": "pkg-cs-12",
-      "name": "12-Session Coding & Contest Track",
-      "code": "PKG-CS-12",
-      "price": 1560,
-      "currency": "USD",
-      "totalSessions": 12,
-      "validityDays": 90,
-      "subjectIds": [
-        "subj-cs"
-      ],
-      "branchIds": [
-        "branch-nyc",
-        "branch-sf",
-        "branch-bos"
-      ],
-      "isActive": true,
-      "provenance": "LOCALLY_CREATED",
-      "createdAt": "2026-02-15T11:00:00Z",
-      "updatedAt": "2026-02-15T11:00:00Z"
-    }
-  ],
+  "branches": [],
+  "subjects": [],
+  "packages": [],
   "payrollPlans": [
     {
       "id": "plan-hybrid-senior",
@@ -1159,113 +721,17 @@
   "classes": [],
   "penalties": [],
   "adjustments": [],
-  "payrollPeriods": [
-    {
-      "id": "period-2026-10-c1",
-      "name": "October 2026 - Cycle 1 (Oct 1 - Oct 15)",
-      "startDate": "2026-10-01",
-      "endDate": "2026-10-15",
-      "status": "LOCKED",
-      "createdAt": "2026-10-01T00:00:00Z"
-    },
-    {
-      "id": "period-2026-10-c2",
-      "name": "October 2026 - Cycle 2 (Oct 16 - Oct 31)",
-      "startDate": "2026-10-16",
-      "endDate": "2026-10-31",
-      "status": "OPEN",
-      "createdAt": "2026-10-16T00:00:00Z"
-    }
-  ],
+  "payrollPeriods": [],
   "payrollBatches": [],
   "payslips": [],
   "invoices": [],
   "payments": [],
-  "auditLogs": [
-    {
-      "id": "audit-1792465070630-idepi",
-      "timestamp": "2026-10-20T02:57:50.630Z",
-      "userId": "user-admin-1",
-      "userName": "Alexandria Vance",
-      "userRole": "ADMINISTRATOR",
-      "action": "CREDENTIAL_UPDATED",
-      "entityType": "ClasscardConfig",
-      "entityId": "config",
-      "details": "Updated Classcard Public API key"
-    },
-    {
-      "id": "audit-1792465070610-6owrj",
-      "timestamp": "2026-10-20T02:57:50.610Z",
-      "userId": "Admin",
-      "userName": "Admin",
-      "userRole": "ADMINISTRATOR",
-      "action": "PAYROLL_LOCKED",
-      "entityType": "PayrollBatch",
-      "entityId": "batch-1792465070608",
-      "details": "Locked payroll batch PAY-20261020-955 and generated 1 payslips."
-    },
-    {
-      "id": "audit-1",
-      "timestamp": "2026-10-17T11:00:00Z",
-      "userId": "user-admin-1",
-      "userName": "Alexandria Vance",
-      "userRole": "ADMINISTRATOR",
-      "action": "PAYROLL_PAID",
-      "entityType": "PayrollBatch",
-      "entityId": "batch-2026-10-c1",
-      "details": "Marked batch PAY-2026-10-01 as PAID via ACH reference ACH-BATCH-994208 ($6,345.00 total net)."
-    },
-    {
-      "id": "audit-2",
-      "timestamp": "2026-10-16T18:00:00Z",
-      "userId": "user-admin-1",
-      "userName": "Alexandria Vance",
-      "userRole": "ADMINISTRATOR",
-      "action": "PAYROLL_LOCKED",
-      "entityType": "PayrollBatch",
-      "entityId": "batch-2026-10-c1",
-      "details": "Locked approved payroll batch PAY-2026-10-01 and finalized 3 payslips."
-    },
-    {
-      "id": "audit-3",
-      "timestamp": "2026-10-16T17:30:00Z",
-      "userId": "user-admin-1",
-      "userName": "Alexandria Vance",
-      "userRole": "ADMINISTRATOR",
-      "action": "PAYROLL_APPROVED",
-      "entityType": "PayrollBatch",
-      "entityId": "batch-2026-10-c1",
-      "details": "Approved payroll batch PAY-2026-10-01 submitted by Jordan Miller."
-    },
-    {
-      "id": "audit-4",
-      "timestamp": "2026-10-16T10:00:00Z",
-      "userId": "user-ops-1",
-      "userName": "Jordan Miller",
-      "userRole": "OPERATIONS",
-      "action": "PAYROLL_SUBMITTED",
-      "entityType": "PayrollBatch",
-      "entityId": "batch-2026-10-c1",
-      "details": "Submitted payroll calculations for Cycle 1 (Oct 1 - Oct 15) for management review."
-    },
-    {
-      "id": "audit-5",
-      "timestamp": "2026-10-05T14:30:00Z",
-      "userId": "user-admin-1",
-      "userName": "Alexandria Vance",
-      "userRole": "ADMINISTRATOR",
-      "action": "PENALTY_APPROVED",
-      "entityType": "Penalty",
-      "entityId": "pen-101",
-      "details": "Approved $50.00 penalty for Dr. Elena Rostova (Unapproved Absence/Delayed arrival on Oct 3)."
-    }
-  ],
+  "auditLogs": [],
   "classcardConfig": {
     "baseUrl": "https://api.classcardapp.com/api/v2/public/",
     "apiKey": "cc_live_9f82a1740b2e88a",
     "isConfigured": true,
-    "useMockMode": false,
-    "lastSuccessfulSync": "2026-10-20T02:57:50.601Z",
+    "useMockMode": true,
     "syncIntervalMinutes": 60
   },
   "classcardEndpoints": [
@@ -1630,5 +1096,25 @@
       "createdAt": "2026-01-01T00:00:00Z",
       "updatedAt": "2026-01-01T00:00:00Z"
     }
-  ]
+  ],
+  "emailConfig": {
+    "host": "smtp.letsunbound.com",
+    "port": 587,
+    "security": "STARTTLS",
+    "authRequired": true,
+    "user": "notifications@letsunbound.com",
+    "pass": "",
+    "fromEmail": "notifications@letsunbound.com",
+    "fromName": "LUmentor Faculty & Operations",
+    "replyTo": "support@letsunbound.com",
+    "allowSelfSignedCert": false,
+    "isEnabled": false,
+    "lastTestStatus": "UNTESTED"
+  },
+  "orgSettings": {
+    "orgName": "LUmentor Educational Services",
+    "currency": "USD",
+    "timezone": "America/New_York",
+    "cutoffDay": 15
+  }
 }

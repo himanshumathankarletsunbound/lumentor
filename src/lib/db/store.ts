@@ -43,7 +43,10 @@ import {
   CLASSCARD_ENDPOINTS_REGISTRY,
   SEED_SYNC_JOBS,
   SEED_CUSTOM_FIELDS,
+  INITIAL_EMAIL_CONFIG,
+  INITIAL_ORG_SETTINGS,
 } from './seedData';
+import { EmailConfig, OrganizationSettings } from '../types/email';
 
 export interface AppDatabase {
   roles: UserRole[];
@@ -67,13 +70,15 @@ export interface AppDatabase {
   classcardEndpoints: ClasscardEndpointInfo[];
   syncJobs: SyncJob[];
   customFields: CustomFieldDefinition[];
+  emailConfig: EmailConfig;
+  orgSettings: OrganizationSettings;
 }
 
 function getNodeFsAndPath() {
   if (typeof window === 'undefined') {
     try {
-      // Use eval to prevent bundlers like Turbopack/Webpack from attempting to bundle fs into client code
-      const req = eval('require');
+      const g = globalThis as unknown as { require?: (mod: string) => any };
+      const req = typeof g.require === 'function' ? g.require : eval('require');
       return {
         fs: req('fs'),
         path: req('path'),
@@ -88,6 +93,7 @@ function getNodeFsAndPath() {
 class DataStore {
   private data: AppDatabase;
   private initialized = false;
+  private lastMtime = 0;
 
   constructor() {
     this.data = this.getDefaultState();
@@ -108,7 +114,7 @@ class DataStore {
       penalties: [...SEED_PENALTIES],
       adjustments: [...SEED_ADJUSTMENTS],
       payrollPeriods: [...SEED_PAYROLL_PERIODS],
-      payrollBatches: [{ ...SEED_PAYROLL_BATCH }],
+      payrollBatches: [],
       payslips: [...SEED_PAYSLIPS],
       invoices: [...SEED_INVOICES],
       payments: [...SEED_PAYMENTS],
@@ -117,7 +123,30 @@ class DataStore {
       classcardEndpoints: [...CLASSCARD_ENDPOINTS_REGISTRY],
       syncJobs: [...SEED_SYNC_JOBS],
       customFields: [...SEED_CUSTOM_FIELDS],
+      emailConfig: { ...INITIAL_EMAIL_CONFIG },
+      orgSettings: { ...INITIAL_ORG_SETTINGS },
     };
+  }
+
+  public reloadIfModified(): void {
+    if (typeof window !== 'undefined') return;
+    try {
+      const node = getNodeFsAndPath();
+      if (!node) return;
+      const dataDir = node.path.join(process.cwd(), 'data');
+      const dbFile = node.path.join(dataDir, 'db.json');
+      if (node.fs.existsSync(dbFile)) {
+        const stat = node.fs.statSync(dbFile);
+        if (stat.mtimeMs > this.lastMtime) {
+          const raw = node.fs.readFileSync(dbFile, 'utf-8');
+          const parsed = JSON.parse(raw);
+          this.data = { ...this.getDefaultState(), ...parsed };
+          this.lastMtime = stat.mtimeMs;
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to check/reload db from disk:', err);
+    }
   }
 
   private loadFromDisk(): void {
@@ -134,6 +163,20 @@ class DataStore {
           const raw = node.fs.readFileSync(dbFile, 'utf-8');
           const parsed = JSON.parse(raw);
           this.data = { ...this.getDefaultState(), ...parsed };
+
+          // If mentors or classes are empty (e.g. from purge), re-populate baseline so system remains functional
+          if (!this.data.mentors || this.data.mentors.length === 0) {
+            this.data.mentors = [...SEED_MENTORS];
+          }
+          if (!this.data.classes || this.data.classes.length === 0) {
+            this.data.classes = [...SEED_CLASSES];
+          }
+          if (!this.data.students || this.data.students.length === 0) {
+            this.data.students = [...SEED_STUDENTS];
+          }
+
+          const stat = node.fs.statSync(dbFile);
+          this.lastMtime = stat.mtimeMs;
         } else {
           this.saveToDisk();
         }
@@ -150,10 +193,15 @@ class DataStore {
       if (node) {
         const dataDir = node.path.join(process.cwd(), 'data');
         const dbFile = node.path.join(dataDir, 'db.json');
+        const tmpFile = node.path.join(dataDir, `db.tmp.${Date.now()}.${Math.random().toString(36).substring(2, 7)}`);
         if (!node.fs.existsSync(dataDir)) {
           node.fs.mkdirSync(dataDir, { recursive: true });
         }
-        node.fs.writeFileSync(dbFile, JSON.stringify(this.data, null, 2), 'utf-8');
+        // Atomic write: write to temp file then renameSync
+        const jsonContent = JSON.stringify(this.data, null, 2);
+        node.fs.writeFileSync(tmpFile, jsonContent, 'utf-8');
+        node.fs.renameSync(tmpFile, dbFile);
+        this.lastMtime = Date.now();
       }
     } catch (err) {
       console.warn('Failed to persist db to disk:', err);
@@ -178,11 +226,87 @@ class DataStore {
 
   // --- Users & Roles ---
   public getUsers(): CurrentUser[] {
+    this.reloadIfModified();
     return this.data.users;
   }
 
   public getUserById(id: string): CurrentUser | undefined {
+    this.reloadIfModified();
     return this.data.users.find((u) => u.id === id);
+  }
+
+  public getUserByEmail(email: string): CurrentUser | undefined {
+    this.reloadIfModified();
+    const clean = email.trim().toLowerCase();
+    return this.data.users.find((u) => u.email.toLowerCase() === clean);
+  }
+
+  public getUserBySessionToken(token: string): CurrentUser | undefined {
+    this.reloadIfModified();
+    if (!token) return undefined;
+    return this.data.users.find(
+      (u) => u.sessionToken === token && (!u.sessionExpiry || new Date(u.sessionExpiry) > new Date())
+    );
+  }
+
+  public getUserByResetToken(token: string): CurrentUser | undefined {
+    this.reloadIfModified();
+    if (!token) return undefined;
+    return this.data.users.find(
+      (u) => u.resetToken === token && (!u.resetTokenExpiry || new Date(u.resetTokenExpiry) > new Date())
+    );
+  }
+
+  public saveUser(user: CurrentUser): CurrentUser {
+    const idx = this.data.users.findIndex((u) => u.id === user.id || u.email.toLowerCase() === user.email.toLowerCase());
+    if (idx === -1) {
+      this.data.users.push(user);
+    } else {
+      this.data.users[idx] = { ...this.data.users[idx], ...user };
+    }
+    this.saveToDisk();
+    return user;
+  }
+
+  public createUser(user: Omit<CurrentUser, 'id'> & { id?: string }): CurrentUser {
+    this.reloadIfModified();
+    const id = user.id || `user-${Date.now()}`;
+    const newUser: CurrentUser = {
+      ...user,
+      id,
+      status: user.status || 'ACTIVE',
+      assignedBranchIds: user.assignedBranchIds || [],
+      permissions: user.permissions || [],
+      createdAt: user.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    this.data.users.push(newUser);
+    this.saveToDisk();
+    return newUser;
+  }
+
+  public updateUser(id: string, updates: Partial<CurrentUser>): CurrentUser {
+    this.reloadIfModified();
+    const idx = this.data.users.findIndex((u) => u.id === id);
+    if (idx === -1) {
+      throw new Error(`User with ID ${id} not found`);
+    }
+    this.data.users[idx] = {
+      ...this.data.users[idx],
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+    this.saveToDisk();
+    return this.data.users[idx];
+  }
+
+  public deleteUser(id: string): boolean {
+    this.reloadIfModified();
+    const idx = this.data.users.findIndex((u) => u.id === id);
+    if (idx === -1) return false;
+    this.data.users.splice(idx, 1);
+    this.saveToDisk();
+    return true;
   }
 
   public getRoles(): UserRole[] {
@@ -282,6 +406,10 @@ class DataStore {
   // --- Packages ---
   public getPackages(): Package[] {
     return this.data.packages;
+  }
+
+  public getPackageById(id: string): Package | undefined {
+    return this.data.packages.find((p) => p.id === id);
   }
 
   public createPackage(pkg: Omit<Package, 'id' | 'createdAt' | 'updatedAt'>): Package {
@@ -669,11 +797,51 @@ class DataStore {
 
   // --- Invoices & Payments ---
   public getInvoices(): Invoice[] {
+    this.reloadIfModified();
     return this.data.invoices;
   }
 
+  public createInvoice(invoice: Omit<Invoice, 'id' | 'createdAt'> & { id?: string }): Invoice {
+    const record: Invoice = {
+      ...invoice,
+      id: invoice.id || `inv-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      createdAt: new Date().toISOString(),
+    };
+    this.data.invoices.unshift(record);
+    this.saveToDisk();
+    return record;
+  }
+
+  public updateInvoice(id: string, updates: Partial<Invoice>): Invoice | undefined {
+    const idx = this.data.invoices.findIndex((inv) => inv.id === id || inv.externalId === id);
+    if (idx === -1) return undefined;
+    this.data.invoices[idx] = { ...this.data.invoices[idx], ...updates };
+    this.saveToDisk();
+    return this.data.invoices[idx];
+  }
+
   public getPayments(): Payment[] {
+    this.reloadIfModified();
     return this.data.payments;
+  }
+
+  public createPayment(payment: Omit<Payment, 'id' | 'createdAt'> & { id?: string }): Payment {
+    const record: Payment = {
+      ...payment,
+      id: payment.id || `pmt-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      createdAt: new Date().toISOString(),
+    };
+    this.data.payments.unshift(record);
+    this.saveToDisk();
+    return record;
+  }
+
+  public updatePayment(id: string, updates: Partial<Payment>): Payment | undefined {
+    const idx = this.data.payments.findIndex((p) => p.id === id || p.externalId === id);
+    if (idx === -1) return undefined;
+    this.data.payments[idx] = { ...this.data.payments[idx], ...updates };
+    this.saveToDisk();
+    return this.data.payments[idx];
   }
 
   // --- Classcard Integration ---
@@ -749,8 +917,47 @@ class DataStore {
     return false;
   }
 
+  // --- Email Settings ---
+  public getEmailConfig(): EmailConfig {
+    this.reloadIfModified();
+    return this.data.emailConfig || { ...INITIAL_EMAIL_CONFIG };
+  }
+
+  public saveEmailConfig(config: Partial<EmailConfig>): EmailConfig {
+    this.reloadIfModified();
+    const current = this.getEmailConfig();
+    const updated: EmailConfig = {
+      ...current,
+      ...config,
+      updatedAt: new Date().toISOString(),
+    };
+    this.data.emailConfig = updated;
+    this.saveToDisk();
+    return updated;
+  }
+
+  // --- Organization Settings ---
+  public getOrgSettings(): OrganizationSettings {
+    this.reloadIfModified();
+    return this.data.orgSettings || { ...INITIAL_ORG_SETTINGS };
+  }
+
+  public saveOrgSettings(settings: Partial<OrganizationSettings>): OrganizationSettings {
+    this.reloadIfModified();
+    const current = this.getOrgSettings();
+    const updated: OrganizationSettings = {
+      ...current,
+      ...settings,
+      updatedAt: new Date().toISOString(),
+    };
+    this.data.orgSettings = updated;
+    this.saveToDisk();
+    return updated;
+  }
+
   // --- Client/Server Hydration Snapshot ---
   public getSnapshot(): AppDatabase {
+    this.reloadIfModified();
     return this.data;
   }
 

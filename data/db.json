@@ -729,8 +729,8 @@
   "auditLogs": [],
   "classcardConfig": {
     "baseUrl": "https://api.classcardapp.com/api/v2/public/",
-    "apiKey": "cc_live_9f82a1740b2e88a",
-    "isConfigured": true,
+    "apiKey": "",
+    "isConfigured": false,
     "useMockMode": true,
     "syncIntervalMinutes": 60
   },

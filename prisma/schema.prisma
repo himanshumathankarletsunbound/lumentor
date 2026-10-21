@@ -96,6 +96,18 @@ model Organization {
   payrollPlans PayrollPlan[]
 }
 
+model AppState {
+  id        String   @id
+  state     Json
+  updatedAt DateTime @updatedAt
+}
+
+model EncryptedSecret {
+  name      String   @id
+  ciphertext String
+  updatedAt DateTime @updatedAt
+}
+
 model Branch {
   id             String         @id @default(uuid())
   organizationId String

@@ -47,6 +47,8 @@ import {
   INITIAL_ORG_SETTINGS,
 } from './seedData';
 import { EmailConfig, OrganizationSettings } from '../types/email';
+import { isDemoMode } from '../config/server';
+import { loadAppState, saveAppState } from './state-repository';
 
 export interface AppDatabase {
   roles: UserRole[];
@@ -94,10 +96,38 @@ class DataStore {
   private data: AppDatabase;
   private initialized = false;
   private lastMtime = 0;
+  private persistenceReady: Promise<void> = Promise.resolve();
 
   constructor() {
     this.data = this.getDefaultState();
-    this.loadFromDisk();
+    if (this.usesPostgres()) {
+      this.persistenceReady = this.loadFromPostgres();
+    } else {
+      this.loadFromDisk();
+    }
+  }
+
+  private usesPostgres(): boolean {
+    return !isDemoMode && Boolean(process.env.DATABASE_URL?.trim());
+  }
+
+  private async loadFromPostgres(): Promise<void> {
+    try {
+      const state = await loadAppState();
+      if (state) {
+        this.data = { ...this.getDefaultState(), ...state };
+      } else {
+        await saveAppState(this.data);
+      }
+      this.initialized = true;
+    } catch (err) {
+      console.error('Failed to load PostgreSQL application state:', err);
+      throw err;
+    }
+  }
+
+  public async ready(): Promise<void> {
+    await this.persistenceReady;
   }
 
   private getDefaultState(): AppDatabase {
@@ -192,6 +222,12 @@ class DataStore {
   }
 
   private saveToDisk(): void {
+    if (this.usesPostgres()) {
+      void saveAppState(this.data).catch((err: unknown) => {
+        console.error('Failed to persist application state to PostgreSQL:', err);
+      });
+      return;
+    }
     try {
       const node = getNodeFsAndPath();
       if (node) {

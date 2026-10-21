@@ -1,5 +1,11 @@
 import { db } from '../../db/store';
 import { requireServerSecret, isDemoMode } from '../../config/server';
+import type {
+  ClasscardInventoryQuery,
+  ClasscardInventoryResponse,
+  ClasscardLeadInput,
+  ClasscardOneOnOneServices,
+} from '../../types/classcard';
 
 export interface ClasscardApiResponse<T> {
   success: boolean;
@@ -51,7 +57,9 @@ export class ClasscardApiClient {
     }
 
     const cleanPath = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-    const url = `${effectiveBaseUrl}${cleanPath}`;
+    const url = endpoint.startsWith('https://')
+      ? endpoint
+      : `${effectiveBaseUrl}${cleanPath}`;
 
     const headers: Record<string, string> = {
       'api-key': effectiveApiKey,
@@ -302,6 +310,50 @@ export class ClasscardApiClient {
 
   public async getStaffServices(staffId: string): Promise<ClasscardApiResponse<unknown[]>> {
     return this.request<unknown[]>(`/staff/${staffId}/services`, 'GET');
+  }
+
+  public async getStaffOneOnOneServices(
+    staffId: string
+  ): Promise<ClasscardApiResponse<ClasscardOneOnOneServices>> {
+    const origin = new URL(this.baseUrl).origin;
+    const path = `${origin}/api/public/staff/one-on-one-services?staff_id=${encodeURIComponent(staffId)}`;
+    return this.request<ClasscardOneOnOneServices>(path, 'GET');
+  }
+
+  public async addLead(
+    lead: ClasscardLeadInput
+  ): Promise<ClasscardApiResponse<undefined>> {
+    return this.request<undefined>('/leads/add', 'POST', {
+      ...lead,
+      address: lead.address || {
+        street: null,
+        city: null,
+        state: null,
+        zip: null,
+        country: null,
+      },
+      isEmergency: lead.isEmergency ?? 0,
+    });
+  }
+
+  public async getProductInventory(
+    query: ClasscardInventoryQuery = {}
+  ): Promise<ClasscardApiResponse<ClasscardInventoryResponse>> {
+    const params = new URLSearchParams();
+    params.set('status', String(query.status ?? 0));
+    params.set(
+      'order_by',
+      JSON.stringify({
+        field: query.orderBy || 'product_id',
+        direction: query.direction || 'desc',
+      })
+    );
+    if (query.search) params.set('search', query.search);
+    if (query.perPage) params.set('per_page', String(query.perPage));
+    return this.request<ClasscardInventoryResponse>(
+      `/inventory/products?${params.toString()}`,
+      'GET'
+    );
   }
 
   // Events & Calendar

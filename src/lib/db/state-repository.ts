@@ -1,0 +1,17 @@
+import { prisma } from './prisma';
+import type { AppDatabase } from './store';
+
+const STATE_ID = 'lumentor';
+
+export async function loadAppState(): Promise<Partial<AppDatabase> | null> {
+  const record = await prisma.appState.findUnique({ where: { id: STATE_ID } });
+  return (record?.state as Partial<AppDatabase> | undefined) ?? null;
+}
+
+export async function saveAppState(state: AppDatabase): Promise<void> {
+  await prisma.appState.upsert({
+    where: { id: STATE_ID },
+    create: { id: STATE_ID, state },
+    update: { state },
+  });
+}

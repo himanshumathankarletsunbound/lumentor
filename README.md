@@ -211,6 +211,14 @@ Production deployments use PostgreSQL through Prisma. Set `DATABASE_URL` only in
 
 Set `CLASSCARD_API_KEY` only on the server. Live synchronization sends this key only in the server-side `api-key` header; it is never persisted in the application store or returned to browser code.
 
+The documented Classcard endpoints currently integrated are:
+
+- `POST /api/classcard/leads` for `POST /api/v2/public/leads/add`
+- `GET /api/classcard/staff/:staffId/one-on-one-services` for `GET /api/public/staff/one-on-one-services`
+- `GET /api/classcard/inventory` for `GET /api/v2/public/inventory/products`
+
+Inventory ordering is allow-listed to `product_id`, `name`, or `status`, and the documented empty response from lead creation is treated as a valid successful response when Classcard returns a successful status.
+
 Set `EMAIL_SMTP_PASSWORD`, `EMAIL_OAUTH_CLIENT_SECRET`, and/or `EMAIL_OAUTH_REFRESH_TOKEN` only on the server. Email secrets are not persisted by the settings API. In production, missing or invalid email configuration is an explicit failure, not a simulated success.
 
 `DEMO_MODE=true` is restricted to local acceptance tests and demonstrations. It is the only mode that enables simulated Classcard responses, JSON seed behavior, or simulated email. Production must use `DEMO_MODE=false`.

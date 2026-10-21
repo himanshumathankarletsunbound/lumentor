@@ -53,6 +53,9 @@ export interface StudentRiskRow {
   present: number;
   absent: number;
   late: number;
+  leftEarly?: number;
+  subjects?: string[];
+  lastAttendedDate?: string | null;
   attendancePct: number | null;
   risk: StudentRiskLevel;
 }
@@ -359,6 +362,9 @@ export function generateStudentTable(rows: PreparedSheetRow[], schema: SheetSche
     present: number;
     absent: number;
     late: number;
+    leftEarly: number;
+    subjects: Set<string>;
+    lastDate?: string;
   }>();
 
   for (const r of rows) {
@@ -374,6 +380,8 @@ export function generateStudentTable(rows: PreparedSheetRow[], schema: SheetSche
         present: 0,
         absent: 0,
         late: 0,
+        leftEarly: 0,
+        subjects: new Set(),
       });
     }
 
@@ -382,6 +390,16 @@ export function generateStudentTable(rows: PreparedSheetRow[], schema: SheetSche
     if (['Present', 'Late', 'Left Early'].includes(r._status_bucket)) item.present++;
     if (r._status_bucket === 'Absent') item.absent++;
     if (r._status_bucket === 'Late') item.late++;
+    if (r._status_bucket === 'Left Early') item.leftEarly++;
+
+    if (schema.subject && r[schema.subject]) {
+      item.subjects.add(String(r[schema.subject]).trim());
+    }
+    if (r._date) {
+      if (!item.lastDate || r._date > item.lastDate) {
+        item.lastDate = r._date;
+      }
+    }
   }
 
   const result: StudentRiskRow[] = [];
@@ -403,6 +421,9 @@ export function generateStudentTable(rows: PreparedSheetRow[], schema: SheetSche
       present: v.present,
       absent: v.absent,
       late: v.late,
+      leftEarly: v.leftEarly,
+      subjects: Array.from(v.subjects),
+      lastAttendedDate: v.lastDate || null,
       attendancePct: pct,
       risk,
     });

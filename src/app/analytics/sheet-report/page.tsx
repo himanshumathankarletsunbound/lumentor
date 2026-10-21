@@ -5,6 +5,7 @@ import { AppShell } from '../../../components/layout/AppShell';
 import { Card, CardHeader, CardContent } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
 import { Badge } from '../../../components/ui/Badge';
+import { Modal } from '../../../components/ui/Modal';
 import { StatCard } from '../../../components/ui/StatCard';
 import { DonutChart } from '../../../components/charts/DonutChart';
 import { BarChart, BarChartItem } from '../../../components/charts/BarChart';
@@ -45,6 +46,11 @@ import {
   FileCheck,
   Building2,
   BookOpen,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  ChevronLeft,
+  Eye,
 } from 'lucide-react';
 import { cn } from '../../../lib/utils/cn';
 
@@ -72,8 +78,14 @@ export default function SheetReportPage() {
   // Selected Teacher for Staff Tab Deep Dive
   const [teacherDetailSelected, setTeacherDetailSelected] = useState<string>('');
 
-  // Student table search
+  // Student table search & interactive controls
   const [studentSearch, setStudentSearch] = useState<string>('');
+  const [studentRiskFilter, setStudentRiskFilter] = useState<'ALL' | 'High Risk' | 'Watch' | 'Healthy'>('ALL');
+  const [studentSortCol, setStudentSortCol] = useState<'rank' | 'name' | 'total' | 'present' | 'absent' | 'late' | 'leftEarly' | 'rate' | 'risk'>('rate');
+  const [studentSortDir, setStudentSortDir] = useState<'asc' | 'desc'>('asc');
+  const [studentPageSize, setStudentPageSize] = useState<number | 'all'>('all');
+  const [studentCurrentPage, setStudentCurrentPage] = useState<number>(1);
+  const [selectedStudentForHistory, setSelectedStudentForHistory] = useState<any | null>(null);
 
   // 1. Schema Detection
   const schema: SheetSchema = useMemo(() => {
@@ -176,13 +188,96 @@ export default function SheetReportPage() {
     return generateStudentTable(filteredData, schema);
   }, [filteredData, schema]);
 
+  // Filtered & Sorted Student Risk List
   const filteredStudentRiskList = useMemo(() => {
-    if (!studentSearch.trim()) return studentRiskList;
-    const q = studentSearch.toLowerCase();
-    return studentRiskList.filter(
-      (s) => s.studentName.toLowerCase().includes(q) || (s.studentId && s.studentId.toLowerCase().includes(q))
-    );
-  }, [studentRiskList, studentSearch]);
+    let list = studentRiskList;
+
+    // 1. Filter by risk status pill
+    if (studentRiskFilter !== 'ALL') {
+      list = list.filter((s) => s.risk === studentRiskFilter);
+    }
+
+    // 2. Filter by search query
+    if (studentSearch.trim()) {
+      const q = studentSearch.toLowerCase();
+      list = list.filter(
+        (s) => s.studentName.toLowerCase().includes(q) || (s.studentId && s.studentId.toLowerCase().includes(q))
+      );
+    }
+
+    // 3. Sort
+    return [...list].sort((a, b) => {
+      let valA: any = a.studentName;
+      let valB: any = b.studentName;
+
+      if (studentSortCol === 'name') {
+        valA = a.studentName.toLowerCase();
+        valB = b.studentName.toLowerCase();
+      } else if (studentSortCol === 'total') {
+        valA = a.totalRecords;
+        valB = b.totalRecords;
+      } else if (studentSortCol === 'present') {
+        valA = a.present;
+        valB = b.present;
+      } else if (studentSortCol === 'absent') {
+        valA = a.absent;
+        valB = b.absent;
+      } else if (studentSortCol === 'late') {
+        valA = a.late;
+        valB = b.late;
+      } else if (studentSortCol === 'leftEarly') {
+        valA = a.leftEarly || 0;
+        valB = b.leftEarly || 0;
+      } else if (studentSortCol === 'rate') {
+        valA = a.attendancePct ?? -1;
+        valB = b.attendancePct ?? -1;
+      } else if (studentSortCol === 'risk') {
+        const order = { 'High Risk': 0, Watch: 1, Healthy: 2 };
+        valA = order[a.risk];
+        valB = order[b.risk];
+      }
+
+      if (valA < valB) return studentSortDir === 'asc' ? -1 : 1;
+      if (valA > valB) return studentSortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [studentRiskList, studentRiskFilter, studentSearch, studentSortCol, studentSortDir]);
+
+  // Paginated list
+  const paginatedStudentList = useMemo(() => {
+    if (studentPageSize === 'all') return filteredStudentRiskList;
+    const size = typeof studentPageSize === 'number' ? studentPageSize : 50;
+    const start = (studentCurrentPage - 1) * size;
+    return filteredStudentRiskList.slice(start, start + size);
+  }, [filteredStudentRiskList, studentPageSize, studentCurrentPage]);
+
+  const totalStudentPages = useMemo(() => {
+    if (studentPageSize === 'all') return 1;
+    const size = typeof studentPageSize === 'number' ? studentPageSize : 50;
+    return Math.max(1, Math.ceil(filteredStudentRiskList.length / size));
+  }, [filteredStudentRiskList.length, studentPageSize]);
+
+  // Selected Student History Rows for Modal
+  const selectedStudentHistoryRows = useMemo(() => {
+    if (!selectedStudentForHistory) return [];
+    const stuCol = schema.student_name || schema.student_id;
+    if (!stuCol) return [];
+    return filteredData.filter((r) => String(r[stuCol]).trim() === selectedStudentForHistory.studentKey);
+  }, [selectedStudentForHistory, filteredData, schema]);
+
+  // Bottom Risk Student Bar Items
+  const bottomRiskStudentBarItems = useMemo(() => {
+    return studentRiskList
+      .filter((s) => s.attendancePct !== null)
+      .slice(0, 15)
+      .sort((a, b) => (a.attendancePct || 0) - (b.attendancePct || 0))
+      .map((s): BarChartItem => ({
+        label: s.studentName.split(' ')[0],
+        value: Math.round(s.attendancePct || 0),
+        valueLabel: `${(s.attendancePct || 0).toFixed(1)}% (${s.absent} absent)`,
+        color: (s.attendancePct || 0) < 75 ? 'bg-rose-600' : 'bg-amber-500',
+      }));
+  }, [studentRiskList]);
 
   // Teacher Workload Table
   const teacherWorkloadList = useMemo(() => {
@@ -897,63 +992,122 @@ export default function SheetReportPage() {
             {/* TAB 2: STUDENTS & RISK */}
             {activeTab === 'students' && (
               <div className="space-y-6">
-                {/* Risk Distribution Summary Cards */}
+                {/* Clickable Risk Distribution Summary Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl flex items-center justify-between">
+                  <div
+                    onClick={() => setStudentRiskFilter(studentRiskFilter === 'High Risk' ? 'ALL' : 'High Risk')}
+                    className={cn(
+                      'p-4 rounded-xl flex items-center justify-between cursor-pointer transition-all border',
+                      studentRiskFilter === 'High Risk'
+                        ? 'bg-rose-100 border-rose-400 ring-2 ring-rose-400/50 shadow-sm'
+                        : 'bg-rose-50 border-rose-200 hover:bg-rose-100/70'
+                    )}
+                  >
                     <div>
-                      <p className="text-xs font-semibold text-rose-800 uppercase tracking-wider">High Risk (&lt;75%)</p>
+                      <p className="text-xs font-semibold text-rose-800 uppercase tracking-wider flex items-center gap-1.5">
+                        High Risk (&lt;75%)
+                        {studentRiskFilter === 'High Risk' && <span className="text-[10px] bg-rose-200 px-1.5 py-0.2 rounded font-bold">ACTIVE FILTER</span>}
+                      </p>
                       <p className="text-2xl font-bold text-rose-900 mt-1">
                         {studentRiskList.filter((s) => s.risk === 'High Risk').length}
                       </p>
-                      <p className="text-[11px] text-rose-600 mt-0.5">Critical intervention required</p>
+                      <p className="text-[11px] text-rose-600 mt-0.5">Critical intervention required • Click to filter</p>
                     </div>
                     <AlertTriangle className="w-8 h-8 text-rose-500 opacity-80" />
                   </div>
 
-                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between">
+                  <div
+                    onClick={() => setStudentRiskFilter(studentRiskFilter === 'Watch' ? 'ALL' : 'Watch')}
+                    className={cn(
+                      'p-4 rounded-xl flex items-center justify-between cursor-pointer transition-all border',
+                      studentRiskFilter === 'Watch'
+                        ? 'bg-amber-100 border-amber-400 ring-2 ring-amber-400/50 shadow-sm'
+                        : 'bg-amber-50 border-amber-200 hover:bg-amber-100/70'
+                    )}
+                  >
                     <div>
-                      <p className="text-xs font-semibold text-amber-800 uppercase tracking-wider">Watch (75%–89%)</p>
+                      <p className="text-xs font-semibold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
+                        Watch (75%–89%)
+                        {studentRiskFilter === 'Watch' && <span className="text-[10px] bg-amber-200 px-1.5 py-0.2 rounded font-bold">ACTIVE FILTER</span>}
+                      </p>
                       <p className="text-2xl font-bold text-amber-900 mt-1">
                         {studentRiskList.filter((s) => s.risk === 'Watch').length}
                       </p>
-                      <p className="text-[11px] text-amber-600 mt-0.5">Monitor attendance trend</p>
+                      <p className="text-[11px] text-amber-600 mt-0.5">Monitor attendance trend • Click to filter</p>
                     </div>
                     <Clock className="w-8 h-8 text-amber-500 opacity-80" />
                   </div>
 
-                  <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">
+                  <div
+                    onClick={() => setStudentRiskFilter(studentRiskFilter === 'Healthy' ? 'ALL' : 'Healthy')}
+                    className={cn(
+                      'p-4 rounded-xl flex items-center justify-between cursor-pointer transition-all border',
+                      studentRiskFilter === 'Healthy'
+                        ? 'bg-emerald-100 border-emerald-400 ring-2 ring-emerald-400/50 shadow-sm'
+                        : 'bg-emerald-50 border-emerald-200 hover:bg-emerald-100/70'
+                    )}
+                  >
                     <div>
-                      <p className="text-xs font-semibold text-emerald-800 uppercase tracking-wider">Healthy (≥90%)</p>
+                      <p className="text-xs font-semibold text-emerald-800 uppercase tracking-wider flex items-center gap-1.5">
+                        Healthy (≥90%)
+                        {studentRiskFilter === 'Healthy' && <span className="text-[10px] bg-emerald-200 px-1.5 py-0.2 rounded font-bold">ACTIVE FILTER</span>}
+                      </p>
                       <p className="text-2xl font-bold text-emerald-900 mt-1">
                         {studentRiskList.filter((s) => s.risk === 'Healthy').length}
                       </p>
-                      <p className="text-[11px] text-emerald-600 mt-0.5">Consistent participation</p>
+                      <p className="text-[11px] text-emerald-600 mt-0.5">Consistent participation • Click to filter</p>
                     </div>
                     <CheckCircle2 className="w-8 h-8 text-emerald-500 opacity-80" />
                   </div>
                 </div>
 
-                {/* Student Risk Table */}
-                <Card>
+                {/* Student Risk Table Card */}
+                <Card className="border-slate-200 shadow-xs">
                   <CardHeader
                     title="Student Attendance & Attrition Risk Roster"
-                    subtitle="Ranked with highest absence rate and lowest attendance percentage first"
+                    subtitle={`Comprehensive roster displaying ${filteredStudentRiskList.length.toLocaleString()} learners • Click column headers to sort • Click any student to view detailed class records`}
                     action={
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Search Input */}
                         <div className="relative">
-                          <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-slate-400" />
+                          <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
                           <input
                             type="text"
-                            placeholder="Search learner..."
+                            placeholder="Filter by name or ID..."
                             value={studentSearch}
-                            onChange={(e) => setStudentSearch(e.target.value)}
-                            className="pl-8 pr-3 py-1 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            onChange={(e) => {
+                              setStudentSearch(e.target.value);
+                              setStudentCurrentPage(1);
+                            }}
+                            className="pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 w-44 sm:w-52"
                           />
                         </div>
+
+                        {/* Page Size Selector */}
+                        <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs">
+                          <span className="text-[11px] text-slate-500">Show:</span>
+                          <select
+                            value={studentPageSize}
+                            onChange={(e) => {
+                              const val = e.target.value === 'all' ? 'all' : Number(e.target.value);
+                              setStudentPageSize(val);
+                              setStudentCurrentPage(1);
+                            }}
+                            className="bg-transparent font-semibold text-slate-800 focus:outline-none text-xs cursor-pointer"
+                          >
+                            <option value="all">All ({filteredStudentRiskList.length})</option>
+                            <option value="25">25 per page</option>
+                            <option value="50">50 per page</option>
+                            <option value="100">100 per page</option>
+                            <option value="250">250 per page</option>
+                          </select>
+                        </div>
+
+                        {/* Export Button */}
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => exportToCsv('student_risk_report.csv', studentRiskList)}
+                          onClick={() => exportToCsv('student_risk_report.csv', filteredStudentRiskList)}
                           className="text-xs flex items-center gap-1.5"
                         >
                           <Download className="w-3.5 h-3.5" />
@@ -962,73 +1116,481 @@ export default function SheetReportPage() {
                       </div>
                     }
                   />
+
+                  {/* Filter Pills Bar */}
+                  <div className="px-4 py-2.5 bg-slate-50/70 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[11px] font-semibold text-slate-500 mr-1">Filter by Risk:</span>
+                      {[
+                        { id: 'ALL', label: `All (${studentRiskList.length})` },
+                        { id: 'High Risk', label: `High Risk (${studentRiskList.filter((s) => s.risk === 'High Risk').length})` },
+                        { id: 'Watch', label: `Watch (${studentRiskList.filter((s) => s.risk === 'Watch').length})` },
+                        { id: 'Healthy', label: `Healthy (${studentRiskList.filter((s) => s.risk === 'Healthy').length})` },
+                      ].map((pill) => (
+                        <button
+                          key={pill.id}
+                          type="button"
+                          onClick={() => {
+                            setStudentRiskFilter(pill.id as any);
+                            setStudentCurrentPage(1);
+                          }}
+                          className={cn(
+                            'px-2.5 py-1 rounded-full text-xs font-semibold transition-all',
+                            studentRiskFilter === pill.id
+                              ? pill.id === 'High Risk'
+                                ? 'bg-rose-600 text-white shadow-xs'
+                                : pill.id === 'Watch'
+                                ? 'bg-amber-500 text-white shadow-xs'
+                                : pill.id === 'Healthy'
+                                ? 'bg-emerald-600 text-white shadow-xs'
+                                : 'bg-indigo-600 text-white shadow-xs'
+                              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                          )}
+                        >
+                          {pill.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="text-[11px] text-slate-500">
+                      Showing <strong>{paginatedStudentList.length}</strong> of{' '}
+                      <strong>{filteredStudentRiskList.length}</strong> learners
+                    </div>
+                  </div>
+
                   <CardContent className="p-0">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs">
-                        <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-semibold text-[10px]">
+                    <div className="overflow-x-auto max-h-[650px]">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 text-slate-600 uppercase font-semibold text-[10px] z-10 shadow-2xs">
                           <tr>
-                            <th className="py-2.5 px-4">Learner / Student</th>
-                            <th className="py-2.5 px-3 text-right">Total Sessions</th>
-                            <th className="py-2.5 px-3 text-right">Present</th>
-                            <th className="py-2.5 px-3 text-right text-rose-600">Absent</th>
-                            <th className="py-2.5 px-3 text-right text-amber-600">Late</th>
-                            <th className="py-2.5 px-4 text-center">Attendance %</th>
-                            <th className="py-2.5 px-4 text-center">Risk Status</th>
+                            <th className="py-2.5 px-3 w-10 text-center">#</th>
+                            <th
+                              onClick={() => {
+                                if (studentSortCol === 'name') setStudentSortDir(studentSortDir === 'asc' ? 'desc' : 'asc');
+                                else {
+                                  setStudentSortCol('name');
+                                  setStudentSortDir('asc');
+                                }
+                              }}
+                              className="py-2.5 px-4 cursor-pointer hover:bg-slate-100 transition-colors"
+                            >
+                              <div className="flex items-center gap-1">
+                                <span>Learner / Student Name</span>
+                                <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                              </div>
+                            </th>
+                            <th className="py-2.5 px-3">Enrolled Subjects</th>
+                            <th
+                              onClick={() => {
+                                if (studentSortCol === 'total') setStudentSortDir(studentSortDir === 'asc' ? 'desc' : 'asc');
+                                else {
+                                  setStudentSortCol('total');
+                                  setStudentSortDir('desc');
+                                }
+                              }}
+                              className="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-100 transition-colors"
+                            >
+                              <div className="flex items-center justify-end gap-1">
+                                <span>Total Classes</span>
+                                <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                              </div>
+                            </th>
+                            <th
+                              onClick={() => {
+                                if (studentSortCol === 'present') setStudentSortDir(studentSortDir === 'asc' ? 'desc' : 'asc');
+                                else {
+                                  setStudentSortCol('present');
+                                  setStudentSortDir('desc');
+                                }
+                              }}
+                              className="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-100 transition-colors text-emerald-700"
+                            >
+                              <div className="flex items-center justify-end gap-1">
+                                <span>Present</span>
+                                <ArrowUpDown className="w-3 h-3 text-emerald-500" />
+                              </div>
+                            </th>
+                            <th
+                              onClick={() => {
+                                if (studentSortCol === 'absent') setStudentSortDir(studentSortDir === 'asc' ? 'desc' : 'asc');
+                                else {
+                                  setStudentSortCol('absent');
+                                  setStudentSortDir('desc');
+                                }
+                              }}
+                              className="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-100 transition-colors text-rose-700"
+                            >
+                              <div className="flex items-center justify-end gap-1">
+                                <span>Absent</span>
+                                <ArrowUpDown className="w-3 h-3 text-rose-500" />
+                              </div>
+                            </th>
+                            <th
+                              onClick={() => {
+                                if (studentSortCol === 'late') setStudentSortDir(studentSortDir === 'asc' ? 'desc' : 'asc');
+                                else {
+                                  setStudentSortCol('late');
+                                  setStudentSortDir('desc');
+                                }
+                              }}
+                              className="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-100 transition-colors text-amber-700"
+                            >
+                              <div className="flex items-center justify-end gap-1">
+                                <span>Late</span>
+                                <ArrowUpDown className="w-3 h-3 text-amber-500" />
+                              </div>
+                            </th>
+                            <th
+                              onClick={() => {
+                                if (studentSortCol === 'leftEarly') setStudentSortDir(studentSortDir === 'asc' ? 'desc' : 'asc');
+                                else {
+                                  setStudentSortCol('leftEarly');
+                                  setStudentSortDir('desc');
+                                }
+                              }}
+                              className="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-100 transition-colors text-cyan-700"
+                            >
+                              <div className="flex items-center justify-end gap-1">
+                                <span>Left Early</span>
+                                <ArrowUpDown className="w-3 h-3 text-cyan-500" />
+                              </div>
+                            </th>
+                            <th
+                              onClick={() => {
+                                if (studentSortCol === 'rate') setStudentSortDir(studentSortDir === 'asc' ? 'desc' : 'asc');
+                                else {
+                                  setStudentSortCol('rate');
+                                  setStudentSortDir('asc');
+                                }
+                              }}
+                              className="py-2.5 px-4 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                <span>Attendance Rate %</span>
+                                <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                              </div>
+                            </th>
+                            <th
+                              onClick={() => {
+                                if (studentSortCol === 'risk') setStudentSortDir(studentSortDir === 'asc' ? 'desc' : 'asc');
+                                else {
+                                  setStudentSortCol('risk');
+                                  setStudentSortDir('asc');
+                                }
+                              }}
+                              className="py-2.5 px-3 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                <span>Risk Band</span>
+                                <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                              </div>
+                            </th>
+                            <th className="py-2.5 px-3 text-center">Action</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {filteredStudentRiskList.slice(0, 50).map((s) => (
-                            <tr key={s.studentKey} className="hover:bg-slate-50/80 transition-colors">
-                              <td className="py-2.5 px-4 font-semibold text-slate-800">
-                                <div>{s.studentName}</div>
-                                {s.studentId && <div className="text-[10px] text-slate-400 font-mono">{s.studentId}</div>}
-                              </td>
-                              <td className="py-2.5 px-3 text-right text-slate-700">{s.totalRecords}</td>
-                              <td className="py-2.5 px-3 text-right font-medium text-emerald-600">{s.present}</td>
-                              <td className="py-2.5 px-3 text-right font-semibold text-rose-600">{s.absent}</td>
-                              <td className="py-2.5 px-3 text-right text-amber-600">{s.late}</td>
-                              <td className="py-2.5 px-4">
-                                <div className="flex items-center gap-2 max-w-[160px] mx-auto">
-                                  <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                                    <div
-                                      className={cn(
-                                        'h-full rounded-full',
-                                        s.attendancePct === null
-                                          ? 'bg-slate-300'
-                                          : s.attendancePct >= 90
-                                          ? 'bg-emerald-500'
-                                          : s.attendancePct >= 75
-                                          ? 'bg-amber-500'
-                                          : 'bg-rose-500'
-                                      )}
-                                      style={{ width: `${Math.min(100, Math.max(0, s.attendancePct || 0))}%` }}
-                                    />
+                        <tbody className="divide-y divide-slate-100 bg-white">
+                          {paginatedStudentList.map((s, idx) => {
+                            const rank =
+                              studentPageSize === 'all'
+                                ? idx + 1
+                                : (studentCurrentPage - 1) * Number(studentPageSize) + idx + 1;
+                            return (
+                              <tr
+                                key={s.studentKey}
+                                className="hover:bg-indigo-50/40 transition-colors group cursor-pointer"
+                                onClick={() => setSelectedStudentForHistory(s)}
+                              >
+                                <td className="py-2.5 px-3 text-center text-slate-400 font-mono text-[11px]">
+                                  {rank}
+                                </td>
+                                <td className="py-2.5 px-4 font-semibold text-slate-800">
+                                  <div className="flex items-center gap-1.5 group-hover:text-indigo-600 transition-colors">
+                                    <span>{s.studentName}</span>
                                   </div>
-                                  <span className="font-semibold text-slate-800 w-11 text-right">
-                                    {s.attendancePct !== null ? `${s.attendancePct.toFixed(1)}%` : 'N/A'}
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="py-2.5 px-4 text-center">
-                                <Badge
-                                  variant={
-                                    s.risk === 'High Risk'
-                                      ? 'danger'
-                                      : s.risk === 'Watch'
-                                      ? 'warning'
-                                      : 'success'
-                                  }
-                                >
-                                  {s.risk}
-                                </Badge>
-                              </td>
-                            </tr>
-                          ))}
+                                  {s.studentId && (
+                                    <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                                      ID: {s.studentId}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 text-slate-600 max-w-[200px]">
+                                  {s.subjects && s.subjects.length > 0 ? (
+                                    <div className="flex flex-wrap gap-1">
+                                      {s.subjects.slice(0, 2).map((sub) => (
+                                        <span
+                                          key={sub}
+                                          className="px-1.5 py-0.5 bg-slate-100 text-slate-700 text-[10px] rounded font-medium truncate max-w-[120px]"
+                                        >
+                                          {sub}
+                                        </span>
+                                      ))}
+                                      {s.subjects.length > 2 && (
+                                        <span className="text-[10px] text-slate-400 font-semibold self-center">
+                                          +{s.subjects.length - 2}
+                                        </span>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="text-slate-400 text-[11px]">—</span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-medium text-slate-800">{s.totalRecords}</td>
+                                <td className="py-2.5 px-3 text-right font-semibold text-emerald-600">{s.present}</td>
+                                <td className="py-2.5 px-3 text-right font-bold text-rose-600">{s.absent}</td>
+                                <td className="py-2.5 px-3 text-right text-amber-600 font-medium">{s.late}</td>
+                                <td className="py-2.5 px-3 text-right text-cyan-600 font-medium">
+                                  {s.leftEarly ?? 0}
+                                </td>
+                                <td className="py-2.5 px-4">
+                                  <div className="flex items-center gap-2 max-w-[180px] mx-auto">
+                                    <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden shadow-inner">
+                                      <div
+                                        className={cn(
+                                          'h-full rounded-full transition-all',
+                                          s.attendancePct === null
+                                            ? 'bg-slate-300'
+                                            : s.attendancePct >= 90
+                                            ? 'bg-emerald-500'
+                                            : s.attendancePct >= 75
+                                            ? 'bg-amber-500'
+                                            : 'bg-rose-500'
+                                        )}
+                                        style={{ width: `${Math.min(100, Math.max(0, s.attendancePct || 0))}%` }}
+                                      />
+                                    </div>
+                                    <span className="font-bold text-slate-900 w-12 text-right">
+                                      {s.attendancePct !== null ? `${s.attendancePct.toFixed(1)}%` : 'N/A'}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="py-2.5 px-3 text-center">
+                                  <Badge
+                                    variant={
+                                      s.risk === 'High Risk'
+                                        ? 'danger'
+                                        : s.risk === 'Watch'
+                                        ? 'warning'
+                                        : 'success'
+                                    }
+                                  >
+                                    {s.risk}
+                                  </Badge>
+                                </td>
+                                <td className="py-2.5 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setSelectedStudentForHistory(s)}
+                                    className="text-[11px] py-1 px-2.5 h-auto flex items-center gap-1 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50"
+                                  >
+                                    <Eye className="w-3 h-3" />
+                                    History
+                                  </Button>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
+
+                    {/* Pagination Footer (when paginated) */}
+                    {studentPageSize !== 'all' && totalStudentPages > 1 && (
+                      <div className="p-3 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                        <span className="text-slate-500 text-[11px]">
+                          Page <strong>{studentCurrentPage}</strong> of <strong>{totalStudentPages}</strong> (
+                          {filteredStudentRiskList.length} total learners)
+                        </span>
+
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            disabled={studentCurrentPage <= 1}
+                            onClick={() => setStudentCurrentPage(1)}
+                            className="px-2 py-1 rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-[11px]"
+                          >
+                            First
+                          </button>
+                          <button
+                            type="button"
+                            disabled={studentCurrentPage <= 1}
+                            onClick={() => setStudentCurrentPage((p) => Math.max(1, p - 1))}
+                            className="px-2 py-1 rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-[11px] flex items-center gap-0.5"
+                          >
+                            <ChevronLeft className="w-3 h-3" /> Prev
+                          </button>
+
+                          <span className="px-2 text-slate-700 font-bold text-xs">{studentCurrentPage}</span>
+
+                          <button
+                            type="button"
+                            disabled={studentCurrentPage >= totalStudentPages}
+                            onClick={() => setStudentCurrentPage((p) => Math.min(totalStudentPages, p + 1))}
+                            className="px-2 py-1 rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-[11px] flex items-center gap-0.5"
+                          >
+                            Next <ChevronRight className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={studentCurrentPage >= totalStudentPages}
+                            onClick={() => setStudentCurrentPage(totalStudentPages)}
+                            className="px-2 py-1 rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-[11px]"
+                          >
+                            Last
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
+
+                {/* Bottom Risk Visual Horizontal Ranking Chart */}
+                {bottomRiskStudentBarItems.length > 0 && (
+                  <Card>
+                    <CardHeader
+                      title="Highest Attrition Risk Learners"
+                      subtitle="Visual comparison of learners with the lowest attendance rates"
+                    />
+                    <CardContent>
+                      <BarChart items={bottomRiskStudentBarItems} height={180} />
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Interactive Student Class History Modal */}
+                {selectedStudentForHistory && (
+                  <Modal
+                    isOpen={Boolean(selectedStudentForHistory)}
+                    onClose={() => setSelectedStudentForHistory(null)}
+                    title={
+                      <div className="flex items-center gap-2">
+                        <Users className="w-5 h-5 text-indigo-600" />
+                        <div>
+                          <span className="font-bold text-slate-900">{selectedStudentForHistory.studentName}</span>
+                          {selectedStudentForHistory.studentId && (
+                            <span className="ml-2 font-mono text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                              {selectedStudentForHistory.studentId}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    }
+                    subtitle="Comprehensive individual attendance records log and timeline"
+                    maxWidth="2xl"
+                    footer={
+                      <div className="flex items-center justify-between w-full">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const clean = selectedStudentHistoryRows.map((r) => {
+                              const c: Record<string, any> = {};
+                              for (const [k, v] of Object.entries(r)) {
+                                if (!k.startsWith('_')) c[k] = v;
+                              }
+                              return c;
+                            });
+                            exportToCsv(
+                              `${selectedStudentForHistory.studentName.replace(/\s+/g, '_')}_history.csv`,
+                              clean
+                            );
+                          }}
+                          className="text-xs flex items-center gap-1.5"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          Download Student CSV
+                        </Button>
+                        <Button variant="primary" size="sm" onClick={() => setSelectedStudentForHistory(null)} className="text-xs">
+                          Close
+                        </Button>
+                      </div>
+                    }
+                  >
+                    <div className="space-y-4">
+                      {/* Metric Summary Badges */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                        <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
+                          <span className="text-[10px] text-slate-400 uppercase block">Total Sessions</span>
+                          <span className="font-bold text-slate-800 text-sm mt-0.5 block">
+                            {selectedStudentForHistory.totalRecords}
+                          </span>
+                        </div>
+                        <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg">
+                          <span className="text-[10px] text-emerald-700 uppercase block">Present</span>
+                          <span className="font-bold text-emerald-800 text-sm mt-0.5 block">
+                            {selectedStudentForHistory.present}
+                          </span>
+                        </div>
+                        <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-lg">
+                          <span className="text-[10px] text-rose-700 uppercase block">Absent</span>
+                          <span className="font-bold text-rose-800 text-sm mt-0.5 block">
+                            {selectedStudentForHistory.absent}
+                          </span>
+                        </div>
+                        <div className="p-2.5 bg-indigo-50 border border-indigo-200 rounded-lg">
+                          <span className="text-[10px] text-indigo-700 uppercase block">Attendance Rate</span>
+                          <span className="font-bold text-indigo-800 text-sm mt-0.5 block">
+                            {selectedStudentForHistory.attendancePct !== null
+                              ? `${selectedStudentForHistory.attendancePct.toFixed(1)}%`
+                              : 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Class History Table */}
+                      <div className="border border-slate-200 rounded-xl overflow-hidden">
+                        <div className="overflow-x-auto max-h-72">
+                          <table className="w-full text-left text-xs">
+                            <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 text-slate-500 uppercase text-[10px]">
+                              <tr>
+                                <th className="py-2 px-3">Date</th>
+                                <th className="py-2 px-3">Time</th>
+                                <th className="py-2 px-3">Subject</th>
+                                <th className="py-2 px-3">Instructor</th>
+                                <th className="py-2 px-3 text-center">Status</th>
+                                <th className="py-2 px-3">Location</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 bg-white">
+                              {selectedStudentHistoryRows.map((r, i) => (
+                                <tr key={i} className="hover:bg-slate-50">
+                                  <td className="py-2 px-3 font-mono text-slate-600">
+                                    {schema.date ? r[schema.date] : '--'}
+                                  </td>
+                                  <td className="py-2 px-3 text-slate-500">
+                                    {schema.start_time ? r[schema.start_time] : '--'}
+                                  </td>
+                                  <td className="py-2 px-3 font-medium text-slate-800">
+                                    {schema.subject ? r[schema.subject] : '--'}
+                                  </td>
+                                  <td className="py-2 px-3 text-slate-700">
+                                    {schema.staff ? r[schema.staff] : '--'}
+                                  </td>
+                                  <td className="py-2 px-3 text-center">
+                                    <Badge
+                                      variant={
+                                        r._status_bucket === 'Present'
+                                          ? 'success'
+                                          : r._status_bucket === 'Absent'
+                                          ? 'danger'
+                                          : 'warning'
+                                      }
+                                    >
+                                      {r._status_bucket}
+                                    </Badge>
+                                  </td>
+                                  <td className="py-2 px-3 text-slate-500">
+                                    {schema.location ? r[schema.location] : '--'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  </Modal>
+                )}
               </div>
             )}
 

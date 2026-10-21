@@ -47,6 +47,12 @@ import {
 } from './seedData';
 import { EmailConfig, OrganizationSettings } from '../types/email';
 
+type PostgresRepository = typeof import('./state-repository');
+
+declare global {
+  var lumentorPostgresRepository: PostgresRepository | undefined;
+}
+
 export interface AppDatabase {
   roles: UserRole[];
   users: CurrentUser[];
@@ -111,9 +117,8 @@ class DataStore {
 
   private async loadFromPostgres(): Promise<void> {
     try {
-      const node = getNodeFsAndPath();
-      if (!node) throw new Error('PostgreSQL persistence is only available on the server.');
-      const repository = node.require?.('./state-repository') as typeof import('./state-repository');
+      const repository = globalThis.lumentorPostgresRepository;
+      if (!repository) throw new Error('PostgreSQL repository is not initialized on the server.');
       const state = await repository.loadAppState();
       if (state) {
         this.data = { ...this.getDefaultState(), ...state };
@@ -228,8 +233,7 @@ class DataStore {
 
   private saveToDisk(): void {
     if (this.usesPostgres()) {
-      const node = getNodeFsAndPath();
-      const repository = node?.require?.('./state-repository') as typeof import('./state-repository') | undefined;
+      const repository = globalThis.lumentorPostgresRepository;
       void repository?.saveAppState(this.data).catch((err: unknown) => {
         console.error('Failed to persist application state to PostgreSQL:', err);
       });

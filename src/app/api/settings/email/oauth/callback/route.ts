@@ -14,6 +14,10 @@ function validState(state: string, expected: string): boolean {
 }
 
 export async function GET(req: NextRequest) {
+  const repository = await import('../../../../../../lib/db/state-repository');
+  globalThis.lumentorPostgresRepository = repository;
+  await db.ready();
+
   const error = req.nextUrl.searchParams.get('error');
   if (error) {
     return NextResponse.redirect(new URL(`/admin/settings?emailOAuth=error&message=${encodeURIComponent(error)}`, req.url));

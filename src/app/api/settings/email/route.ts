@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../../lib/db/store';
 import { EmailConfig } from '../../../../lib/types/email';
-import { getServerEmailSecrets } from '../../../../lib/config/server';
+import { getServerEmailSecrets, googleOAuthConfig } from '../../../../lib/config/server';
 import { authorizationError } from '../../../../lib/auth/server';
 
 function sanitizeEmailConfig(config: EmailConfig) {
@@ -21,9 +21,16 @@ export async function GET(req: NextRequest) {
   try {
     db.reloadIfModified();
     const config = db.getEmailConfig();
+    const secrets = await getServerEmailSecrets();
+    const googleConfig = googleOAuthConfig();
     return NextResponse.json({
       success: true,
-      emailConfig: sanitizeEmailConfig(config),
+      emailConfig: {
+        ...sanitizeEmailConfig(config),
+        oauthClientId: googleConfig.clientId || config.oauthClientId || '',
+        oauthConfigured: Boolean(googleConfig.clientId && googleConfig.clientSecret && googleConfig.redirectUri),
+        oauthConnected: Boolean(secrets.oauthRefreshToken),
+      },
     });
   } catch (err: unknown) {
     return NextResponse.json(
@@ -52,7 +59,7 @@ export async function POST(req: NextRequest) {
     const secrets = await getServerEmailSecrets();
     const pass = secrets.pass;
 
-    const oauthClientId = String(body.oauthClientId ?? current.oauthClientId ?? '').trim();
+    const oauthClientId = String(body.oauthClientId ?? current.oauthClientId ?? googleOAuthConfig().clientId ?? '').trim();
     const oauthClientSecret = secrets.oauthClientSecret;
     const oauthRefreshToken = secrets.oauthRefreshToken;
 

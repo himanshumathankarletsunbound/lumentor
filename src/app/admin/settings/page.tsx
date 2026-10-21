@@ -52,8 +52,8 @@ export default function SettingsPage() {
   });
   const [hasStoredPassword, setHasStoredPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [hasStoredOAuthSecret, setHasStoredOAuthSecret] = useState(false);
-  const [showOAuthSecret, setShowOAuthSecret] = useState(false);
+  const [oauthConfigured, setOauthConfigured] = useState(false);
+  const [oauthConnected, setOauthConnected] = useState(false);
   const [emailSaved, setEmailSaved] = useState(false);
   const [isSavingEmail, setIsSavingEmail] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
@@ -94,11 +94,13 @@ export default function SettingsPage() {
           oauthClientSecret: '',
         });
         setHasStoredPassword(Boolean(emailData.emailConfig.hasPassword));
-        setHasStoredOAuthSecret(Boolean(emailData.emailConfig.hasOAuthSecret));
+        setOauthConfigured(Boolean(emailData.emailConfig.oauthConfigured));
+        setOauthConnected(Boolean(emailData.emailConfig.oauthConnected));
       }
     } catch {
       setHasStoredPassword(false);
-      setHasStoredOAuthSecret(false);
+      setOauthConfigured(false);
+      setOauthConnected(false);
     }
   }, []);
 
@@ -106,6 +108,24 @@ export default function SettingsPage() {
     const timer = window.setTimeout(() => void loadSettings(), 0);
     return () => window.clearTimeout(timer);
   }, [loadSettings]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams(window.location.search);
+      const oauthStatus = params.get('emailOAuth');
+      if (oauthStatus === 'success') {
+        setOauthConnected(true);
+        setEmailSaved(true);
+        setEmailError(null);
+      } else if (oauthStatus === 'error') {
+        setEmailError(params.get('message') || 'Gmail authorization was cancelled or failed.');
+      }
+      if (oauthStatus) {
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   // Handle General Settings Save
   const handleSaveGeneral = async () => {
@@ -764,6 +784,18 @@ export default function SettingsPage() {
                         </div>
                       </div>
 
+                      <div className={`rounded-lg border p-3 text-xs ${oauthConnected ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+                        <div className="flex items-center gap-2 font-semibold">
+                          {oauthConnected ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+                          {oauthConnected ? 'Gmail account connected' : 'Gmail account not connected'}
+                        </div>
+                        <p className="mt-1">
+                          {oauthConfigured
+                            ? 'Select Connect Gmail securely to authorize sending. The refresh token is stored encrypted on the server.'
+                            : 'Configure GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, GOOGLE_OAUTH_REDIRECT_URI, and APP_ENCRYPTION_KEY on Vercel before connecting.'}
+                        </p>
+                      </div>
+
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="font-semibold text-slate-700 block mb-1">
@@ -802,37 +834,11 @@ export default function SettingsPage() {
 
                         <div>
                           <label className="font-semibold text-slate-700 block mb-1">
-                            Google OAuth Client Secret <span className="text-rose-500">*</span>
-                          </label>
-                          <div className="relative">
-                            <input
-                              type={showOAuthSecret ? 'text' : 'password'}
-                              placeholder={hasStoredOAuthSecret ? '•••••••••••• (Leave blank to keep existing)' : 'GOCSPX-xxxxxxxx'}
-                              value={emailConfig.oauthClientSecret || ''}
-                              onChange={(e) => setEmailConfig({ ...emailConfig, oauthClientSecret: e.target.value })}
-                              className="w-full pl-3 pr-9 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowOAuthSecret(!showOAuthSecret)}
-                              className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
-                            >
-                              {showOAuthSecret ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                            </button>
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="font-semibold text-slate-700 block mb-1">
                             OAuth Refresh Token
                           </label>
-                          <input
-                            type="text"
-                            placeholder="Connect Gmail above to store this securely"
-                            value={emailConfig.oauthRefreshToken || ''}
-                            onChange={(e) => setEmailConfig({ ...emailConfig, oauthRefreshToken: e.target.value })}
-                            className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
-                          />
+                          <div className="rounded-lg border border-slate-200 bg-white p-2 text-[11px] text-slate-500">
+                            Never paste a refresh token here. Use <strong>Connect Gmail securely</strong>; LUmentor exchanges the authorization code server-side and stores the token encrypted.
+                          </div>
                         </div>
                       </div>
                     </div>

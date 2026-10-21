@@ -117,6 +117,10 @@ class DataStore {
       const state = await repository.loadAppState();
       if (state) {
         this.data = { ...this.getDefaultState(), ...state };
+        this.data.classcardConfig.apiKey = '';
+        this.data.emailConfig.pass = '';
+        this.data.emailConfig.oauthClientSecret = '';
+        this.data.emailConfig.oauthRefreshToken = '';
       } else {
         await repository.saveAppState(this.data);
       }

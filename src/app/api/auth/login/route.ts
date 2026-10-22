@@ -97,6 +97,10 @@ export async function POST(req: NextRequest) {
       user.status = 'ACTIVE';
     }
     user = await saveUser(user);
+    // Keep the compatibility authorization cache synchronized while remaining
+    // APIs migrate to normalized Prisma records.
+    db.saveUser(user);
+    await db.persistNow();
 
     const safeUser = { ...user };
     delete safeUser.passwordHash;

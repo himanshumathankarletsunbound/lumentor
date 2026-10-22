@@ -14,16 +14,14 @@ import {
   Eye,
   EyeOff,
   Sparkles,
-  CheckCircle2,
-  KeyRound,
 } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
 
-  const [email, setEmail] = useState('himanshu.m@letsunbound.com');
-  const [password, setPassword] = useState('admin@1290@');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
@@ -58,12 +56,6 @@ export default function LoginPage() {
       setError(res.error || 'Invalid email or password. Please try again.');
       setIsLoading(false);
     }
-  };
-
-  const fillSuperAdmin = () => {
-    setEmail('himanshu.m@letsunbound.com');
-    setPassword('admin@1290@');
-    setError(null);
   };
 
   return (
@@ -134,7 +126,7 @@ export default function LoginPage() {
                   autoComplete="username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="himanshu.m@letsunbound.com"
+                  placeholder="name@yourinstitution.com"
                   className="block w-full pl-9 pr-3 py-2.5 bg-slate-800/80 border border-slate-700 rounded-lg text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                 />
               </div>
@@ -212,34 +204,6 @@ export default function LoginPage() {
               Sign In to Command Center
             </Button>
           </form>
-
-          {/* Super Admin Quick Fill Card */}
-          <div className="mt-6 pt-5 border-t border-slate-800/80">
-            <div className="p-3.5 rounded-xl bg-indigo-950/40 border border-indigo-500/20 flex items-start justify-between gap-3">
-              <div className="space-y-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-xs font-semibold text-white">
-                    Super Admin Account
-                  </span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                    ADMINISTRATOR
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-400 font-mono">
-                  himanshu.m@letsunbound.com
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={fillSuperAdmin}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/40 transition-colors shrink-0"
-              >
-                <KeyRound className="w-3 h-3" />
-                Auto Fill
-              </button>
-            </div>
-          </div>
 
           <div className="mt-5 text-center">
             <p className="text-[11px] text-slate-500 flex items-center justify-center gap-1">

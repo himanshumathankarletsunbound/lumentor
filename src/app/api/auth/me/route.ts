@@ -40,6 +40,15 @@ export async function GET(req: NextRequest) {
     });
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ success: false, error: errorMsg }, { status: 500 });
+    const isMissingTable = errorMsg.includes('does not exist in the current database');
+    return NextResponse.json(
+      {
+        success: false,
+        error: isMissingTable
+          ? 'The production database schema is not initialized. Deploy the pending Prisma migrations, then try again.'
+          : errorMsg,
+      },
+      { status: 500 }
+    );
   }
 }

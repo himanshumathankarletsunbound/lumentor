@@ -216,7 +216,7 @@ Internal proprietary license for education and tutoring business operations. All
 
 ## Production deployment requirements
 
-Production deployments use PostgreSQL through Prisma. Set `DATABASE_URL` only in the server environment, run `pnpm db:generate`, then run `pnpm db:migrate` against the deployment database. Do not expose it through a `NEXT_PUBLIC_*` variable.
+Production deployments use PostgreSQL through Prisma. Set `DATABASE_URL` only in the Vercel **Production** environment and redeploy. The production build automatically runs `prisma migrate deploy` before `next build`, applying all checked-in migrations, including `AppState` and `EncryptedSecret`. Do not expose `DATABASE_URL` through a `NEXT_PUBLIC_*` variable. For a manual migration, run `pnpm db:migrate` locally with the same server-only `DATABASE_URL`.
 
 Set `CLASSCARD_API_KEY` only on the server. Live synchronization sends this key only in the server-side `api-key` header; it is never persisted in the application store or returned to browser code.
 

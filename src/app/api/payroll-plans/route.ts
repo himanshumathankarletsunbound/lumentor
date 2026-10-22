@@ -4,6 +4,10 @@ import { ensureServerPersistence } from '../../../lib/db/server-initialization';
 import { CompensationModel } from '../../../lib/types/payroll';
 import { createPayrollPlan, deletePayrollPlan, listPayrollPlans, updatePayrollPlan } from '../../../lib/db/state-repository';
 
+function numberOrDefault(value: number | undefined, fallback: number): number {
+  return value !== undefined && Number.isFinite(Number(value)) ? Number(value) : fallback;
+}
+
 export async function GET(req: NextRequest) {
   await ensureServerPersistence();
   const denied = await authorizationErrorAsync(req, 'payroll_rules', 'view');
@@ -60,15 +64,15 @@ export async function POST(req: NextRequest) {
       description: body.description?.trim() || '',
       compensationModel: body.compensationModel || 'PER_CLASS',
       currency: body.currency || 'INR',
-      baseSalary: Number(body.baseSalary) || 0,
-      defaultClassRate: Number(body.defaultClassRate) || 0,
-      hourlyRate: Number(body.hourlyRate) || 0,
-      perStudentRate: Number(body.perStudentRate) || 0,
-      revenuePercentage: Number(body.revenuePercentage) || 0,
-      minEligibleDurationMinutes: Number(body.minEligibleDurationMinutes) || 30,
+      baseSalary: numberOrDefault(body.baseSalary, 0),
+      defaultClassRate: numberOrDefault(body.defaultClassRate, 0),
+      hourlyRate: numberOrDefault(body.hourlyRate, 0),
+      perStudentRate: numberOrDefault(body.perStudentRate, 0),
+      revenuePercentage: numberOrDefault(body.revenuePercentage, 0),
+      minEligibleDurationMinutes: numberOrDefault(body.minEligibleDurationMinutes, 30),
       payableClassStatuses: body.payableClassStatuses || ['COMPLETED', 'LATE_CANCELLED'],
-      lateCancellationPayPercent: Number(body.lateCancellationPayPercent) || 50,
-      groupMultiplier: Number(body.groupMultiplier) || 1.25,
+      lateCancellationPayPercent: numberOrDefault(body.lateCancellationPayPercent, 50),
+      groupMultiplier: numberOrDefault(body.groupMultiplier, 1.25),
       formula: body.formula?.trim() || '',
       version: 1,
       effectiveFrom: new Date().toISOString(),

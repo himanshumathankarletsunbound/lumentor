@@ -65,7 +65,7 @@ export function computeStandardFormula(params: {
   const hRate = params.hourlyRate || 0;
   const sRate = params.perStudentRate || 0;
   const rev = params.revenuePercentage || 0;
-  const grp = params.groupMultiplier || 1.0;
+  const grp = Number.isFinite(params.groupMultiplier) ? params.groupMultiplier : 1.0;
   const late = Number.isFinite(params.lateCancelPercent) ? params.lateCancelPercent : 0;
 
   switch (params.compensationModel) {
@@ -118,7 +118,7 @@ export function simulateGrossPayout(params: {
   let total = 0;
   switch (params.compensationModel) {
     case 'PER_CLASS':
-      total = sampleClasses * params.classRate * (params.groupMultiplier || 1.0);
+      total = sampleClasses * params.classRate * (Number.isFinite(params.groupMultiplier) ? params.groupMultiplier : 1.0);
       break;
     case 'DURATION_BASED':
       total = sampleHours * params.hourlyRate;
@@ -135,7 +135,7 @@ export function simulateGrossPayout(params: {
     case 'HYBRID':
       total =
         params.baseSalary +
-        sampleClasses * params.classRate * (params.groupMultiplier || 1.0) +
+        sampleClasses * params.classRate * (Number.isFinite(params.groupMultiplier) ? params.groupMultiplier : 1.0) +
         sampleHours * params.hourlyRate +
         sampleStudents * params.perStudentRate +
         sampleTuition * (params.revenuePercentage / 100);
@@ -246,8 +246,8 @@ export default function PayrollRulesPage() {
     setHourlyRate(String(p.hourlyRate || 0));
     setPerStudentRate(String(p.perStudentRate || 0));
     setRevenuePercentage(String(p.revenuePercentage || 0));
-    setGroupMultiplier(String(p.groupMultiplier || 1.25));
-    setMinDuration(String(p.minEligibleDurationMinutes || 30));
+    setGroupMultiplier(String(p.groupMultiplier ?? 1.25));
+    setMinDuration(String(p.minEligibleDurationMinutes ?? 30));
     setLateCancelPercent(String(p.lateCancellationPayPercent ?? 0));
 
     if (p.formula && p.formula.trim().length > 0) {

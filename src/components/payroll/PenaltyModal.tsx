@@ -53,11 +53,14 @@ export function PenaltyModal({
 
   useEffect(() => {
     if (!isOpen || isViewing || !initialMentorId) return;
-    const selected = mentors.find((mentor) => mentor.id === initialMentorId);
-    if (selected) {
-      setMentorId(selected.id);
-      setBranchId(selected.branchId);
-    }
+    const timer = window.setTimeout(() => {
+      const selected = mentors.find((mentor) => mentor.id === initialMentorId);
+      if (selected) {
+        setMentorId(selected.id);
+        setBranchId(selected.branchId);
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [initialMentorId, isOpen, isViewing, mentors]);
 
   useEffect(() => {

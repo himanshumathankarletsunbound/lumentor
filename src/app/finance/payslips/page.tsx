@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AppShell } from '../../../components/layout/AppShell';
 import { db } from '../../../lib/db/store';
 import { useAuth } from '../../../lib/auth/AuthContext';
@@ -14,10 +14,23 @@ import { formatCurrency, formatDate } from '../../../lib/utils/formatters';
 
 export default function PayslipsPage() {
   const { isMentor, currentUser } = useAuth();
-  const [payslips] = useState<Payslip[]>(
+  const [payslips, setPayslips] = useState<Payslip[]>(
     isMentor ? db.getPayslips(currentUser.mentorId) : db.getPayslips()
   );
   const [selectedSlip, setSelectedSlip] = useState<Payslip | null>(null);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void fetch(`/api/payslips${isMentor ? `?mentorId=${encodeURIComponent(currentUser.mentorId || '')}` : ''}`)
+        .then(async (response) => {
+          const result = await response.json();
+          if (!response.ok || !result.success) throw new Error(result.error || 'Unable to load payslips.');
+          setPayslips(result.payslips);
+        })
+        .catch((error: unknown) => console.error('Failed to load payslips from the database:', error));
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [currentUser.mentorId, isMentor]);
 
   return (
     <AppShell>

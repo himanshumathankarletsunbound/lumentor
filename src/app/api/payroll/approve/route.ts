@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../../lib/db/store';
 import { enforceRateLimit } from '../../../../lib/rate-limit/limiter';
 import { authorizationError } from '../../../../lib/auth/server';
+import { ensureServerPersistence } from '../../../../lib/db/server-initialization';
 
 export async function POST(req: NextRequest) {
+  await ensureServerPersistence();
   const denied = authorizationError(req, 'payroll_processing', 'approve');
   if (denied) return denied;
   const rateLimitError = enforceRateLimit(req, { limit: 10, windowSeconds: 60, identifierPrefix: 'payroll-approve' });
@@ -16,6 +18,17 @@ export async function POST(req: NextRequest) {
     const batch = db.getPayrollBatchById(batchId);
     if (!batch) {
       return NextResponse.json({ error: 'Batch not found' }, { status: 404 });
+    }
+
+    if (action === 'SUBMIT') {
+      batch.status = 'SUBMITTED';
+      batch.submittedBy = approverId;
+      batch.submittedByName = approverName;
+      batch.submittedAt = new Date().toISOString();
+      batch.updatedAt = new Date().toISOString();
+      db.savePayrollBatch(batch);
+      await db.persistNow();
+      return NextResponse.json(batch);
     }
 
     if (action === 'APPROVE') {
@@ -36,6 +49,7 @@ export async function POST(req: NextRequest) {
         details: `Approved payroll batch ${batch.batchNumber} (${batch.totalMentors} mentors, $${batch.totalNet} net).`,
       });
 
+      await db.persistNow();
       return NextResponse.json(batch);
     } else if (action === 'REJECT') {
       batch.status = 'DRAFT';
@@ -52,6 +66,7 @@ export async function POST(req: NextRequest) {
         details: `Returned payroll batch ${batch.batchNumber} for corrections: ${rejectionReason || 'No reason specified'}`,
       });
 
+      await db.persistNow();
       return NextResponse.json(batch);
     }
 

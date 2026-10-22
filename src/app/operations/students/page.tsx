@@ -6,16 +6,21 @@ import { db } from '../../../lib/db/store';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell, TableEmptyState } from '../../../components/ui/Table';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
-import { Users, Mail, Phone, MapPin, Search, RefreshCw, Plus } from 'lucide-react';
-import { formatDate } from '../../../lib/utils/formatters';
+import { RowActions } from '../../../components/ui/RowActions';
+import { DeleteConfirmModal } from '../../../components/ui/DeleteConfirmModal';
+import { Search, RefreshCw, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { AddRecordModal } from '../../../components/operations/AddRecordModal';
+import { Student } from '../../../lib/types/models';
 
 export default function StudentsPage() {
-  const [students, setStudents] = useState(() => db.getStudents());
+  const [students, setStudents] = useState<Student[]>(() => db.getStudents());
   const [search, setSearch] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [deletingStudent, setDeletingStudent] = useState<Student | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [branches, setBranches] = useState(() => db.getBranches());
 
   const refreshStudents = async () => {
@@ -56,6 +61,76 @@ export default function StudentsPage() {
       }
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  const handleCreateStudent = async (values: Record<string, string>) => {
+    const response = await fetch('/api/records', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'student',
+        record: {
+          firstName: values.firstName.trim(),
+          lastName: values.lastName.trim(),
+          email: values.email.trim(),
+          phone: values.phone?.trim() || '',
+          guardianName: values.guardianName?.trim() || '',
+          guardianEmail: values.guardianEmail?.trim() || '',
+          branchId: values.branchId || branches[0]?.id || '',
+          enrolledPackageIds: [],
+          status: 'ACTIVE',
+          provenance: 'LOCALLY_CREATED',
+        },
+      }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Unable to create student.');
+    const created = result.record as Student;
+    setStudents((current) => [...current, created]);
+    setShowModal(false);
+  };
+
+  const handleUpdateStudent = async (values: Record<string, string>) => {
+    if (!editingStudent) return;
+    const response = await fetch('/api/records', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'student',
+        id: editingStudent.id,
+        updates: {
+          firstName: values.firstName.trim(),
+          lastName: values.lastName.trim(),
+          email: values.email.trim(),
+          phone: values.phone?.trim() || '',
+          guardianName: values.guardianName?.trim() || '',
+          guardianEmail: values.guardianEmail?.trim() || '',
+          branchId: values.branchId || editingStudent.branchId,
+        },
+      }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Unable to update student.');
+    await refreshStudents();
+    setEditingStudent(null);
+  };
+
+  const handleDeleteStudent = async () => {
+    if (!deletingStudent) return;
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/records?type=student&id=${encodeURIComponent(deletingStudent.id)}`, {
+        method: 'DELETE',
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Unable to delete student.');
+      await refreshStudents();
+      setDeletingStudent(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Deletion failed.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -146,6 +221,7 @@ export default function StudentsPage() {
                 <TableHead>Custom Fields (Classcard)</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Provenance</TableHead>
+                <TableHead className="text-right">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -197,35 +273,90 @@ export default function StudentsPage() {
                         <Badge variant="neutral" size="sm">Local</Badge>
                       )}
                     </TableCell>
+                    <TableCell className="text-right">
+                      <RowActions
+                        editTooltip={`Edit ${s.firstName} ${s.lastName}`}
+                        deleteTooltip={`Delete ${s.firstName} ${s.lastName}`}
+                        onEdit={() => setEditingStudent(s)}
+                        onDelete={() => setDeletingStudent(s)}
+                        extraActions={[
+                          {
+                            label: 'View attendance history',
+                            onClick: () => alert(`Opening attendance record history for ${s.firstName} ${s.lastName}...`),
+                          },
+                          {
+                            label: 'View guardian profile',
+                            onClick: () => alert(`Guardian contact: ${s.guardianName || 'None'} (${s.guardianEmail || 'No email'})`),
+                          },
+                          {
+                            label: 'Export student record',
+                            onClick: () => alert(`Exporting record for ${s.firstName} ${s.lastName}...`),
+                          },
+                        ]}
+                      />
+                    </TableCell>
                   </TableRow>
                 );
               })}
             </TableBody>
           </Table>
         )}
+
+        {/* Add Student Modal */}
         <AddRecordModal
-          title="Add student"
+          title="Add Student"
           isOpen={showModal}
           onClose={() => setShowModal(false)}
           fields={[
-            { name: 'firstName', label: 'First name', placeholder: 'Aarav' },
-            { name: 'lastName', label: 'Last name', placeholder: 'Sharma' },
+            { name: 'firstName', label: 'First name', placeholder: 'e.g. Aarav' },
+            { name: 'lastName', label: 'Last name', placeholder: 'e.g. Sharma' },
             { name: 'email', label: 'Email', type: 'email', placeholder: 'student@example.com' },
-            { name: 'phone', label: 'Phone', required: false },
+            { name: 'phone', label: 'Phone', required: false, placeholder: '+1 (555) 000-0000' },
+            { name: 'guardianName', label: 'Guardian name', required: false, placeholder: 'Parent or Guardian' },
+            { name: 'guardianEmail', label: 'Guardian email', type: 'email', required: false, placeholder: 'guardian@example.com' },
           ]}
-          onSave={async (values) => {
-            const response = await fetch('/api/records', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'student', record: {
-              firstName: values.firstName.trim(), lastName: values.lastName.trim(),
-              email: values.email.trim(), phone: values.phone.trim(), branchId: branches[0]?.id || '',
-              enrolledPackageIds: [], status: 'ACTIVE', provenance: 'LOCALLY_CREATED',
-            }})});
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.error || 'Unable to create student.');
-            const created = result.record;
-            setStudents((current) => [...current, created]);
-            setShowModal(false);
-          }}
+          onSave={handleCreateStudent}
         />
+
+        {/* Edit Student Modal */}
+        {editingStudent && (
+          <AddRecordModal
+            title={`Edit Student: ${editingStudent.firstName} ${editingStudent.lastName}`}
+            isOpen={Boolean(editingStudent)}
+            submitLabel="Save changes"
+            onClose={() => setEditingStudent(null)}
+            initialValues={{
+              firstName: editingStudent.firstName,
+              lastName: editingStudent.lastName,
+              email: editingStudent.email,
+              phone: editingStudent.phone || '',
+              guardianName: editingStudent.guardianName || '',
+              guardianEmail: editingStudent.guardianEmail || '',
+              branchId: editingStudent.branchId || '',
+            }}
+            fields={[
+              { name: 'firstName', label: 'First name' },
+              { name: 'lastName', label: 'Last name' },
+              { name: 'email', label: 'Email', type: 'email' },
+              { name: 'phone', label: 'Phone', required: false },
+              { name: 'guardianName', label: 'Guardian name', required: false },
+              { name: 'guardianEmail', label: 'Guardian email', type: 'email', required: false },
+            ]}
+            onSave={handleUpdateStudent}
+          />
+        )}
+
+        {/* Delete Student Modal */}
+        {deletingStudent && (
+          <DeleteConfirmModal
+            isOpen={Boolean(deletingStudent)}
+            recordName={`${deletingStudent.firstName} ${deletingStudent.lastName}`}
+            recordType="student"
+            isDeleting={isDeleting}
+            onConfirm={handleDeleteStudent}
+            onClose={() => setDeletingStudent(null)}
+          />
+        )}
       </div>
     </AppShell>
   );

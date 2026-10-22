@@ -333,6 +333,12 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
             icon: <PackageIcon className="w-4 h-4" />,
             module: 'packages',
           },
+          {
+            name: 'Submit Penalties',
+            href: '/operations/penalties',
+            icon: <ShieldAlert className="w-4 h-4" />,
+            module: 'penalties',
+          },
         ],
       },
       {
@@ -357,7 +363,13 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
             module: 'payroll_processing',
           },
           {
-            name: 'Penalties & Adjustments',
+            name: 'Single Payout',
+            href: '/finance/single-payout',
+            icon: <CreditCard className="w-4 h-4" />,
+            module: 'payroll_processing',
+          },
+          {
+            name: 'Penalties & Policy Deductions',
             href: '/finance/penalties',
             icon: <ShieldAlert className="w-4 h-4" />,
             module: 'penalties',

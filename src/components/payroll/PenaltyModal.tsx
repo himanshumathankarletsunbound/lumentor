@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Penalty, PenaltyCategory } from '../../lib/types/payroll';
+import React, { useEffect, useState } from 'react';
+import { Penalty, PenaltyCategory, PenaltyPolicy } from '../../lib/types/payroll';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
@@ -16,6 +16,7 @@ export interface PenaltyModalProps {
   onClose: () => void;
   penaltyToView?: Penalty | null;
   onSaved: () => void;
+  initialMentorId?: string;
 }
 
 export function PenaltyModal({
@@ -23,14 +24,16 @@ export function PenaltyModal({
   onClose,
   penaltyToView,
   onSaved,
+  initialMentorId,
 }: PenaltyModalProps) {
   const { currentUser, isAdmin, isMentor } = useAuth();
   const mentors = db.getMentors();
   const branches = db.getBranches();
+  const initialMentor = mentors.find((mentor) => mentor.id === initialMentorId) || mentors[0];
 
   // Form State for new penalty
-  const [mentorId, setMentorId] = useState(mentors[0]?.id || '');
-  const [branchId, setBranchId] = useState(branches[0]?.id || '');
+  const [mentorId, setMentorId] = useState(initialMentor?.id || '');
+  const [branchId, setBranchId] = useState(initialMentor?.branchId || branches[0]?.id || '');
   const [category, setCategory] = useState<PenaltyCategory>('LATE_CANCELLATION');
   const [amount, setAmount] = useState('35.00');
   const [reason, setReason] = useState('');
@@ -45,10 +48,25 @@ export function PenaltyModal({
   const [disputeNote, setDisputeNote] = useState('');
   const [showDisputeInput, setShowDisputeInput] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-
+  const [policies, setPolicies] = useState<PenaltyPolicy[]>([]);
   const isViewing = Boolean(penaltyToView);
 
-  const handleSubmitNew = () => {
+  useEffect(() => {
+    if (!isOpen || isViewing) return;
+    void fetch('/api/penalty-policies')
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error || 'Unable to load penalty policies.');
+        setPolicies(result.policies);
+        if (result.policies[0]) {
+          setCategory(result.policies[0].name);
+          setAmount(String(result.policies[0].defaultAmount || 0));
+        }
+      })
+      .catch((error: unknown) => setErrorMsg(error instanceof Error ? error.message : 'Unable to load penalty policies.'));
+  }, [isOpen, isViewing]);
+
+  const handleSubmitNew = async () => {
     if (!reason.trim()) {
       setErrorMsg('Mandatory reason is required to submit a penalty.');
       return;
@@ -59,22 +77,17 @@ export function PenaltyModal({
       return;
     }
 
-    const selectedMentor = mentors.find((m) => m.id === mentorId);
-    const selectedBranch = branches.find((b) => b.id === branchId);
-
-    const pen = db.createPenalty({
-      mentorId,
-      mentorName: selectedMentor ? `${selectedMentor.firstName} ${selectedMentor.lastName}` : 'Mentor',
-      branchId,
-      branchName: selectedBranch?.name || 'Primary Campus',
-      category,
-      reason,
-      amount: parsedAmount,
-      evidenceNote: evidenceNote.trim() || undefined,
-      evidenceUrl: evidenceUrl.trim() || undefined,
-      createdBy: currentUser.id,
-      createdByName: currentUser.name,
+    const response = await fetch('/api/penalties', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mentorId, branchId, category, reason, amount: parsedAmount, evidenceNote, evidenceUrl, createdBy: currentUser.id, createdByName: currentUser.name }),
     });
+    const result = await response.json();
+    if (!response.ok) {
+      setErrorMsg(result.error || 'Unable to submit penalty.');
+      return;
+    }
+    const pen = result;
 
     db.logAudit({
       userId: currentUser.id,
@@ -440,11 +453,11 @@ export function PenaltyModal({
                   onChange={(e) => setCategory(e.target.value as PenaltyCategory)}
                   className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-800"
                 >
-                  <option value="LATE_CANCELLATION">Late Cancellation</option>
-                  <option value="UNAPPROVED_ABSENCE">Unapproved Absence / Delayed Arrival</option>
-                  <option value="MISSING_ATTENDANCE">Missing / Overdue Attendance</option>
-                  <option value="POLICY_VIOLATION">Policy / Compliance Violation</option>
-                  <option value="ADMINISTRATIVE">Administrative Correction</option>
+                  {policies.length === 0 ? (
+                    <option value="">No active penalty policies configured</option>
+                  ) : policies.map((policy) => (
+                    <option key={policy.id} value={policy.name}>{policy.name}</option>
+                  ))}
                 </select>
               </div>
 

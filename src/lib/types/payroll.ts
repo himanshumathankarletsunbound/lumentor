@@ -41,7 +41,18 @@ export type PenaltyCategory =
   | 'MISSING_ATTENDANCE'
   | 'POLICY_VIOLATION'
   | 'ADMINISTRATIVE'
-  | 'OTHER';
+  | 'OTHER'
+  | (string & {});
+
+export interface PenaltyPolicy {
+  id: string;
+  name: string;
+  description: string;
+  defaultAmount: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export type PenaltyStatus =
   | 'DRAFT'

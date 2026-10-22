@@ -13,6 +13,7 @@ import {
 } from '../types/models';
 import {
   PayrollPlan,
+  PenaltyPolicy,
   Penalty,
   Adjustment,
   PayrollPeriod,
@@ -64,6 +65,7 @@ export interface AppDatabase {
   students: Student[];
   classes: ClassEvent[];
   penalties: Penalty[];
+  penaltyPolicies: PenaltyPolicy[];
   adjustments: Adjustment[];
   payrollPeriods: PayrollPeriod[];
   payrollBatches: PayrollBatch[];
@@ -170,6 +172,7 @@ class DataStore {
       students: [...SEED_STUDENTS],
       classes: [...SEED_CLASSES],
       penalties: [...SEED_PENALTIES],
+      penaltyPolicies: [],
       adjustments: [...SEED_ADJUSTMENTS],
       payrollPeriods: [...SEED_PAYROLL_PERIODS],
       payrollBatches: [],
@@ -199,6 +202,9 @@ class DataStore {
           const raw = node.fs.readFileSync(dbFile, 'utf-8');
           const parsed = JSON.parse(raw);
           this.data = { ...this.getDefaultState(), ...parsed };
+          if (!this.data.payrollPlans || this.data.payrollPlans.length === 0) {
+            this.data.payrollPlans = [...SEED_PAYROLL_PLANS];
+          }
           this.data.classcardConfig.apiKey = '';
           this.data.emailConfig.oauthClientSecret = '';
           this.data.emailConfig.oauthRefreshToken = '';
@@ -231,6 +237,9 @@ class DataStore {
           }
           if (!this.data.classes || this.data.classes.length === 0) {
             this.data.classes = [...SEED_CLASSES];
+          }
+          if (!this.data.payrollPlans || this.data.payrollPlans.length === 0) {
+            this.data.payrollPlans = [...SEED_PAYROLL_PLANS];
           }
           if (!this.data.students || this.data.students.length === 0) {
             this.data.students = [...SEED_STUDENTS];
@@ -428,7 +437,13 @@ class DataStore {
 
   // --- Branches ---
   public getBranches(): Branch[] {
-    return this.data.branches;
+    const seen = new Set<string>();
+    return this.data.branches.filter((branch) => {
+      const key = branch.code.trim().toLowerCase() || branch.id;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }
 
   public getBranchById(id: string): Branch | undefined {
@@ -436,6 +451,13 @@ class DataStore {
   }
 
   public createBranch(branch: Omit<Branch, 'id' | 'createdAt' | 'updatedAt'>): Branch {
+    const normalizedCode = branch.code.trim().toLowerCase();
+    const existing = this.data.branches.find(
+      (item) => item.code.trim().toLowerCase() === normalizedCode
+    );
+    if (existing) {
+      throw new Error(`A branch with code ${branch.code.toUpperCase()} already exists.`);
+    }
     const record: Branch = {
       ...branch,
       id: `branch-${Date.now()}`,
@@ -457,6 +479,14 @@ class DataStore {
     };
     this.saveToDisk();
     return this.data.branches[index];
+  }
+
+  public deleteBranch(id: string): boolean {
+    const idx = this.data.branches.findIndex((b) => b.id === id);
+    if (idx === -1) return false;
+    this.data.branches.splice(idx, 1);
+    this.saveToDisk();
+    return true;
   }
 
   // --- Subjects ---
@@ -492,6 +522,14 @@ class DataStore {
     return this.data.subjects[idx];
   }
 
+  public deleteSubject(id: string): boolean {
+    const idx = this.data.subjects.findIndex((s) => s.id === id);
+    if (idx === -1) return false;
+    this.data.subjects.splice(idx, 1);
+    this.saveToDisk();
+    return true;
+  }
+
   // --- Packages ---
   public getPackages(): Package[] {
     return this.data.packages;
@@ -523,6 +561,14 @@ class DataStore {
     };
     this.saveToDisk();
     return this.data.packages[idx];
+  }
+
+  public deletePackage(id: string): boolean {
+    const idx = this.data.packages.findIndex((p) => p.id === id);
+    if (idx === -1) return false;
+    this.data.packages.splice(idx, 1);
+    this.saveToDisk();
+    return true;
   }
 
   // --- Mentors ---
@@ -563,6 +609,14 @@ class DataStore {
     return this.data.mentors[idx];
   }
 
+  public deleteMentor(id: string): boolean {
+    const idx = this.data.mentors.findIndex((m) => m.id === id);
+    if (idx === -1) return false;
+    this.data.mentors.splice(idx, 1);
+    this.saveToDisk();
+    return true;
+  }
+
   // --- Students ---
   public getStudents(branchId?: string): Student[] {
     if (!branchId || branchId === 'ALL') return this.data.students;
@@ -595,6 +649,14 @@ class DataStore {
     };
     this.saveToDisk();
     return this.data.students[idx];
+  }
+
+  public deleteStudent(id: string): boolean {
+    const idx = this.data.students.findIndex((s) => s.id === id);
+    if (idx === -1) return false;
+    this.data.students.splice(idx, 1);
+    this.saveToDisk();
+    return true;
   }
 
   // --- Classes & Events ---
@@ -732,6 +794,27 @@ class DataStore {
 
   public getPenaltyById(id: string): Penalty | undefined {
     return this.data.penalties.find((p) => p.id === id);
+  }
+
+  public getPenaltyPolicies(): PenaltyPolicy[] {
+    return this.data.penaltyPolicies ?? [];
+  }
+
+  public createPenaltyPolicy(policy: Omit<PenaltyPolicy, 'id' | 'createdAt' | 'updatedAt'>): PenaltyPolicy {
+    const normalizedName = policy.name.trim().toLowerCase();
+    if (this.getPenaltyPolicies().some((item) => item.name.trim().toLowerCase() === normalizedName)) {
+      throw new Error('A penalty policy with this name already exists.');
+    }
+    const now = new Date().toISOString();
+    const record = { ...policy, id: `penalty-policy-${Date.now()}`, createdAt: now, updatedAt: now };
+    this.data.penaltyPolicies = [...this.getPenaltyPolicies(), record];
+    this.saveToDisk();
+    return record;
+  }
+
+  public deletePenaltyPolicy(id: string): void {
+    this.data.penaltyPolicies = this.getPenaltyPolicies().filter((policy) => policy.id !== id);
+    this.saveToDisk();
   }
 
   public createPenalty(penalty: Omit<Penalty, 'id' | 'createdAt' | 'status'>): Penalty {

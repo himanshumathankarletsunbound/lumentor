@@ -9,6 +9,7 @@ const jsonState = (state: AppDatabase): Prisma.InputJsonValue => {
   persisted.classcardConfig.apiKey = '';
   persisted.emailConfig.oauthClientSecret = '';
   persisted.emailConfig.oauthRefreshToken = '';
+  persisted.penaltyPolicies = persisted.penaltyPolicies ?? [];
   return persisted as unknown as Prisma.InputJsonValue;
 };
 
@@ -108,5 +109,26 @@ export async function saveNormalizedRecord(
       create: { id: mentor.id, branchId: mentor.branchId, firstName: mentor.firstName, lastName: mentor.lastName, email: mentor.email, phone: mentor.phone, payrollPlanId, status: mentor.status, provenance: mentor.provenance, teachingHoursThisMonth: mentor.teachingHoursThisMonth, completedClassesCount: mentor.completedClassesCount, attendanceRate: mentor.attendanceRate },
       update: { branchId: mentor.branchId, firstName: mentor.firstName, lastName: mentor.lastName, email: mentor.email, phone: mentor.phone, payrollPlanId, status: mentor.status, provenance: mentor.provenance },
     });
+  }
+}
+
+export async function deleteNormalizedRecord(
+  type: 'branch' | 'subject' | 'package' | 'student' | 'mentor',
+  id: string
+): Promise<void> {
+  try {
+    if (type === 'branch') {
+      await prisma.branch.delete({ where: { id } }).catch(() => {});
+    } else if (type === 'subject') {
+      await prisma.subject.delete({ where: { id } }).catch(() => {});
+    } else if (type === 'package') {
+      await prisma.package.delete({ where: { id } }).catch(() => {});
+    } else if (type === 'student') {
+      await prisma.student.delete({ where: { id } }).catch(() => {});
+    } else if (type === 'mentor') {
+      await prisma.mentor.delete({ where: { id } }).catch(() => {});
+    }
+  } catch (error) {
+    console.warn(`Could not delete normalized ${type} with id ${id} from Prisma:`, error);
   }
 }

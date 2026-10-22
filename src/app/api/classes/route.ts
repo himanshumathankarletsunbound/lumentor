@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../lib/db/store';
 import { authorizationError } from '../../../lib/auth/server';
 import { ClassEvent, ClassStudentRoster } from '../../../lib/types/models';
+import { ensureServerPersistence } from '../../../lib/db/server-initialization';
 
 export async function GET(req: NextRequest) {
+  await ensureServerPersistence();
   const denied = authorizationError(req);
   if (denied) return denied;
   try {
@@ -34,6 +36,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  await ensureServerPersistence();
   const denied = authorizationError(req);
   if (denied) return denied;
   try {
@@ -134,6 +137,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  await ensureServerPersistence();
   const denied = authorizationError(req);
   if (denied) return denied;
   try {

@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../lib/db/store';
 import { enforceRateLimit } from '../../../lib/rate-limit/limiter';
 import { authorizationError } from '../../../lib/auth/server';
+import { ensureServerPersistence } from '../../../lib/db/server-initialization';
 
 export async function GET(req: NextRequest) {
+  await ensureServerPersistence();
   const denied = authorizationError(req, 'penalties', 'view');
   if (denied) return denied;
   const rateLimitError = enforceRateLimit(req, { limit: 60, windowSeconds: 60, identifierPrefix: 'penalties-get' });
@@ -16,6 +18,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  await ensureServerPersistence();
   const denied = authorizationError(req, 'penalties', 'create');
   if (denied) return denied;
   const rateLimitError = enforceRateLimit(req, { limit: 20, windowSeconds: 60, identifierPrefix: 'penalties-post' });
@@ -45,6 +48,7 @@ export async function POST(req: NextRequest) {
       createdByName: createdByName || 'Operations Staff',
     });
 
+    await db.persistNow();
     return NextResponse.json(pen);
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);

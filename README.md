@@ -66,7 +66,7 @@ Calculates mentor compensations with precision arithmetic (2 decimal places) acr
 - **Date Utilities**: [date-fns](https://date-fns.org/)
 - **Database Schema**: [Prisma ORM](https://www.prisma.io/) (`prisma/schema.prisma` targeting PostgreSQL)
 - **Production Persistence Layer**: PostgreSQL through Prisma. The server store hydrates from and persists to PostgreSQL `AppState`; encrypted credentials use `EncryptedSecret`.
-- **Demo Persistence Layer**: Atomic JSON seed store, used only when `DEMO_MODE=true`.
+- **Local/test persistence (explicit opt-in only)**: Atomic JSON storage can be enabled with `DEMO_MODE=true`; it is never used by production deployments and no fabricated records are created by normal startup.
 
 ---
 
@@ -188,7 +188,7 @@ pnpm test
 
 ### Persistence modes:
 - **Production**: `DEMO_MODE=false` and a valid `DATABASE_URL`. Prisma loads and persists application state in PostgreSQL. `data/db.json` is not read or written.
-- **Demo/tests**: `DEMO_MODE=true`. The JSON store and seeded data are used deliberately so acceptance tests and demonstrations do not need a database.
+- **Local/tests**: `DEMO_MODE=true` is an explicit opt-in for isolated tests that cannot provision PostgreSQL. The JSON store starts empty; application records must be created through the same APIs used in production.
 - `APP_ENCRYPTION_KEY` is required for encrypted OAuth refresh-token storage. Never reuse a development key in production.
 
 ### Migrating to Production PostgreSQL:
@@ -240,6 +240,6 @@ Email is outbound-only through Google Workspace OAuth. There is no SMTP-password
 
 Configure a Google OAuth Web application with the exact callback URL in `GOOGLE_OAUTH_REDIRECT_URI`, then set `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, and `APP_ENCRYPTION_KEY` on the server. In **Admin → Settings → Email**, enter the Google Workspace sender address and select **Connect Google Workspace**. The callback exchanges the authorization code server-side and stores only an AES-256-GCM encrypted refresh token in PostgreSQL; it is never sent to browser code or written to JSON. The account must grant the `https://mail.google.com/` scope. Run the outbound test after connecting and enabling email. LUmentor never reads incoming mail.
 
-`DEMO_MODE=true` is restricted to local acceptance tests and demonstrations. It is the only mode that enables simulated Classcard responses, JSON seed behavior, or simulated email. Production must use `DEMO_MODE=false`.
+`DEMO_MODE=true` is restricted to local acceptance tests. Production must use `DEMO_MODE=false`; production startup requires PostgreSQL and does not seed users, mentors, students, plans, penalties, classes, or policies.
 
 Protected API routes validate the HTTP-only session cookie or bearer token, enforce session expiry and account status, and apply server-side role permissions. Client `localStorage` is not an authentication source. Run `pnpm test:api-auth` to verify unauthenticated and expired-session behavior.

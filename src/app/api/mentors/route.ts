@@ -2,8 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../lib/db/store';
 import { authorizationError } from '../../../lib/auth/server';
 import { Mentor } from '../../../lib/types/models';
+import { ensureServerPersistence } from '../../../lib/db/server-initialization';
 
 export async function GET(req: NextRequest) {
+  try {
+    await ensureServerPersistence();
+  } catch (error) {
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : 'Database initialization failed.' },
+      { status: 503 }
+    );
+  }
   const denied = authorizationError(req);
   if (denied) return denied;
   try {
@@ -29,6 +38,14 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  try {
+    await ensureServerPersistence();
+  } catch (error) {
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : 'Database initialization failed.' },
+      { status: 503 }
+    );
+  }
   const denied = authorizationError(req);
   if (denied) return denied;
   try {
@@ -72,6 +89,7 @@ export async function PATCH(req: NextRequest) {
     if (hourlyRate !== undefined) updates.hourlyRate = Number(hourlyRate);
 
     const updated = db.updateMentor(id, updates);
+    await db.persistNow();
 
     db.logAudit({
       userId: 'usr-admin-1',

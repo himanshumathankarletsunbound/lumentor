@@ -28,6 +28,24 @@ export default function MentorsPage() {
   const plans = db.getPayrollPlans();
   const canViewPayroll = hasPermission('payroll_dashboard', 'view_sensitive_payroll');
 
+  const refreshMentors = async () => {
+    const response = await fetch('/api/mentors');
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || 'Unable to load mentors.');
+    }
+    setMentors(result.mentors);
+  };
+
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void refreshMentors().catch((error: unknown) => {
+        setImportMessage(error instanceof Error ? error.message : 'Unable to load mentors.');
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   const handleSyncStaff = async () => {
     setIsSyncing(true);
     try {
@@ -38,7 +56,7 @@ export default function MentorsPage() {
       });
       const data = await res.json();
       if (data.status === 'COMPLETED' || data.success) {
-        setMentors(db.getMentors());
+        await refreshMentors();
       }
     } finally {
       setIsSyncing(false);
@@ -86,7 +104,7 @@ export default function MentorsPage() {
       });
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.error || 'Staff import failed.');
-      setMentors(db.getMentors());
+      await refreshMentors();
       setImportMessage(`Imported ${result.uniqueRows} staff records (${result.created} created, ${result.updated} updated, ${result.duplicatesCollapsed} duplicate rows collapsed).`);
     } catch (error) {
       setImportMessage(error instanceof Error ? error.message : 'Staff import failed.');
@@ -128,22 +146,24 @@ export default function MentorsPage() {
               Faculty roster, branch assignments, payroll plan mappings, and teaching metrics.
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            isLoading={isSyncing}
-            leftIcon={<RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />}
-            onClick={handleSyncStaff}
-          >
-            Sync Faculty from Classcard
-          </Button>
-          <Button variant="primary" size="sm" leftIcon={<Plus className="w-3.5 h-3.5" />} onClick={() => setShowModal(true)}>
-            Add record
-          </Button>
-          <label className="inline-flex cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
-            {isImporting ? 'Importing...' : 'Import staff CSV'}
-            <input type="file" accept=".csv,text/csv" className="hidden" disabled={isImporting} onChange={handleStaffImport} />
-          </label>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <Button
+              variant="outline"
+              size="sm"
+              isLoading={isSyncing}
+              leftIcon={<RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />}
+              onClick={handleSyncStaff}
+            >
+              Sync Faculty from Classcard
+            </Button>
+            <Button variant="primary" size="sm" leftIcon={<Plus className="w-3.5 h-3.5" />} onClick={() => setShowModal(true)}>
+              Add record
+            </Button>
+            <label className="inline-flex cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs">
+              {isImporting ? 'Importing...' : 'Import staff CSV'}
+              <input type="file" accept=".csv,text/csv" className="hidden" disabled={isImporting} onChange={handleStaffImport} />
+            </label>
+          </div>
         </div>
         {importMessage && <p className="rounded-lg border border-indigo-100 bg-indigo-50 p-3 text-xs text-indigo-800">{importMessage}</p>}
 
@@ -278,7 +298,7 @@ export default function MentorsPage() {
             }})});
             const result = await response.json();
             if (!response.ok) throw new Error(result.error || 'Unable to create mentor.');
-            setMentors((current) => [...current, result.record]);
+            await refreshMentors();
             setShowModal(false);
           }}
         />

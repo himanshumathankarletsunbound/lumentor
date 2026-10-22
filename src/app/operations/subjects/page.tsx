@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AppShell } from '../../../components/layout/AppShell';
 import { db } from '../../../lib/db/store';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../../../components/ui/Table';
@@ -13,6 +13,22 @@ import { AddRecordModal } from '../../../components/operations/AddRecordModal';
 export default function SubjectsPage() {
   const [subjects, setSubjects] = useState<Subject[]>(db.getSubjects());
   const [showModal, setShowModal] = useState(false);
+
+  const refreshSubjects = async () => {
+    const response = await fetch('/api/records?type=subject');
+    const result = await response.json();
+    if (!response.ok || !result.success) throw new Error(result.error || 'Unable to load subjects.');
+    setSubjects(result.records as Subject[]);
+  };
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void refreshSubjects().catch((error: unknown) => {
+        console.error('Failed to load subjects from the database:', error);
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   return (
     <AppShell>
@@ -87,7 +103,7 @@ export default function SubjectsPage() {
             }})});
             const result = await response.json();
             if (!response.ok) throw new Error(result.error || 'Unable to create subject.');
-            setSubjects((current) => [...current, result.record]);
+            await refreshSubjects();
             setShowModal(false);
           }}
         />

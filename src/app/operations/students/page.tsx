@@ -16,7 +16,7 @@ export default function StudentsPage() {
   const [search, setSearch] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
   const [showModal, setShowModal] = useState(false);
-  const branches = db.getBranches();
+  const [branches, setBranches] = useState(() => db.getBranches());
 
   const refreshStudents = async () => {
     try {
@@ -24,9 +24,13 @@ export default function StudentsPage() {
       const json = await res.json();
       if (json.success && json.data && json.data.students) {
         setStudents(json.data.students);
+        if (json.data.branches) setBranches(json.data.branches);
         if (typeof db.initClient === 'function') {
           db.initClient({ ...db.getSnapshot(), students: json.data.students });
         }
+        const branchResponse = await fetch('/api/records?type=branch');
+        const branchResult = await branchResponse.json();
+        if (branchResponse.ok && branchResult.success) setBranches(branchResult.records);
       }
     } catch (e) {
       console.warn('Failed to refresh students from API:', e);

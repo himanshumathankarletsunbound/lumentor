@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AppShell } from '../../../components/layout/AppShell';
 import { db } from '../../../lib/db/store';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../../../components/ui/Table';
@@ -18,6 +18,22 @@ export default function BranchesPage() {
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
   const [timezone, setTimezone] = useState('America/New_York');
+
+  const refreshBranches = async () => {
+    const response = await fetch('/api/records?type=branch');
+    const result = await response.json();
+    if (!response.ok || !result.success) throw new Error(result.error || 'Unable to load branches.');
+    setBranches(result.records as Branch[]);
+  };
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void refreshBranches().catch((error: unknown) => {
+        console.error('Failed to load branches from the database:', error);
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const handleCreate = async () => {
     if (!name.trim() || !code.trim()) return;
@@ -38,8 +54,7 @@ export default function BranchesPage() {
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Unable to create branch.');
-    const b = result.record as Branch;
-    setBranches((current) => [...current, b]);
+    await refreshBranches();
     setShowModal(false);
     setName('');
     setCode('');

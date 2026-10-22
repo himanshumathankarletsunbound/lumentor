@@ -7,6 +7,34 @@ import { saveNormalizedRecord } from '../../../lib/db/state-repository';
 const allowedTypes = ['mentor', 'student', 'branch', 'subject', 'package'] as const;
 type RecordType = (typeof allowedTypes)[number];
 
+export async function GET(req: NextRequest) {
+  try {
+    await ensureServerPersistence();
+    const denied = authorizationError(req);
+    if (denied) return denied;
+
+    const type = new URL(req.url).searchParams.get('type') as RecordType | null;
+    if (!type || !allowedTypes.includes(type)) {
+      return NextResponse.json({ success: false, error: 'A valid record type is required.' }, { status: 400 });
+    }
+
+    const records = {
+      mentor: db.getMentors(),
+      student: db.getStudents(),
+      branch: db.getBranches(),
+      subject: db.getSubjects(),
+      package: db.getPackages(),
+    }[type];
+
+    return NextResponse.json({ success: true, records });
+  } catch (error) {
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : 'Failed to load records.' },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     await ensureServerPersistence();

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AppShell } from '../../../components/layout/AppShell';
 import { db } from '../../../lib/db/store';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../../../components/ui/Table';
@@ -15,6 +15,22 @@ import { Plus } from 'lucide-react';
 export default function PackagesPage() {
   const [packages, setPackages] = useState<Package[]>(db.getPackages());
   const [showModal, setShowModal] = useState(false);
+
+  const refreshPackages = async () => {
+    const response = await fetch('/api/records?type=package');
+    const result = await response.json();
+    if (!response.ok || !result.success) throw new Error(result.error || 'Unable to load packages.');
+    setPackages(result.records as Package[]);
+  };
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void refreshPackages().catch((error: unknown) => {
+        console.error('Failed to load packages from the database:', error);
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   return (
     <AppShell>
@@ -93,7 +109,7 @@ export default function PackagesPage() {
             }})});
             const result = await response.json();
             if (!response.ok) throw new Error(result.error || 'Unable to create package.');
-            setPackages((current) => [...current, result.record]);
+            await refreshPackages();
             setShowModal(false);
           }}
         />

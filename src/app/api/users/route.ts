@@ -3,7 +3,9 @@ import { db } from '../../../lib/db/store';
 import { hashPassword, generateResetToken } from '../../../lib/auth/crypto';
 import { SystemRole, UserStatus, RolePermission, CurrentUser } from '../../../lib/types/auth';
 import { sendPasswordSetupEmail } from '../../../lib/email/service';
-import { authorizationError } from '../../../lib/auth/server';
+import { authorizationErrorAsync } from '../../../lib/auth/server';
+import { listUsers, listRoles, findUserByEmail, findUserById, saveUser, deleteUser as deleteNormalizedUser } from '../../../lib/db/state-repository';
+import { ensureServerPersistence } from '../../../lib/db/server-initialization';
 
 function sanitizeUser(u: CurrentUser) {
   const safeUser = { ...u };
@@ -18,12 +20,12 @@ function sanitizeUser(u: CurrentUser) {
 }
 
 export async function GET(req: NextRequest) {
-  const denied = authorizationError(req, 'users_roles', 'view');
+  await ensureServerPersistence();
+  const denied = await authorizationErrorAsync(req, 'users_roles', 'view');
   if (denied) return denied;
   try {
-    db.reloadIfModified();
-    const users = db.getUsers().map(sanitizeUser);
-    return NextResponse.json({ success: true, users });
+    const users = (await listUsers()).map(sanitizeUser);
+    return NextResponse.json({ success: true, users, roles: await listRoles() });
   } catch (err: unknown) {
     return NextResponse.json(
       { success: false, error: err instanceof Error ? err.message : 'Failed to fetch users' },
@@ -33,7 +35,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const denied = authorizationError(req, 'users_roles', 'create');
+  await ensureServerPersistence();
+  const denied = await authorizationErrorAsync(req, 'users_roles', 'create');
   if (denied) return denied;
   try {
     const body = await req.json().catch(() => ({}));
@@ -54,8 +57,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'A valid email address is required.' }, { status: 400 });
     }
 
-    db.reloadIfModified();
-    const existing = db.getUserByEmail(email);
+    const existing = await findUserByEmail(email);
     if (existing) {
       return NextResponse.json(
         { success: false, error: `A user with email ${email} already exists.` },
@@ -64,7 +66,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Resolve role permissions
-    const roles = db.getRoles();
+    const roles = await listRoles();
     const matchedRole = roles.find((r) => r.systemRole === role) || roles[0];
     const finalRoleName = roleName || matchedRole?.name || role;
     const permissions: RolePermission[] = matchedRole ? matchedRole.permissions : [];
@@ -97,7 +99,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const newUser = db.createUser({
+    const newUser = await saveUser({
+      id: `user-${Date.now()}`,
       name,
       email,
       role,
@@ -145,7 +148,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const denied = authorizationError(req, 'users_roles', 'edit');
+  await ensureServerPersistence();
+  const denied = await authorizationErrorAsync(req, 'users_roles', 'edit');
   if (denied) return denied;
   try {
     const body = await req.json().catch(() => ({}));
@@ -156,8 +160,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'User ID is required.' }, { status: 400 });
     }
 
-    db.reloadIfModified();
-    const user = db.getUserById(id);
+    const user = await findUserById(id);
     if (!user) {
       return NextResponse.json({ success: false, error: 'User not found.' }, { status: 404 });
     }
@@ -168,7 +171,7 @@ export async function PATCH(req: NextRequest) {
       user.resetToken = tokenInfo.token;
       user.resetTokenExpiry = tokenInfo.expiresAt;
       user.status = 'SENT_PASSWORD_VERIFICATION';
-      db.saveUser(user);
+      await saveUser(user);
 
       const origin = req.nextUrl.origin || 'http://localhost:3005';
       const resetUrl = `${origin}/reset-password?token=${encodeURIComponent(tokenInfo.token)}`;
@@ -217,7 +220,7 @@ export async function PATCH(req: NextRequest) {
     if (body.name) user.name = String(body.name).trim();
     if (body.role) {
       user.role = body.role as SystemRole;
-      const roles = db.getRoles();
+      const roles = await listRoles();
       const matched = roles.find((r) => r.systemRole === user.role);
       user.roleName = body.roleName || matched?.name || user.role;
       if (matched) {
@@ -228,7 +231,7 @@ export async function PATCH(req: NextRequest) {
       user.assignedBranchIds = body.assignedBranchIds;
     }
 
-    db.saveUser(user);
+    await saveUser(user);
 
     db.logAudit({
       userId: 'user-admin',
@@ -254,7 +257,8 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const denied = authorizationError(req, 'users_roles', 'delete');
+  await ensureServerPersistence();
+  const denied = await authorizationErrorAsync(req, 'users_roles', 'delete');
   if (denied) return denied;
   try {
     const { searchParams } = new URL(req.url);
@@ -264,8 +268,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'User ID is required.' }, { status: 400 });
     }
 
-    db.reloadIfModified();
-    const user = db.getUserById(id);
+    const user = await findUserById(id);
     if (!user) {
       return NextResponse.json({ success: false, error: 'User not found.' }, { status: 404 });
     }
@@ -278,7 +281,7 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    db.deleteUser(id);
+    await deleteNormalizedUser(id);
 
     db.logAudit({
       userId: 'user-admin',

@@ -146,6 +146,8 @@ model User {
   status       String     @default("ACTIVE")
   sessionToken String?    @unique
   sessionExpiry DateTime?
+  resetToken   String?    @unique
+  resetTokenExpiry DateTime?
   roleId       String?
   roleDef      Role?      @relation(fields: [roleId], references: [id])
   mentorId     String?    @unique
@@ -376,6 +378,7 @@ model PayrollPlan {
   groupMultiplier            Decimal           @default(1.25) @db.Decimal(4, 2)
   subjectRates               Json?
   branchRates                Json?
+  formula                    String?
   version                    Int               @default(1)
   effectiveFrom              DateTime
   effectiveTo                DateTime?
@@ -413,6 +416,19 @@ model Penalty {
   disputeNote           String?
   createdAt             DateTime        @default(now())
   updatedAt             DateTime        @updatedAt
+}
+
+model PenaltyPolicy {
+  id            String   @id
+  code          String?
+  name          String
+  description   String?
+  deductionType String   @default("FIXED_AMOUNT")
+  rateValue     Decimal  @default(0) @db.Decimal(10, 2)
+  defaultAmount Decimal  @default(0) @db.Decimal(10, 2)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model Adjustment {

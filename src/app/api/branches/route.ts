@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../lib/db/store';
-import { authorizationError } from '../../../lib/auth/server';
+import { authorizationErrorAsync } from '../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../lib/db/server-initialization';
+import { listBranches } from '../../../lib/db/state-repository';
 
 export async function GET(req: NextRequest) {
   await ensureServerPersistence();
-  const denied = authorizationError(req);
+  const denied = await authorizationErrorAsync(req);
   if (denied) return denied;
   try {
-    const branches = db.getBranches();
+    const branches = await listBranches();
     return NextResponse.json({
       success: true,
       count: branches.length,
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   await ensureServerPersistence();
-  const denied = authorizationError(req);
+  const denied = await authorizationErrorAsync(req);
   if (denied) return denied;
   try {
     const body = await req.json();

@@ -84,6 +84,7 @@ export default function UsersRolesPage() {
       const data = await res.json();
       if (data.success && Array.isArray(data.users)) {
         setUsers(data.users);
+        if (Array.isArray(data.roles)) setRoles(data.roles);
       }
     } catch {
       setUsers(db.getUsers());
@@ -102,21 +103,29 @@ export default function UsersRolesPage() {
   };
 
   // Create Role
-  const handleCreateRole = () => {
+  const handleCreateRole = async () => {
     if (!roleName.trim()) return;
-    db.createRole({
-      name: roleName,
-      systemRole: 'CUSTOM',
-      description: roleDesc || 'Custom authorized organizational role',
-      permissions: [
-        { module: 'overview', actions: ['view'] },
-        { module: 'calendar', actions: ['view'] },
-        { module: 'classes', actions: ['view', 'create'] },
-        { module: 'attendance', actions: ['view', 'create'] },
-        { module: 'reports', actions: ['view', 'export'] },
-      ],
+    const response = await fetch('/api/roles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: roleName,
+        description: roleDesc || 'Custom authorized organizational role',
+        permissions: [
+          { module: 'overview', actions: ['view'] },
+          { module: 'calendar', actions: ['view'] },
+          { module: 'classes', actions: ['view', 'create'] },
+          { module: 'attendance', actions: ['view', 'create'] },
+          { module: 'reports', actions: ['view', 'export'] },
+        ],
+      }),
     });
-    setRoles(db.getRoles());
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+      setActionNotice({ type: 'error', message: data.error || 'Failed to create role.' });
+      return;
+    }
+    await refreshUsers();
     setShowRoleModal(false);
     setRoleName('');
     setRoleDesc('');

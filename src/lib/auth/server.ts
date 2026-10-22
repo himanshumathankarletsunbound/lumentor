@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../db/store';
 import { hasPermission } from './permissions';
 import type { CurrentUser, PermissionAction, PermissionModule } from '../types/auth';
+import { findUserBySessionToken } from '../db/state-repository';
 
 export class ApiAuthError extends Error {
   constructor(
@@ -66,6 +67,24 @@ export function authorizationError(
   } catch (error) {
     return authErrorResponse(error);
   }
+}
+
+export async function authorizationErrorAsync(
+    req: NextRequest,
+    module?: PermissionModule,
+    action?: PermissionAction
+  ): Promise<NextResponse | undefined> {
+    const cookieToken = req.cookies.get('lumentor_session')?.value;
+    const authorization = req.headers.get('authorization');
+    const bearerToken = authorization?.startsWith('Bearer ')
+      ? authorization.slice('Bearer '.length).trim()
+      : undefined;
+    const user = (cookieToken || bearerToken) ? await findUserBySessionToken(cookieToken || bearerToken || '') : undefined;
+    if (!user) return NextResponse.json({ success: false, error: 'Authentication is required.' }, { status: 401 });
+    if (module && action && !hasPermission(user, module, action)) {
+      return NextResponse.json({ success: false, error: 'You do not have permission to perform this action.' }, { status: 403 });
+    }
+    return undefined;
 }
 
 export function withApiAuth<TArgs extends unknown[]>(

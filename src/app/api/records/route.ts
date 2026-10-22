@@ -3,6 +3,7 @@ import { authorizationError } from '../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../lib/db/server-initialization';
 import { db } from '../../../lib/db/store';
 import { saveNormalizedRecord, deleteNormalizedRecord } from '../../../lib/db/state-repository';
+import { listBranches, listMentors, listPackages, listStudents, listSubjects } from '../../../lib/db/state-repository';
 
 const allowedTypes = ['mentor', 'student', 'branch', 'subject', 'package'] as const;
 type RecordType = (typeof allowedTypes)[number];
@@ -18,13 +19,15 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'A valid record type is required.' }, { status: 400 });
     }
 
-    const records = {
-      mentor: db.getMentors(),
-      student: db.getStudents(),
-      branch: db.getBranches(),
-      subject: db.getSubjects(),
-      package: db.getPackages(),
-    }[type];
+    const records = type === 'mentor'
+      ? await listMentors()
+      : type === 'student'
+      ? await listStudents()
+      : type === 'branch'
+      ? await listBranches()
+      : type === 'subject'
+      ? await listSubjects()
+      : await listPackages();
 
     return NextResponse.json({ success: true, records });
   } catch (error) {

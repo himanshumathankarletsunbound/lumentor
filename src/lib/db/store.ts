@@ -27,6 +27,9 @@ import {
   CLASSCARD_ENDPOINTS_REGISTRY,
   INITIAL_EMAIL_CONFIG,
   INITIAL_ORG_SETTINGS,
+  SEED_ROLES,
+  SEED_USERS,
+  SEED_CUSTOM_FIELDS,
 } from './seedData';
 import { EmailConfig, OrganizationSettings } from '../types/email';
 
@@ -144,8 +147,8 @@ class DataStore {
 
   private getDefaultState(): AppDatabase {
     return {
-      roles: [],
-      users: [],
+      roles: [...SEED_ROLES],
+      users: [...SEED_USERS],
       branches: [],
       subjects: [],
       packages: [],
@@ -165,7 +168,7 @@ class DataStore {
       classcardConfig: { ...INITIAL_CLASSCARD_CONFIG },
       classcardEndpoints: [...CLASSCARD_ENDPOINTS_REGISTRY],
       syncJobs: [],
-      customFields: [],
+      customFields: [...SEED_CUSTOM_FIELDS],
       emailConfig: { ...INITIAL_EMAIL_CONFIG },
       orgSettings: { ...INITIAL_ORG_SETTINGS },
     };

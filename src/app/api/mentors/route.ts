@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../lib/db/store';
-import { authorizationError } from '../../../lib/auth/server';
+import { authorizationErrorAsync } from '../../../lib/auth/server';
+import { listMentors } from '../../../lib/db/state-repository';
 import { Mentor } from '../../../lib/types/models';
 import { ensureServerPersistence } from '../../../lib/db/server-initialization';
 
@@ -13,16 +14,13 @@ export async function GET(req: NextRequest) {
       { status: 503 }
     );
   }
-  const denied = authorizationError(req);
+  const denied = await authorizationErrorAsync(req);
   if (denied) return denied;
   try {
     const { searchParams } = new URL(req.url);
     const branchId = searchParams.get('branchId');
 
-    let mentors = db.getMentors();
-    if (branchId && branchId !== 'ALL') {
-      mentors = mentors.filter((m) => m.branchId === branchId);
-    }
+    const mentors = await listMentors(branchId || undefined);
 
     return NextResponse.json({
       success: true,
@@ -46,7 +44,7 @@ export async function PATCH(req: NextRequest) {
       { status: 503 }
     );
   }
-  const denied = authorizationError(req);
+  const denied = await authorizationErrorAsync(req);
   if (denied) return denied;
   try {
     const body = await req.json();

@@ -2,6 +2,8 @@ import { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
 import type { AppDatabase } from './store';
 import type { Branch, Mentor, Package, Student, Subject } from '../types/models';
+import type { UserRole } from '../types/auth';
+import { SEED_ROLES } from './seedData';
 import type { CurrentUser } from '../types/auth';
 
 const STATE_ID = 'lumentor';
@@ -49,6 +51,8 @@ function toCurrentUser(user: {
   salt: string;
   sessionToken: string | null;
   sessionExpiry: Date | null;
+  resetToken: string | null;
+  resetTokenExpiry: Date | null;
   mentorId: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -65,6 +69,8 @@ function toCurrentUser(user: {
     salt: user.salt,
     sessionToken: user.sessionToken || undefined,
     sessionExpiry: user.sessionExpiry?.toISOString(),
+    resetToken: user.resetToken || undefined,
+    resetTokenExpiry: user.resetTokenExpiry?.toISOString(),
     mentorId: user.mentorId || undefined,
     assignedBranchIds: [],
     createdAt: user.createdAt.toISOString(),
@@ -74,6 +80,11 @@ function toCurrentUser(user: {
 
 export async function findUserByEmail(email: string): Promise<CurrentUser | undefined> {
   const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+  return user ? toCurrentUser(user) : undefined;
+}
+
+export async function findUserById(id: string): Promise<CurrentUser | undefined> {
+  const user = await prisma.user.findUnique({ where: { id } });
   return user ? toCurrentUser(user) : undefined;
 }
 
@@ -102,6 +113,8 @@ export async function saveUser(user: CurrentUser): Promise<CurrentUser> {
       isActive: user.status !== 'DISABLED',
       sessionToken: user.sessionToken,
       sessionExpiry: user.sessionExpiry ? new Date(user.sessionExpiry) : null,
+      resetToken: user.resetToken,
+      resetTokenExpiry: user.resetTokenExpiry ? new Date(user.resetTokenExpiry) : null,
       mentorId: user.mentorId,
     },
     update: {
@@ -115,10 +128,169 @@ export async function saveUser(user: CurrentUser): Promise<CurrentUser> {
       isActive: user.status !== 'DISABLED',
       sessionToken: user.sessionToken,
       sessionExpiry: user.sessionExpiry ? new Date(user.sessionExpiry) : null,
+      resetToken: user.resetToken,
+      resetTokenExpiry: user.resetTokenExpiry ? new Date(user.resetTokenExpiry) : null,
       mentorId: user.mentorId,
     },
   });
   return toCurrentUser(saved);
+}
+
+export async function deleteUser(id: string): Promise<void> {
+  await prisma.user.delete({ where: { id } });
+}
+
+export async function listUsers(): Promise<CurrentUser[]> {
+  const users = await prisma.user.findMany({ orderBy: { createdAt: 'asc' } });
+  return users.map(toCurrentUser);
+}
+
+export async function listRoles(): Promise<UserRole[]> {
+  const roles = await prisma.role.findMany({ orderBy: { createdAt: 'asc' } });
+  if (roles.length > 0) {
+    return roles.map((role) => ({
+      id: role.id,
+      name: role.name,
+      systemRole: role.systemRole,
+      description: role.description,
+      permissions: Array.isArray(role.permissions) ? role.permissions as unknown as UserRole['permissions'] : [],
+      createdAt: role.createdAt.toISOString(),
+      updatedAt: role.updatedAt.toISOString(),
+    }));
+  }
+  return process.env.DEMO_MODE === 'true' ? SEED_ROLES : [];
+}
+
+export async function createRole(role: Omit<UserRole, 'id' | 'createdAt' | 'updatedAt'>): Promise<UserRole> {
+  const created = await prisma.role.create({
+    data: {
+      name: role.name,
+      systemRole: role.systemRole,
+      description: role.description,
+      permissions: JSON.parse(JSON.stringify(role.permissions)),
+    },
+  });
+  return {
+    id: created.id,
+    name: created.name,
+    systemRole: created.systemRole,
+    description: created.description,
+    permissions: created.permissions as unknown as UserRole['permissions'],
+    createdAt: created.createdAt.toISOString(),
+    updatedAt: created.updatedAt.toISOString(),
+  };
+}
+
+export async function listMentors(branchId?: string): Promise<Mentor[]> {
+  const mentors = await prisma.mentor.findMany({
+    where: branchId && branchId !== 'ALL' ? { branchId } : undefined,
+    include: { branch: true, user: true },
+    orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+  });
+  return mentors.map((mentor) => ({
+    id: mentor.id,
+    userId: mentor.user?.id,
+    firstName: mentor.firstName,
+    lastName: mentor.lastName,
+    email: mentor.email,
+    phone: mentor.phone || '',
+    avatarUrl: mentor.avatarUrl || undefined,
+    branchId: mentor.branchId,
+    branchName: mentor.branch.name,
+    subjectIds: [],
+    payrollPlanId: mentor.payrollPlanId,
+    status: mentor.status as Mentor['status'],
+    externalId: mentor.externalId || undefined,
+    provenance: mentor.provenance,
+    teachingHoursThisMonth: mentor.teachingHoursThisMonth,
+    completedClassesCount: mentor.completedClassesCount,
+    attendanceRate: mentor.attendanceRate,
+    createdAt: mentor.createdAt.toISOString(),
+    updatedAt: mentor.updatedAt.toISOString(),
+  }));
+}
+
+export async function listBranches(): Promise<Branch[]> {
+  const branches = await prisma.branch.findMany({ orderBy: { name: 'asc' } });
+  return branches.map((branch) => ({
+    id: branch.id,
+    name: branch.name,
+    code: branch.code,
+    address: branch.address || '',
+    city: branch.city || '',
+    timezone: branch.timezone,
+    phone: branch.phone || '',
+    email: branch.email || '',
+    isActive: branch.isActive,
+    externalId: branch.externalId || undefined,
+    provenance: branch.provenance,
+    createdAt: branch.createdAt.toISOString(),
+    updatedAt: branch.updatedAt.toISOString(),
+  }));
+}
+
+export async function listSubjects(): Promise<Subject[]> {
+  const subjects = await prisma.subject.findMany({ orderBy: { name: 'asc' } });
+  return subjects.map((subject) => ({
+    id: subject.id,
+    name: subject.name,
+    code: subject.code,
+    category: subject.category,
+    description: subject.description || '',
+    defaultDurationMinutes: subject.defaultDurationMinutes,
+    availableDurations: subject.availableDurations,
+    isActive: subject.isActive,
+    color: subject.color,
+    externalId: subject.externalId || undefined,
+    provenance: subject.provenance,
+    createdAt: subject.createdAt.toISOString(),
+    updatedAt: subject.updatedAt.toISOString(),
+  }));
+}
+
+export async function listPackages(): Promise<Package[]> {
+  const packages = await prisma.package.findMany({ orderBy: { name: 'asc' } });
+  return packages.map((item) => ({
+    id: item.id,
+    name: item.name,
+    code: item.code,
+    price: Number(item.price),
+    currency: item.currency,
+    totalSessions: item.totalSessions,
+    validityDays: item.validityDays,
+    subjectIds: [],
+    branchIds: [],
+    isActive: item.isActive,
+    externalId: item.externalId || undefined,
+    provenance: item.provenance,
+    createdAt: item.createdAt.toISOString(),
+    updatedAt: item.updatedAt.toISOString(),
+  }));
+}
+
+export async function listStudents(branchId?: string): Promise<Student[]> {
+  const students = await prisma.student.findMany({
+    where: branchId && branchId !== 'ALL' ? { branchId } : undefined,
+    orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+  });
+  return students.map((student) => ({
+    id: student.id,
+    firstName: student.firstName,
+    lastName: student.lastName,
+    email: student.email,
+    phone: student.phone || '',
+    branchId: student.branchId,
+    dateOfBirth: student.dateOfBirth?.toISOString(),
+    guardianName: student.guardianName || undefined,
+    guardianEmail: student.guardianEmail || undefined,
+    enrolledPackageIds: [],
+    status: student.status as Student['status'],
+    externalId: student.externalId || undefined,
+    provenance: student.provenance,
+    customFields: (student.customFields as Record<string, string> | null) || undefined,
+    createdAt: student.createdAt.toISOString(),
+    updatedAt: student.updatedAt.toISOString(),
+  }));
 }
 
 async function ensurePayrollPlan(organizationId: string, id: string) {

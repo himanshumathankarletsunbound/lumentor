@@ -172,7 +172,7 @@ class DataStore {
   }
 
   public reloadIfModified(): void {
-    if (typeof window !== 'undefined') return;
+    if (typeof window !== 'undefined' || this.usesPostgres()) return;
     try {
       const node = getNodeFsAndPath();
       if (!node) return;

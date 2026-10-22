@@ -1,0 +1,2 @@
+-- This migration slot is intentionally empty.
+-- The user reset-token changes are tracked by 0004_user_reset_tokens.

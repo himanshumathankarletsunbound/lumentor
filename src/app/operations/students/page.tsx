@@ -8,7 +8,7 @@ import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { RowActions } from '../../../components/ui/RowActions';
 import { DeleteConfirmModal } from '../../../components/ui/DeleteConfirmModal';
-import { Search, RefreshCw, Plus } from 'lucide-react';
+import { Search, RefreshCw, Plus, ArrowDown, ArrowUp } from 'lucide-react';
 import Link from 'next/link';
 import { AddRecordModal } from '../../../components/operations/AddRecordModal';
 import { Student } from '../../../lib/types/models';
@@ -16,6 +16,9 @@ import { Student } from '../../../lib/types/models';
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>(() => db.getStudents());
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | Student['status']>('ALL');
+  const [branchFilter, setBranchFilter] = useState('ALL');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [isSyncing, setIsSyncing] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
@@ -135,16 +138,29 @@ export default function StudentsPage() {
   };
 
   const filtered = students.filter((s) => {
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      return (
-        s.firstName.toLowerCase().includes(q) ||
-        s.lastName.toLowerCase().includes(q) ||
-        s.email.toLowerCase().includes(q)
-      );
-    }
-    return true;
+    const q = search.trim().toLowerCase();
+    const matchesSearch =
+      !q ||
+      `${s.firstName} ${s.lastName}`.toLowerCase().includes(q) ||
+      s.email.toLowerCase().includes(q) ||
+      s.phone.toLowerCase().includes(q);
+    const matchesStatus = statusFilter === 'ALL' || s.status === statusFilter;
+    const matchesBranch = branchFilter === 'ALL' || s.branchId === branchFilter;
+    return matchesSearch && matchesStatus && matchesBranch;
+  }).sort((a, b) => {
+    const nameA = `${a.firstName} ${a.lastName}`.trim();
+    const nameB = `${b.firstName} ${b.lastName}`.trim();
+    return sortDirection === 'asc'
+      ? nameA.localeCompare(nameB)
+      : nameB.localeCompare(nameA);
   });
+
+  const toggleNameSort = () => {
+    setSortDirection((direction) => direction === 'asc' ? 'desc' : 'asc');
+  };
+
+  const formatCreatedAt = (value: string) =>
+    new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
 
   return (
     <AppShell>
@@ -170,6 +186,27 @@ export default function StudentsPage() {
                 className="pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
               />
             </div>
+            <select
+              aria-label="Filter students by status"
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
+              className="py-1.5 px-2.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-700"
+            >
+              <option value="ALL">All statuses</option>
+              <option value="ACTIVE">Active</option>
+              <option value="INACTIVE">Inactive</option>
+              <option value="LEAD">Lead</option>
+              <option value="GRADUATED">Graduated</option>
+            </select>
+            <select
+              aria-label="Filter students by branch"
+              value={branchFilter}
+              onChange={(event) => setBranchFilter(event.target.value)}
+              className="py-1.5 px-2.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-700"
+            >
+              <option value="ALL">All branches</option>
+              {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+            </select>
             <Button
               variant="outline"
               size="sm"
@@ -215,11 +252,19 @@ export default function StudentsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Student Name</TableHead>
+                <TableHead>
+                  <button type="button" onClick={toggleNameSort} className="inline-flex items-center gap-1.5 hover:text-slate-900">
+                    Name
+                    {sortDirection === 'desc' ? <ArrowDown className="h-3.5 w-3.5" aria-label="descending" /> : <ArrowUp className="h-3.5 w-3.5" aria-label="ascending" />}
+                  </button>
+                </TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Phone</TableHead>
+                <TableHead>Created at</TableHead>
                 <TableHead>Campus Branch</TableHead>
                 <TableHead>Guardian Contact</TableHead>
                 <TableHead>Custom Fields (Classcard)</TableHead>
-                <TableHead>Status</TableHead>
                 <TableHead>Provenance</TableHead>
                 <TableHead className="text-right">Action</TableHead>
               </TableRow>
@@ -241,12 +286,20 @@ export default function StudentsPage() {
                         </div>
                       </div>
                     </TableCell>
+                    <TableCell>
+                      <Badge variant={s.status === 'ACTIVE' ? 'success' : 'neutral'} size="sm" dot>
+                        {s.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs text-slate-600">{s.email || '-'}</TableCell>
+                    <TableCell className="text-xs text-slate-600">{s.phone || '-'}</TableCell>
+                    <TableCell className="whitespace-nowrap text-xs text-slate-600">{formatCreatedAt(s.createdAt)}</TableCell>
                     <TableCell className="text-xs font-medium text-slate-700">
                       {branch?.name || 'Primary Campus'}
                     </TableCell>
                     <TableCell className="text-xs text-slate-600">
                       <p className="font-medium text-slate-800">{s.guardianName || 'None'}</p>
-                      <p className="text-[11px] text-slate-400">{s.guardianEmail}</p>
+                      <p className="text-[11px] text-slate-400">{s.guardianEmail || '-'}</p>
                     </TableCell>
                     <TableCell className="text-xs text-slate-600">
                       {s.customFields ? (
@@ -260,11 +313,6 @@ export default function StudentsPage() {
                       ) : (
                         '-'
                       )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={s.status === 'ACTIVE' ? 'success' : 'neutral'} size="sm" dot>
-                        {s.status}
-                      </Badge>
                     </TableCell>
                     <TableCell>
                       {s.provenance === 'CLASSCARD_SOURCED' ? (

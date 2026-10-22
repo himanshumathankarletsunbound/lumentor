@@ -104,7 +104,7 @@ class DataStore {
   }
 
   private usesPostgres(): boolean {
-    return process.env.DEMO_MODE !== 'true' && Boolean(process.env.DATABASE_URL?.trim());
+    return process.env.DEMO_MODE !== 'true' && Boolean((process.env.DATABASE_URL || process.env.DIRECT_DATABASE_URL)?.trim());
   }
 
   private async loadFromPostgres(): Promise<void> {

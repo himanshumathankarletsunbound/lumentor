@@ -6,14 +6,16 @@ import { db } from '../../../lib/db/store';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell, TableEmptyState } from '../../../components/ui/Table';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
-import { Users, Mail, Phone, MapPin, Search, RefreshCw } from 'lucide-react';
+import { Users, Mail, Phone, MapPin, Search, RefreshCw, Plus } from 'lucide-react';
 import { formatDate } from '../../../lib/utils/formatters';
 import Link from 'next/link';
+import { AddRecordModal } from '../../../components/operations/AddRecordModal';
 
 export default function StudentsPage() {
   const [students, setStudents] = useState(() => db.getStudents());
   const [search, setSearch] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const branches = db.getBranches();
 
   const refreshStudents = async () => {
@@ -32,7 +34,8 @@ export default function StudentsPage() {
   };
 
   React.useEffect(() => {
-    refreshStudents();
+    const timer = window.setTimeout(() => void refreshStudents(), 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const handleSyncStudents = async () => {
@@ -75,6 +78,9 @@ export default function StudentsPage() {
             </p>
           </div>
           <div className="flex items-center gap-2.5">
+            <Button variant="primary" size="sm" leftIcon={<Plus className="w-3.5 h-3.5" />} onClick={() => setShowModal(true)}>
+              Add record
+            </Button>
             <div className="relative">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
               <input
@@ -193,6 +199,29 @@ export default function StudentsPage() {
             </TableBody>
           </Table>
         )}
+        <AddRecordModal
+          title="Add student"
+          isOpen={showModal}
+          onClose={() => setShowModal(false)}
+          fields={[
+            { name: 'firstName', label: 'First name', placeholder: 'Aarav' },
+            { name: 'lastName', label: 'Last name', placeholder: 'Sharma' },
+            { name: 'email', label: 'Email', type: 'email', placeholder: 'student@example.com' },
+            { name: 'phone', label: 'Phone', required: false },
+          ]}
+          onSave={async (values) => {
+            const response = await fetch('/api/records', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'student', record: {
+              firstName: values.firstName.trim(), lastName: values.lastName.trim(),
+              email: values.email.trim(), phone: values.phone.trim(), branchId: branches[0]?.id || '',
+              enrolledPackageIds: [], status: 'ACTIVE', provenance: 'LOCALLY_CREATED',
+            }})});
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Unable to create student.');
+            const created = result.record;
+            setStudents((current) => [...current, created]);
+            setShowModal(false);
+          }}
+        />
       </div>
     </AppShell>
   );

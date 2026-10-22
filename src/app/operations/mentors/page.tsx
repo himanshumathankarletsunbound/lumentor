@@ -10,9 +10,10 @@ import { Button } from '../../../components/ui/Button';
 import { Drawer } from '../../../components/ui/Drawer';
 import { Tabs } from '../../../components/ui/Tabs';
 import { Mentor } from '../../../lib/types/models';
-import { GraduationCap, Mail, Phone, MapPin, DollarSign, Calendar, ShieldAlert, FileText, CheckCircle2, RefreshCw } from 'lucide-react';
+import { GraduationCap, Mail, Phone, MapPin, DollarSign, Calendar, ShieldAlert, FileText, CheckCircle2, RefreshCw, Plus } from 'lucide-react';
 import { formatCurrency, formatDuration, formatDate } from '../../../lib/utils/formatters';
 import Link from 'next/link';
+import { AddRecordModal } from '../../../components/operations/AddRecordModal';
 
 export default function MentorsPage() {
   const { hasPermission } = useAuth();
@@ -20,6 +21,7 @@ export default function MentorsPage() {
   const [selectedMentor, setSelectedMentor] = useState<Mentor | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [isSyncing, setIsSyncing] = useState(false);
+  const [showModal, setShowModal] = useState(false);
 
   const plans = db.getPayrollPlans();
   const canViewPayroll = hasPermission('payroll_dashboard', 'view_sensitive_payroll');
@@ -82,6 +84,9 @@ export default function MentorsPage() {
             onClick={handleSyncStaff}
           >
             Sync Faculty from Classcard
+          </Button>
+          <Button variant="primary" size="sm" leftIcon={<Plus className="w-3.5 h-3.5" />} onClick={() => setShowModal(true)}>
+            Add record
           </Button>
         </div>
 
@@ -180,6 +185,7 @@ export default function MentorsPage() {
                         Local
                       </Badge>
                     )}
+
                   </TableCell>
                   <TableCell className="text-right">
                     <Button variant="outline" size="sm">
@@ -192,6 +198,33 @@ export default function MentorsPage() {
           </TableBody>
         </Table>
         )}
+
+        <AddRecordModal
+          title="Add mentor or faculty member"
+          isOpen={showModal}
+          onClose={() => setShowModal(false)}
+          fields={[
+            { name: 'firstName', label: 'First name', placeholder: 'Priya' },
+            { name: 'lastName', label: 'Last name', placeholder: 'Patel' },
+            { name: 'email', label: 'Email', type: 'email', placeholder: 'mentor@example.com' },
+            { name: 'phone', label: 'Phone', required: false },
+          ]}
+          onSave={async (values) => {
+            const branch = db.getBranches()[0];
+            const plan = plans[0];
+            const response = await fetch('/api/records', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'mentor', record: {
+              firstName: values.firstName.trim(), lastName: values.lastName.trim(),
+              email: values.email.trim(), phone: values.phone.trim(), branchId: branch?.id || '',
+              branchName: branch?.name, subjectIds: [], payrollPlanId: plan?.id || '',
+              status: 'ACTIVE', provenance: 'LOCALLY_CREATED', teachingHoursThisMonth: 0,
+              completedClassesCount: 0, attendanceRate: 100,
+            }})});
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Unable to create mentor.');
+            setMentors((current) => [...current, result.record]);
+            setShowModal(false);
+          }}
+        />
 
         {/* Mentor Detail Drawer */}
         <Drawer

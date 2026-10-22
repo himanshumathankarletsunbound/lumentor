@@ -8,9 +8,11 @@ import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { BookOpen, Plus } from 'lucide-react';
 import { Subject } from '../../../lib/types/models';
+import { AddRecordModal } from '../../../components/operations/AddRecordModal';
 
 export default function SubjectsPage() {
-  const [subjects] = useState<Subject[]>(db.getSubjects());
+  const [subjects, setSubjects] = useState<Subject[]>(db.getSubjects());
+  const [showModal, setShowModal] = useState(false);
 
   return (
     <AppShell>
@@ -22,6 +24,9 @@ export default function SubjectsPage() {
               Curriculum catalog, category assignments, and configurable class durations.
             </p>
           </div>
+          <Button variant="primary" size="sm" leftIcon={<Plus className="w-4 h-4" />} onClick={() => setShowModal(true)}>
+            Add record
+          </Button>
         </div>
 
         <Table>
@@ -63,6 +68,29 @@ export default function SubjectsPage() {
             ))}
           </TableBody>
         </Table>
+        <AddRecordModal
+          title="Add academic subject"
+          isOpen={showModal}
+          onClose={() => setShowModal(false)}
+          fields={[
+            { name: 'name', label: 'Subject name', placeholder: 'Mathematics' },
+            { name: 'code', label: 'Subject code', placeholder: 'MATH-101' },
+            { name: 'category', label: 'Category', placeholder: 'STEM' },
+            { name: 'duration', label: 'Default duration (minutes)', type: 'number', placeholder: '60' },
+          ]}
+          onSave={async (values) => {
+            const duration = Number(values.duration) || 60;
+            const response = await fetch('/api/records', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'subject', record: {
+              name: values.name.trim(), code: values.code.trim().toUpperCase(), category: values.category.trim(),
+              description: '', defaultDurationMinutes: duration, availableDurations: [duration],
+              isActive: true, color: '#6366f1', provenance: 'LOCALLY_CREATED',
+            }})});
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Unable to create subject.');
+            setSubjects((current) => [...current, result.record]);
+            setShowModal(false);
+          }}
+        />
       </div>
     </AppShell>
   );

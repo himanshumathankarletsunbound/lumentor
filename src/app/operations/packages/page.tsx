@@ -8,9 +8,13 @@ import { Badge } from '../../../components/ui/Badge';
 import { Package } from '../../../lib/types/models';
 import { Package as PackageIcon } from 'lucide-react';
 import { formatCurrency } from '../../../lib/utils/formatters';
+import { Button } from '../../../components/ui/Button';
+import { AddRecordModal } from '../../../components/operations/AddRecordModal';
+import { Plus } from 'lucide-react';
 
 export default function PackagesPage() {
-  const [packages] = useState<Package[]>(db.getPackages());
+  const [packages, setPackages] = useState<Package[]>(db.getPackages());
+  const [showModal, setShowModal] = useState(false);
 
   return (
     <AppShell>
@@ -22,6 +26,9 @@ export default function PackagesPage() {
               Tuition package offerings, session allowances, validity periods, and pricing.
             </p>
           </div>
+          <Button variant="primary" size="sm" leftIcon={<Plus className="w-4 h-4" />} onClick={() => setShowModal(true)}>
+            Add record
+          </Button>
         </div>
 
         <Table>
@@ -65,6 +72,31 @@ export default function PackagesPage() {
             ))}
           </TableBody>
         </Table>
+        <AddRecordModal
+          title="Add tuition package"
+          isOpen={showModal}
+          onClose={() => setShowModal(false)}
+          fields={[
+            { name: 'name', label: 'Package name', placeholder: '12-Session Math Package' },
+            { name: 'code', label: 'Package code', placeholder: 'MATH-12' },
+            { name: 'sessions', label: 'Included sessions', type: 'number', placeholder: '12' },
+            { name: 'validity', label: 'Validity (days)', type: 'number', placeholder: '90' },
+            { name: 'price', label: 'Tuition price', type: 'number', placeholder: '1200' },
+            { name: 'currency', label: 'Currency', placeholder: 'USD' },
+          ]}
+          onSave={async (values) => {
+            const response = await fetch('/api/records', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'package', record: {
+              name: values.name.trim(), code: values.code.trim().toUpperCase(),
+              totalSessions: Number(values.sessions) || 1, validityDays: Number(values.validity) || 30,
+              price: Number(values.price) || 0, currency: values.currency.trim().toUpperCase() || 'USD',
+              subjectIds: [], branchIds: [], isActive: true, provenance: 'LOCALLY_CREATED',
+            }})});
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Unable to create package.');
+            setPackages((current) => [...current, result.record]);
+            setShowModal(false);
+          }}
+        />
       </div>
     </AppShell>
   );

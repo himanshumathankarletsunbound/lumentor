@@ -19,9 +19,12 @@ export default function BranchesPage() {
   const [city, setCity] = useState('');
   const [timezone, setTimezone] = useState('America/New_York');
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!name.trim() || !code.trim()) return;
-    const b = db.createBranch({
+    const response = await fetch('/api/records', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'branch', record: {
       name,
       code,
       address,
@@ -31,8 +34,12 @@ export default function BranchesPage() {
       email: `${code.toLowerCase()}@academyapex.com`,
       isActive: true,
       provenance: 'LOCALLY_CREATED',
+      }}),
     });
-    setBranches(db.getBranches());
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Unable to create branch.');
+    const b = result.record as Branch;
+    setBranches((current) => [...current, b]);
     setShowModal(false);
     setName('');
     setCode('');
@@ -55,7 +62,7 @@ export default function BranchesPage() {
             leftIcon={<Plus className="w-4 h-4" />}
             onClick={() => setShowModal(true)}
           >
-            Add Branch
+            Add record
           </Button>
         </div>
 

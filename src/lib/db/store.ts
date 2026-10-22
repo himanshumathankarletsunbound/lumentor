@@ -763,10 +763,10 @@ class DataStore {
     return this.data.payrollPlans.find((p) => p.id === id);
   }
 
-  public createPayrollPlan(plan: Omit<PayrollPlan, 'id' | 'createdAt' | 'updatedAt' | 'version'>): PayrollPlan {
+  public createPayrollPlan(plan: Omit<PayrollPlan, 'id' | 'createdAt' | 'updatedAt' | 'version'> & { id?: string }): PayrollPlan {
     const record: PayrollPlan = {
       ...plan,
-      id: `plan-${Date.now()}`,
+      id: plan.id?.trim() || `plan-${Date.now()}`,
       version: 1,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -791,6 +791,14 @@ class DataStore {
     };
     this.saveToDisk();
     return this.data.payrollPlans[idx];
+  }
+
+  public deletePayrollPlan(id: string): boolean {
+    const idx = this.data.payrollPlans.findIndex((p) => p.id === id);
+    if (idx === -1) return false;
+    this.data.payrollPlans.splice(idx, 1);
+    this.saveToDisk();
+    return true;
   }
 
   // --- Penalties & Adjustments ---

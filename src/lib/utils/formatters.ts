@@ -1,11 +1,10 @@
-export function formatCurrency(amount: number | string, currency: string = 'INR'): string {
+export function formatCurrency(amount: number | string, currency: string = 'USD'): string {
   const numeric = typeof amount === 'string' ? parseFloat(amount) : amount;
-  if (isNaN(numeric)) return '₹0.00';
-  // LUmentor reports all monetary values in the organization's INR currency.
-  const normalizedCurrency = currency === 'USD' ? 'INR' : currency;
-  return new Intl.NumberFormat('en-IN', {
+  if (isNaN(numeric)) return currency === 'INR' ? '₹0.00' : '$0.00';
+  const locale = currency === 'INR' ? 'en-IN' : 'en-US';
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
-    currency: normalizedCurrency,
+    currency: currency,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(numeric);

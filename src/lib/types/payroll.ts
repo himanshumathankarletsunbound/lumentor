@@ -27,6 +27,7 @@ export interface PayrollPlan {
   groupMultiplier: number;
   subjectRates?: Record<string, number>; // subjectId -> rate
   branchRates?: Record<string, number>;  // branchId -> rate
+  formula?: string; // Configured / customizable mathematical calculation formula
   version: number;
   effectiveFrom: string;
   effectiveTo?: string;

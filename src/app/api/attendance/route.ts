@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../lib/db/store';
 import { authorizationError } from '../../../lib/auth/server';
 import { AttendanceStatus, ClassEvent } from '../../../lib/types/models';
+import { ensureServerPersistence } from '../../../lib/db/server-initialization';
 
 export async function POST(req: NextRequest) {
   const denied = authorizationError(req);
   if (denied) return denied;
   try {
+    await ensureServerPersistence();
     const body = await req.json();
     const { classId, roster, markedBy = 'Staff Administrator' } = body;
 
@@ -46,7 +48,7 @@ export async function POST(req: NextRequest) {
 
     if (statuses.length > 0 && statuses.every((s) => s === 'PRESENT')) {
       summary = 'ALL_PRESENT';
-    } else if (statuses.length > 0 && statuses.every((s) => s === 'ABSENT')) {
+    } else if (statuses.length > 0 && statuses.every((s) => s === 'ABSENT' || s === 'ABSENT_BILLABLE')) {
       summary = 'ALL_ABSENT';
     } else if (statuses.length > 0 && statuses.every((s) => s !== 'UNMARKED')) {
       summary = 'PARTIAL';
@@ -63,6 +65,7 @@ export async function POST(req: NextRequest) {
       attendanceStatusSummary: summary,
       status: newStatus,
     });
+    await db.persistNow();
 
     db.logAudit({
       userId: 'usr-ops-1',

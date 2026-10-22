@@ -77,7 +77,7 @@ export function CalendarEventModal({
     const statuses = updatedRoster.map((s) => s.attendanceStatus);
     let summary: 'ALL_PRESENT' | 'PARTIAL' | 'ALL_ABSENT' | 'UNMARKED' = 'PARTIAL';
     if (statuses.every((s) => s === 'PRESENT' || s === 'LATE')) summary = 'ALL_PRESENT';
-    else if (statuses.every((s) => s === 'ABSENT')) summary = 'ALL_ABSENT';
+    else if (statuses.every((s) => s === 'ABSENT' || s === 'ABSENT_BILLABLE')) summary = 'ALL_ABSENT';
     else if (statuses.every((s) => s === 'UNMARKED')) summary = 'UNMARKED';
 
     let updatedStatus = eventData.status;
@@ -347,6 +347,16 @@ export function CalendarEventModal({
                           Absent
                         </button>
                         <button
+                          onClick={() => handleAttendanceChange(student.studentId, 'ABSENT_BILLABLE')}
+                          className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                            student.attendanceStatus === 'ABSENT_BILLABLE'
+                              ? 'bg-violet-600 text-white shadow-xs font-semibold'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          Absent Billable
+                        </button>
+                        <button
                           onClick={() => handleAttendanceChange(student.studentId, 'EXCUSED')}
                           className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
                             student.attendanceStatus === 'EXCUSED'
@@ -366,10 +376,12 @@ export function CalendarEventModal({
                             ? 'warning'
                             : student.attendanceStatus === 'ABSENT'
                             ? 'danger'
+                            : student.attendanceStatus === 'ABSENT_BILLABLE'
+                            ? 'purple'
                             : 'neutral'
                         }
                       >
-                        {student.attendanceStatus}
+                        {student.attendanceStatus === 'ABSENT_BILLABLE' ? 'ABSENT BILLABLE' : student.attendanceStatus}
                       </Badge>
                     )}
                   </div>

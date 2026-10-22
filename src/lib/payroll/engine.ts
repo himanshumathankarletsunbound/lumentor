@@ -97,7 +97,10 @@ export class PayrollEngine {
         if (plan.perStudentRate > 0) {
           // Count attending students
           const attendingCount = cls.students.filter(
-            (s) => s.attendanceStatus === 'PRESENT' || s.attendanceStatus === 'LATE'
+            (s) =>
+              s.attendanceStatus === 'PRESENT' ||
+              s.attendanceStatus === 'LATE' ||
+              s.attendanceStatus === 'ABSENT_BILLABLE'
           ).length;
           const studentPay = attendingCount * plan.perStudentRate * lateMultiplier;
           studentEarnings += studentPay;

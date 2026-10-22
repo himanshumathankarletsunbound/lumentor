@@ -682,7 +682,7 @@ class DataStore {
   public updateAttendance(
     classId: string,
     studentId: string,
-    status: 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED',
+    status: 'PRESENT' | 'ABSENT' | 'ABSENT_BILLABLE' | 'LATE' | 'EXCUSED',
     markedBy: string,
     notes?: string
   ): ClassEvent {
@@ -701,7 +701,7 @@ class DataStore {
     const statuses = cls.students.map((s) => s.attendanceStatus);
     if (statuses.every((s) => s === 'PRESENT' || s === 'LATE')) {
       cls.attendanceStatusSummary = 'ALL_PRESENT';
-    } else if (statuses.every((s) => s === 'ABSENT')) {
+    } else if (statuses.every((s) => s === 'ABSENT' || s === 'ABSENT_BILLABLE')) {
       cls.attendanceStatusSummary = 'ALL_ABSENT';
     } else if (statuses.some((s) => s === 'UNMARKED')) {
       cls.attendanceStatusSummary = 'UNMARKED';

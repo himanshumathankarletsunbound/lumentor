@@ -120,6 +120,7 @@ export type ClassStatus =
 export type AttendanceStatus =
   | 'PRESENT'
   | 'ABSENT'
+  | 'ABSENT_BILLABLE'
   | 'LATE'
   | 'EXCUSED'
   | 'UNMARKED';

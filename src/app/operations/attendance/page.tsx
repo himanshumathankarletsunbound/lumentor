@@ -128,10 +128,29 @@ export default function AttendancePage() {
           isOpen={Boolean(selectedEvent)}
           onClose={() => setSelectedEvent(null)}
           classEvent={selectedEvent}
-          onSave={(updated) => {
-            db.updateClass(updated.id, updated);
-            setClasses(db.getClasses());
-            setSelectedEvent(null);
+          onSave={async (updated) => {
+            try {
+              const response = await fetch('/api/attendance', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  classId: updated.id,
+                  roster: updated.students.map((student) => ({
+                    studentId: student.studentId,
+                    attendanceStatus: student.attendanceStatus,
+                    notes: student.notes,
+                  })),
+                }),
+              });
+              const payload = await response.json() as { class?: ClassEvent; error?: string };
+              if (!response.ok || !payload.class) {
+                throw new Error(payload.error || 'Attendance could not be saved.');
+              }
+              setClasses((current) => current.map((item) => item.id === updated.id ? payload.class! : item));
+              setSelectedEvent(null);
+            } catch (error) {
+              window.alert(error instanceof Error ? error.message : 'Attendance could not be saved.');
+            }
           }}
         />
       </div>

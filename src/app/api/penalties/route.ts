@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../lib/db/store';
 import { enforceRateLimit } from '../../../lib/rate-limit/limiter';
-import { authorizationError } from '../../../lib/auth/server';
+import { authorizationErrorAsync } from '../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../lib/db/server-initialization';
 
 export async function GET(req: NextRequest) {
   await ensureServerPersistence();
-  const denied = authorizationError(req, 'penalties', 'view');
+  const denied = await authorizationErrorAsync(req, 'penalties', 'view');
   if (denied) return denied;
   const rateLimitError = enforceRateLimit(req, { limit: 60, windowSeconds: 60, identifierPrefix: 'penalties-get' });
   if (rateLimitError) return rateLimitError;
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   await ensureServerPersistence();
-  const denied = authorizationError(req, 'penalties', 'create');
+  const denied = await authorizationErrorAsync(req, 'penalties', 'create');
   if (denied) return denied;
   const rateLimitError = enforceRateLimit(req, { limit: 20, windowSeconds: 60, identifierPrefix: 'penalties-post' });
   if (rateLimitError) return rateLimitError;

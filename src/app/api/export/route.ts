@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../lib/db/store';
-import { authorizationError } from '../../../lib/auth/server';
+import { authorizationErrorAsync } from '../../../lib/auth/server';
 
 export async function GET(req: NextRequest) {
-  const denied = authorizationError(req, 'reports', 'export');
+  const denied = await authorizationErrorAsync(req, 'reports', 'export');
   if (denied) return denied;
   try {
     const { searchParams } = new URL(req.url);

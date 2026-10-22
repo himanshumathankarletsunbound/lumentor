@@ -16,7 +16,7 @@ All monetary values in the application are denominated and displayed in Indian r
 - **Endpoint Matrix**: Covers all 27 documented endpoints across Students, Leads, Staff, Invoices, Payments, Enrolments, Categories/Items, Coupons/Events, Attendance, Credit Notes, and Guardians.
 - **Idempotent Sync**: Ingests students, staff/mentors, classes/events, invoices, and attendance without duplicate creations via external ID and email upserts.
 - **Resilience**: Automatic retry with exponential backoff, circuit-breaker awareness, timeout handling, empty-body HTTP 200/204 response normalization, and full provenance tagging (`CLASSCARD_SOURCED`).
-- **Sandbox Fallback**: Built-in mock/sandbox mode allows full end-to-end testing and demo operations even when external credentials are not yet provisioned.
+- **Explicit demo mode**: JSON fixtures are available only when `DEMO_MODE=true` for local acceptance tests. Production never falls back to mock Classcard data.
 
 ### 2. Fine-Grained Role-Based Access Control (RBAC)
 - **Personas Supported**:
@@ -65,7 +65,7 @@ Calculates mentor compensations with precision arithmetic (2 decimal places) acr
 - **Icons**: [Lucide React](https://lucide.dev/)
 - **Date Utilities**: [date-fns](https://date-fns.org/)
 - **Database Schema**: [Prisma ORM](https://www.prisma.io/) (`prisma/schema.prisma` targeting PostgreSQL)
-- **Production Persistence Layer**: PostgreSQL through Prisma. The server store hydrates from and persists to PostgreSQL `AppState`; encrypted credentials use `EncryptedSecret`.
+- **Production Persistence Layer**: PostgreSQL through Prisma normalized tables. Operational records, authentication sessions, classes, attendance, branches, subjects, packages, students, mentors, and roles are read and written through Prisma repositories. `AppState` is retained only as a migration-era compatibility table and is not a production source of truth. Encrypted credentials use `EncryptedSecret`.
 - **Local/test persistence (explicit opt-in only)**: Atomic JSON storage can be enabled with `DEMO_MODE=true`; it is never used by production deployments and no fabricated records are created by normal startup.
 
 ---

@@ -1,6 +1,6 @@
 import { createHmac, randomBytes } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
-import { authorizationError } from '../../../../../../lib/auth/server';
+import { authorizationErrorAsync } from '../../../../../../lib/auth/server';
 import { googleOAuthConfig } from '../../../../../../lib/config/server';
 import { ensureServerPersistence } from '../../../../../../lib/db/server-initialization';
 
@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   try {
     await ensureServerPersistence();
 
-    const denied = authorizationError(req, 'settings', 'manage_settings');
+    const denied = await authorizationErrorAsync(req, 'settings', 'manage_settings');
     if (denied) return denied;
 
     const config = googleOAuthConfig();

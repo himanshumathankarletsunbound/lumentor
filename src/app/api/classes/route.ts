@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../../../lib/db/store';
-import { authorizationError, authorizationErrorAsync } from '../../../lib/auth/server';
-import { listClasses } from '../../../lib/db/state-repository';
-import { ClassEvent, ClassStudentRoster } from '../../../lib/types/models';
+import { authorizationErrorAsync } from '../../../lib/auth/server';
+import { createNormalizedClass, listClasses, updateNormalizedClass } from '../../../lib/db/state-repository';
+import { prisma } from '../../../lib/db/prisma';
 import { ensureServerPersistence } from '../../../lib/db/server-initialization';
 
 export async function GET(req: NextRequest) {
@@ -34,7 +33,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   await ensureServerPersistence();
-  const denied = authorizationError(req);
+  const denied = await authorizationErrorAsync(req);
   if (denied) return denied;
   try {
     const body = await req.json();
@@ -47,7 +46,6 @@ export async function POST(req: NextRequest) {
       durationMinutes,
       room,
       studentIds,
-      createdBy = 'Operations Admin',
     } = body;
 
     if (!title || !subjectId || !branchId || !mentorId || !startTime || !durationMinutes) {
@@ -57,10 +55,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const branch = db.getBranches().find((b) => b.id === branchId);
-    const subject = db.getSubjects().find((s) => s.id === subjectId);
-    const mentor = db.getMentors().find((m) => m.id === mentorId);
-
+    const [branch, subject, mentor] = await Promise.all([
+      prisma.branch.findUnique({ where: { id: branchId } }),
+      prisma.subject.findUnique({ where: { id: subjectId } }),
+      prisma.mentor.findUnique({ where: { id: mentorId } }),
+    ]);
     if (!branch || !subject || !mentor) {
       return NextResponse.json(
         { success: false, error: 'Invalid branch, subject, or mentor reference' },
@@ -71,54 +70,19 @@ export async function POST(req: NextRequest) {
     const start = new Date(startTime);
     const end = new Date(start.getTime() + (durationMinutes || 60) * 60000);
 
-    const allStudents = db.getStudents();
-    const roster: ClassStudentRoster[] = (studentIds || []).map((sId: string) => {
-      const st = allStudents.find((s) => s.id === sId);
-      return {
-        studentId: sId,
-        studentName: st ? `${st.firstName} ${st.lastName}` : 'Enrolled Student',
-        studentEmail: st ? st.email : '',
-        attendanceStatus: 'UNMARKED',
-      };
-    });
-
-    const newClass: ClassEvent = {
-      id: `cls-loc-${Date.now()}`,
+    const newClass = await createNormalizedClass({
       title,
       subjectId,
-      subjectName: subject.name,
       branchId,
-      branchName: branch.name,
       mentorId,
-      mentorName: `${mentor.firstName} ${mentor.lastName}`,
       startTime: start.toISOString(),
       endTime: end.toISOString(),
       durationMinutes,
-      isGroup: roster.length > 1,
-      capacity: Math.max(roster.length, 10),
-      isLateCancellation: false,
-      status: 'SCHEDULED',
-      attendanceStatusSummary: 'UNMARKED',
-      students: roster,
+      isGroup: (studentIds || []).length > 1,
+      capacity: Math.max((studentIds || []).length, 10),
+      studentIds: Array.isArray(studentIds) ? studentIds : [],
       room: room || 'Room 101',
-      provenance: 'LOCALLY_CREATED',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    db.createClass(newClass);
-
-    db.logAudit({
-      userId: 'usr-ops-1',
-      userName: createdBy,
-      userRole: 'OPERATIONS',
-      action: 'CLASS_SCHEDULED',
-      entityType: 'ClassEvent',
-      entityId: newClass.id,
-      details: `Scheduled instructional session "${title}" with mentor ${newClass.mentorName} at ${newClass.branchName}.`,
-      branchId,
     });
-    await db.persistNow();
 
     return NextResponse.json({
       success: true,
@@ -135,7 +99,7 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   await ensureServerPersistence();
-  const denied = authorizationError(req);
+  const denied = await authorizationErrorAsync(req);
   if (denied) return denied;
   try {
     const body = await req.json();
@@ -148,17 +112,16 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    const cls = db.getClassById(id);
-    if (!cls) {
-      return NextResponse.json(
-        { success: false, error: `Class ${id} not found` },
-        { status: 404 }
-      );
-    }
-
-    const updates: Partial<ClassEvent> = {};
+    const updates: {
+      status?: 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'LATE_CANCELLED';
+      cancellationReason?: string;
+      cancelledAt?: string;
+      cancelledBy?: string;
+      notes?: string;
+      room?: string;
+    } = {};
     if (status) {
-      updates.status = status;
+      updates.status = status as typeof updates.status;
       if (status === 'CANCELLED' || status === 'LATE_CANCELLED') {
         updates.cancelledAt = new Date().toISOString();
         updates.cancelledBy = cancelledBy || 'Operations Staff';
@@ -168,19 +131,15 @@ export async function PATCH(req: NextRequest) {
     if (notes !== undefined) updates.notes = notes;
     if (room !== undefined) updates.room = room;
 
-    const updated = db.updateClass(id, updates);
-
-    db.logAudit({
-      userId: 'usr-ops-1',
-      userName: cancelledBy || 'Operations Staff',
-      userRole: 'OPERATIONS',
-      action: status ? `CLASS_STATUS_${status}` : 'CLASS_UPDATED',
-      entityType: 'ClassEvent',
-      entityId: id,
-      details: `Updated class "${cls.title}" (status: ${status || cls.status}).`,
-      branchId: cls.branchId,
-    });
-    await db.persistNow();
+    let updated;
+    try {
+      updated = await updateNormalizedClass(id, updates);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('Record to update not found')) {
+        return NextResponse.json({ success: false, error: `Class ${id} not found` }, { status: 404 });
+      }
+      throw error;
+    }
 
     return NextResponse.json({
       success: true,

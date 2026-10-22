@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authorizationError } from '../../../lib/auth/server';
+import { authorizationErrorAsync } from '../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../lib/db/server-initialization';
 import { db } from '../../../lib/db/store';
 import { saveNormalizedRecord, deleteNormalizedRecord } from '../../../lib/db/state-repository';
@@ -11,7 +11,7 @@ type RecordType = (typeof allowedTypes)[number];
 export async function GET(req: NextRequest) {
   try {
     await ensureServerPersistence();
-    const denied = authorizationError(req);
+    const denied = await authorizationErrorAsync(req);
     if (denied) return denied;
 
     const type = new URL(req.url).searchParams.get('type') as RecordType | null;
@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     await ensureServerPersistence();
-    const denied = authorizationError(req);
+    const denied = await authorizationErrorAsync(req);
     if (denied) return denied;
 
     const body = await req.json() as { type?: RecordType; record?: Record<string, unknown> };
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
     if (process.env.DEMO_MODE !== 'true') {
       await saveNormalizedRecord(body.type, created as never, db.getSnapshot());
     }
-    await db.persistNow();
+    if (process.env.DEMO_MODE === 'true') await db.persistNow();
     return NextResponse.json({ success: true, record: created }, { status: 201 });
   } catch (error) {
     return NextResponse.json(
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     await ensureServerPersistence();
-    const denied = authorizationError(req);
+    const denied = await authorizationErrorAsync(req);
     if (denied) return denied;
 
     const body = (await req.json()) as {
@@ -125,7 +125,7 @@ export async function PUT(req: NextRequest) {
         console.warn('Prisma save error during update:', err);
       }
     }
-    await db.persistNow();
+    if (process.env.DEMO_MODE === 'true') await db.persistNow();
     return NextResponse.json({ success: true, record: updated });
   } catch (error) {
     return NextResponse.json(
@@ -138,7 +138,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     await ensureServerPersistence();
-    const denied = authorizationError(req);
+    const denied = await authorizationErrorAsync(req);
     if (denied) return denied;
 
     const url = new URL(req.url);
@@ -185,7 +185,7 @@ export async function DELETE(req: NextRequest) {
         console.warn('Prisma delete error:', err);
       }
     }
-    await db.persistNow();
+    if (process.env.DEMO_MODE === 'true') await db.persistNow();
     return NextResponse.json({ success: true, id });
   } catch (error) {
     return NextResponse.json(

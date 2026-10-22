@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../../lib/db/store';
-import { authorizationError } from '../../../../lib/auth/server';
+import { authorizationErrorAsync } from '../../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../../lib/db/server-initialization';
 
 export async function GET(req: NextRequest) {
@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     return NextResponse.json({ success: false, error: err instanceof Error ? err.message : 'Database initialization failed.' }, { status: 503 });
   }
-  const denied = authorizationError(req, 'settings', 'view');
+  const denied = await authorizationErrorAsync(req, 'settings', 'view');
   if (denied) return denied;
   try {
     db.reloadIfModified();
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     return NextResponse.json({ success: false, error: err instanceof Error ? err.message : 'Database initialization failed.' }, { status: 503 });
   }
-  const denied = authorizationError(req, 'settings', 'manage_settings');
+  const denied = await authorizationErrorAsync(req, 'settings', 'manage_settings');
   if (denied) return denied;
   try {
     const body = await req.json().catch(() => ({}));

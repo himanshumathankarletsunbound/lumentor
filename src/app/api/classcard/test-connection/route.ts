@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { classcardClient } from '../../../../lib/integrations/classcard/client';
 import { enforceRateLimit } from '../../../../lib/rate-limit/limiter';
-import { authorizationError } from '../../../../lib/auth/server';
+import { authorizationErrorAsync } from '../../../../lib/auth/server';
 
 export async function POST(req: NextRequest) {
-  const denied = authorizationError(req, 'classcard_integration', 'manage_settings');
+  const denied = await authorizationErrorAsync(req, 'classcard_integration', 'manage_settings');
   if (denied) return denied;
   const rateLimitError = enforceRateLimit(req, { limit: 20, windowSeconds: 60, identifierPrefix: 'classcard-test-connection' });
   if (rateLimitError) return rateLimitError;

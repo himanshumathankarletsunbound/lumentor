@@ -303,7 +303,7 @@ export async function listClasses(filters: {
   const classes = await prisma.classEvent.findMany({
     where: {
       mentorId: filters.mentorId,
-      branchId: filters.branchId,
+      branchId: filters.branchId && filters.branchId !== 'ALL' ? filters.branchId : undefined,
       status: filters.status && filters.status !== 'ALL' ? filters.status as never : undefined,
       startTime: filters.startDate || filters.endDate ? {
         gte: filters.startDate ? new Date(filters.startDate) : undefined,
@@ -366,6 +366,133 @@ export async function listClasses(filters: {
       updatedAt: item.updatedAt.toISOString(),
     };
   });
+}
+
+type ClassWriteInput = {
+  id?: string;
+  title: string;
+  subjectId: string;
+  branchId: string;
+  mentorId: string;
+  startTime: string;
+  endTime: string;
+  durationMinutes: number;
+  isGroup: boolean;
+  capacity: number;
+  room?: string;
+  meetingLink?: string;
+  notes?: string;
+  status?: ClassEvent['status'];
+  cancellationReason?: string;
+  cancelledAt?: string;
+  cancelledBy?: string;
+  isLateCancellation?: boolean;
+  provenance?: ClassEvent['provenance'];
+  studentIds: string[];
+};
+
+export async function createNormalizedClass(input: ClassWriteInput): Promise<ClassEvent> {
+  const created = await prisma.classEvent.create({
+    data: {
+      ...(input.id ? { id: input.id } : {}),
+      title: input.title,
+      subjectId: input.subjectId,
+      branchId: input.branchId,
+      mentorId: input.mentorId,
+      startTime: new Date(input.startTime),
+      endTime: new Date(input.endTime),
+      durationMinutes: input.durationMinutes,
+      isGroup: input.isGroup,
+      capacity: input.capacity,
+      room: input.room,
+      meetingLink: input.meetingLink,
+      notes: input.notes,
+      status: input.status ?? 'SCHEDULED',
+      cancellationReason: input.cancellationReason,
+      cancelledAt: input.cancelledAt ? new Date(input.cancelledAt) : undefined,
+      cancelledBy: input.cancelledBy,
+      isLateCancellation: input.isLateCancellation ?? false,
+      provenance: input.provenance ?? 'LOCALLY_CREATED',
+      attendances: input.studentIds.length > 0
+        ? { create: input.studentIds.map((studentId) => ({ studentId, status: 'UNMARKED' })) }
+        : undefined,
+    },
+  });
+  const classes = await listClasses({ startDate: created.startTime.toISOString(), endDate: created.startTime.toISOString() });
+  const result = classes.find((item) => item.id === created.id);
+  if (!result) throw new Error('The newly created class could not be reloaded from PostgreSQL.');
+  return result;
+}
+
+export async function updateNormalizedClass(
+  id: string,
+  updates: {
+    status?: ClassEvent['status'];
+    cancellationReason?: string;
+    cancelledAt?: string;
+    cancelledBy?: string;
+    notes?: string;
+    room?: string;
+    meetingLink?: string;
+    isLateCancellation?: boolean;
+  }
+): Promise<ClassEvent> {
+  const updated = await prisma.classEvent.update({
+    where: { id },
+    data: {
+      status: updates.status,
+      cancellationReason: updates.cancellationReason,
+      cancelledAt: updates.cancelledAt ? new Date(updates.cancelledAt) : undefined,
+      cancelledBy: updates.cancelledBy,
+      notes: updates.notes,
+      room: updates.room,
+      meetingLink: updates.meetingLink,
+      isLateCancellation: updates.isLateCancellation,
+    },
+  });
+  const classes = await listClasses({ startDate: updated.startTime.toISOString(), endDate: updated.startTime.toISOString() });
+  const result = classes.find((item) => item.id === id);
+  if (!result) throw new Error('The updated class could not be reloaded from PostgreSQL.');
+  return result;
+}
+
+export async function recordNormalizedAttendance(
+  classId: string,
+  roster: Array<{ studentId: string; attendanceStatus: 'PRESENT' | 'ABSENT' | 'ABSENT_BILLABLE' | 'LATE' | 'EXCUSED' | 'UNMARKED'; notes?: string }>,
+  markedBy: string
+): Promise<ClassEvent> {
+  const now = new Date();
+  await prisma.$transaction(async (transaction) => {
+    for (const student of roster) {
+      await transaction.classAttendance.upsert({
+        where: { classEventId_studentId: { classEventId: classId, studentId: student.studentId } },
+        create: {
+          classEventId: classId,
+          studentId: student.studentId,
+          status: student.attendanceStatus,
+          notes: student.notes,
+          markedAt: student.attendanceStatus === 'UNMARKED' ? null : now,
+          markedBy: student.attendanceStatus === 'UNMARKED' ? null : markedBy,
+        },
+        update: {
+          status: student.attendanceStatus,
+          notes: student.notes,
+          markedAt: student.attendanceStatus === 'UNMARKED' ? null : now,
+          markedBy: student.attendanceStatus === 'UNMARKED' ? null : markedBy,
+        },
+      });
+    }
+    const statuses = roster.map((student) => student.attendanceStatus);
+    const complete = statuses.length > 0 && statuses.every((status) => status !== 'UNMARKED');
+    await transaction.classEvent.update({
+      where: { id: classId },
+      data: complete && statuses.some((status) => status === 'PRESENT' || status === 'LATE') ? { status: 'COMPLETED' } : {},
+    });
+  });
+  const classes = await listClasses();
+  const result = classes.find((item) => item.id === classId);
+  if (!result) throw new Error('The class attendance was saved but the class could not be reloaded.');
+  return result;
 }
 
 async function ensurePayrollPlan(organizationId: string, id: string) {

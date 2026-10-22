@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { classcardClient } from '../../../../../../lib/integrations/classcard/client';
-import { authorizationError } from '../../../../../../lib/auth/server';
+import { authorizationErrorAsync } from '../../../../../../lib/auth/server';
 
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ staffId: string }> }
 ) {
-  const denied = authorizationError(req, 'classcard_integration', 'view');
+  const denied = await authorizationErrorAsync(req, 'classcard_integration', 'view');
   if (denied) return denied;
 
   const { staffId } = await context.params;

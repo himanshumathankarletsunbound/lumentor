@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../../../lib/db/store';
-import { authorizationError } from '../../../lib/auth/server';
-import { AttendanceStatus, ClassEvent } from '../../../lib/types/models';
+import { authorizationErrorAsync } from '../../../lib/auth/server';
+import { recordNormalizedAttendance } from '../../../lib/db/state-repository';
 import { ensureServerPersistence } from '../../../lib/db/server-initialization';
 
 export async function POST(req: NextRequest) {
-  const denied = authorizationError(req);
+  await ensureServerPersistence();
+  const denied = await authorizationErrorAsync(req);
   if (denied) return denied;
   try {
     await ensureServerPersistence();
@@ -19,71 +19,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const cls = db.getClassById(classId);
-    if (!cls) {
-      return NextResponse.json(
-        { success: false, error: `Class session ${classId} not found` },
-        { status: 404 }
-      );
-    }
-
-    const now = new Date().toISOString();
-    const updatedStudents = cls.students.map((existing) => {
-      const match = roster.find((r: { studentId: string; attendanceStatus: AttendanceStatus; notes?: string }) => r.studentId === existing.studentId);
-      if (match) {
-        return {
-          ...existing,
-          attendanceStatus: match.attendanceStatus,
-          notes: match.notes !== undefined ? match.notes : existing.notes,
-          markedAt: now,
-          markedBy,
-        };
-      }
-      return existing;
-    });
-
-    // Compute summary
-    const statuses = updatedStudents.map((s) => s.attendanceStatus);
-    let summary: ClassEvent['attendanceStatusSummary'] = 'UNMARKED';
-
-    if (statuses.length > 0 && statuses.every((s) => s === 'PRESENT')) {
-      summary = 'ALL_PRESENT';
-    } else if (statuses.length > 0 && statuses.every((s) => s === 'ABSENT' || s === 'ABSENT_BILLABLE')) {
-      summary = 'ALL_ABSENT';
-    } else if (statuses.length > 0 && statuses.every((s) => s !== 'UNMARKED')) {
-      summary = 'PARTIAL';
-    }
-
-    // Auto-complete class if scheduled and roster is now marked
-    let newStatus = cls.status;
-    if (cls.status === 'SCHEDULED' && summary !== 'UNMARKED') {
-      newStatus = 'COMPLETED';
-    }
-
-    const updated = db.updateClass(classId, {
-      students: updatedStudents,
-      attendanceStatusSummary: summary,
-      status: newStatus,
-    });
-    await db.persistNow();
-
-    db.logAudit({
-      userId: 'usr-ops-1',
-      userName: markedBy,
-      userRole: 'OPERATIONS',
-      action: 'ATTENDANCE_RECORDED',
-      entityType: 'ClassEvent',
-      entityId: classId,
-      details: `Recorded attendance for ${updatedStudents.length} students in "${cls.title}" (Outcome: ${summary}, Class: ${newStatus}).`,
-      branchId: cls.branchId,
-    });
+    const updated = await recordNormalizedAttendance(classId, roster, markedBy);
+    const statuses = updated.students.map((student) => student.attendanceStatus);
+    const summary = updated.attendanceStatusSummary;
 
     return NextResponse.json({
       success: true,
       message: 'Attendance recorded successfully',
       class: updated,
       summary: {
-        totalStudents: updatedStudents.length,
+        totalStudents: updated.students.length,
         present: statuses.filter((s) => s === 'PRESENT').length,
         absent: statuses.filter((s) => s === 'ABSENT').length,
         late: statuses.filter((s) => s === 'LATE').length,

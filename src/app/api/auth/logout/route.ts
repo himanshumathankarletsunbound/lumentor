@@ -1,25 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../../../../lib/db/store';
+import { findUserBySessionToken, saveUser } from '../../../../lib/db/state-repository';
 
 export async function POST(req: NextRequest) {
   try {
     const sessionToken = req.cookies.get('lumentor_session')?.value;
     if (sessionToken) {
-      const user = db.getUserBySessionToken(sessionToken);
+      const user = await findUserBySessionToken(sessionToken);
       if (user) {
         user.sessionToken = undefined;
         user.sessionExpiry = undefined;
-        db.saveUser(user);
-
-        db.logAudit({
-          userId: user.id,
-          userName: user.name,
-          userRole: user.role,
-          action: 'LOGOUT',
-          entityType: 'User',
-          entityId: user.id,
-          details: `User ${user.email} logged out`,
-        });
+        await saveUser(user);
       }
     }
 

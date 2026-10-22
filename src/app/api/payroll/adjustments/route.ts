@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authorizationError } from '../../../../lib/auth/server';
+import { authorizationErrorAsync } from '../../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../../lib/db/server-initialization';
 import { db } from '../../../../lib/db/store';
 
 export async function POST(req: NextRequest) {
   await ensureServerPersistence();
-  const denied = authorizationError(req, 'payroll_processing', 'create');
+  const denied = await authorizationErrorAsync(req, 'payroll_processing', 'create');
   if (denied) return denied;
   try {
     const body = await req.json() as { mentorId?: string; type?: 'BONUS' | 'REIMBURSEMENT' | 'MANUAL_CORRECTION'; reason?: string; amount?: number; approvedBy?: string; approvedByName?: string };

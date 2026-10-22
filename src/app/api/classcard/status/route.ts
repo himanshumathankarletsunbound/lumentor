@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../../lib/db/store';
 import { classcardClient } from '../../../../lib/integrations/classcard/client';
-import { authorizationError } from '../../../../lib/auth/server';
+import { authorizationErrorAsync } from '../../../../lib/auth/server';
 import { requireServerSecret } from '../../../../lib/config/server';
 
 export async function GET(req: NextRequest) {
-  const denied = authorizationError(req, 'classcard_integration', 'view');
+  const denied = await authorizationErrorAsync(req, 'classcard_integration', 'view');
   if (denied) return denied;
   const config = db.getClasscardConfig();
   // Return masked configuration to protect API key
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const denied = authorizationError(req, 'classcard_integration', 'manage_settings');
+  const denied = await authorizationErrorAsync(req, 'classcard_integration', 'manage_settings');
   if (denied) return denied;
   try {
     requireServerSecret('CLASSCARD_API_KEY');

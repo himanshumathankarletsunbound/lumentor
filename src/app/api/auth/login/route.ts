@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../../../../lib/db/store';
 import { verifyPassword, generateSessionToken } from '../../../../lib/auth/crypto';
 import { enforceRateLimit } from '../../../../lib/rate-limit/limiter';
 import { ensureServerPersistence } from '../../../../lib/db/server-initialization';
@@ -70,16 +69,6 @@ export async function POST(req: NextRequest) {
     }
 
     if (!isValid) {
-      db.logAudit({
-        userId: user.id,
-        userName: user.name,
-        userRole: user.role,
-        action: 'LOGIN_FAILED',
-        entityType: 'User',
-        entityId: user.id,
-        details: `Failed login attempt for ${user.email}`,
-      });
-
       return NextResponse.json(
         { success: false, error: 'Invalid password. Please check and try again.' },
         { status: 401 }
@@ -97,11 +86,6 @@ export async function POST(req: NextRequest) {
       user.status = 'ACTIVE';
     }
     user = await saveUser(user);
-    // Keep the compatibility authorization cache synchronized while remaining
-    // APIs migrate to normalized Prisma records.
-    db.saveUser(user);
-    await db.persistNow();
-
     const safeUser = { ...user };
     delete safeUser.passwordHash;
     delete safeUser.salt;

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../../../lib/db/store';
 import { authorizationErrorAsync } from '../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../lib/db/server-initialization';
-import { listBranches } from '../../../lib/db/state-repository';
+import { listBranches, saveNormalizedRecord } from '../../../lib/db/state-repository';
+import { db } from '../../../lib/db/store';
 
 export async function GET(req: NextRequest) {
   await ensureServerPersistence();
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   if (denied) return denied;
   try {
     const body = await req.json();
-    const { name, code, address, city, timezone, phone, email, createdBy = 'Administrator' } = body;
+    const { name, code, address, city, timezone, phone, email } = body;
 
     if (!name || !code || !address || !city) {
       return NextResponse.json(
@@ -50,17 +50,11 @@ export async function POST(req: NextRequest) {
       provenance: 'LOCALLY_CREATED',
     });
 
-    db.logAudit({
-      userId: 'usr-admin-1',
-      userName: createdBy,
-      userRole: 'ADMINISTRATOR',
-      action: 'BRANCH_CREATED',
-      entityType: 'Branch',
-      entityId: branch.id,
-      details: `Created new campus branch "${name}" (${branch.code}) in ${city}.`,
-      branchId: branch.id,
-    });
-    await db.persistNow();
+    if (process.env.DEMO_MODE !== 'true') {
+      await saveNormalizedRecord('branch', branch, db.getSnapshot());
+    } else {
+      await db.persistNow();
+    }
 
     return NextResponse.json({
       success: true,

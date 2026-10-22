@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { classcardClient } from '../../../../lib/integrations/classcard/client';
-import { authorizationError } from '../../../../lib/auth/server';
+import { authorizationErrorAsync } from '../../../../lib/auth/server';
 import type { ClasscardLeadInput } from '../../../../lib/types/classcard';
 
 export async function POST(req: NextRequest) {
-  const denied = authorizationError(req, 'students', 'create');
+  const denied = await authorizationErrorAsync(req, 'students', 'create');
   if (denied) return denied;
 
   const body = (await req.json().catch(() => null)) as Partial<ClasscardLeadInput> | null;

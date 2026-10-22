@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authorizationError, getSessionUser } from '../../../lib/auth/server';
+import { authorizationErrorAsync, getSessionUserAsync } from '../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../lib/db/server-initialization';
 import { db } from '../../../lib/db/store';
 import { PenaltyDeductionType } from '../../../lib/types/payroll';
 
 export async function GET(req: NextRequest) {
   await ensureServerPersistence();
-  const denied = authorizationError(req, 'penalties', 'view');
+  const denied = await authorizationErrorAsync(req, 'penalties', 'view');
   if (denied) return denied;
   return NextResponse.json({
     success: true,
@@ -16,9 +16,9 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   await ensureServerPersistence();
-  const denied = authorizationError(req, 'penalties', 'create');
+  const denied = await authorizationErrorAsync(req, 'penalties', 'create');
   if (denied) return denied;
-  if (getSessionUser(req)?.role !== 'ADMINISTRATOR') {
+  if ((await getSessionUserAsync(req))?.role !== 'ADMINISTRATOR') {
     return NextResponse.json(
       { success: false, error: 'Only administrators can manage penalty policies.' },
       { status: 403 }
@@ -68,9 +68,9 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   await ensureServerPersistence();
-  const denied = authorizationError(req, 'penalties', 'edit');
+  const denied = await authorizationErrorAsync(req, 'penalties', 'edit');
   if (denied) return denied;
-  if (getSessionUser(req)?.role !== 'ADMINISTRATOR') {
+  if ((await getSessionUserAsync(req))?.role !== 'ADMINISTRATOR') {
     return NextResponse.json(
       { success: false, error: 'Only administrators can manage penalty policies.' },
       { status: 403 }
@@ -111,9 +111,9 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   await ensureServerPersistence();
-  const denied = authorizationError(req, 'penalties', 'delete');
+  const denied = await authorizationErrorAsync(req, 'penalties', 'delete');
   if (denied) return denied;
-  if (getSessionUser(req)?.role !== 'ADMINISTRATOR') {
+  if ((await getSessionUserAsync(req))?.role !== 'ADMINISTRATOR') {
     return NextResponse.json(
       { success: false, error: 'Only administrators can manage penalty policies.' },
       { status: 403 }

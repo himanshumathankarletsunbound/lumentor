@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../lib/db/store';
 import { authorizationErrorAsync } from '../../../lib/auth/server';
-import { listMentors } from '../../../lib/db/state-repository';
+import { listMentors, saveNormalizedRecord } from '../../../lib/db/state-repository';
 import { Mentor } from '../../../lib/types/models';
 import { ensureServerPersistence } from '../../../lib/db/server-initialization';
 
@@ -87,7 +87,11 @@ export async function PATCH(req: NextRequest) {
     if (hourlyRate !== undefined) updates.hourlyRate = Number(hourlyRate);
 
     const updated = db.updateMentor(id, updates);
-    await db.persistNow();
+    if (process.env.DEMO_MODE !== 'true') {
+      await saveNormalizedRecord('mentor', updated, db.getSnapshot());
+    } else {
+      await db.persistNow();
+    }
 
     db.logAudit({
       userId: 'usr-admin-1',
@@ -99,7 +103,7 @@ export async function PATCH(req: NextRequest) {
       details: `Updated mentor ${mentor.firstName} ${mentor.lastName} (plan: ${updates.payrollPlanId || mentor.payrollPlanId}, branch: ${updates.branchId || mentor.branchId}).`,
       branchId: updates.branchId || mentor.branchId,
     });
-    await db.persistNow();
+    if (process.env.DEMO_MODE === 'true') await db.persistNow();
 
     return NextResponse.json({
       success: true,

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authorizationError, getSessionUser } from '../../../lib/auth/server';
+import { authorizationErrorAsync, getSessionUserAsync } from '../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../lib/db/server-initialization';
 import { db } from '../../../lib/db/store';
 import { CompensationModel } from '../../../lib/types/payroll';
 
 export async function GET(req: NextRequest) {
   await ensureServerPersistence();
-  const denied = authorizationError(req, 'payroll_rules', 'view');
+  const denied = await authorizationErrorAsync(req, 'payroll_rules', 'view');
   if (denied) return denied;
 
   return NextResponse.json({
@@ -17,10 +17,10 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   await ensureServerPersistence();
-  const denied = authorizationError(req, 'payroll_rules', 'create');
+  const denied = await authorizationErrorAsync(req, 'payroll_rules', 'create');
   if (denied) return denied;
 
-  const user = getSessionUser(req);
+  const user = await getSessionUserAsync(req);
   if (user?.role !== 'ADMINISTRATOR' && user?.role !== 'OPERATIONS') {
     return NextResponse.json(
       { success: false, error: 'Only administrators and operations managers can configure payroll plans.' },
@@ -87,10 +87,10 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   await ensureServerPersistence();
-  const denied = authorizationError(req, 'payroll_rules', 'edit');
+  const denied = await authorizationErrorAsync(req, 'payroll_rules', 'edit');
   if (denied) return denied;
 
-  const user = getSessionUser(req);
+  const user = await getSessionUserAsync(req);
   if (user?.role !== 'ADMINISTRATOR' && user?.role !== 'OPERATIONS') {
     return NextResponse.json(
       { success: false, error: 'Only administrators and operations managers can update payroll plans.' },
@@ -157,10 +157,10 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   await ensureServerPersistence();
-  const denied = authorizationError(req, 'payroll_rules', 'delete');
+  const denied = await authorizationErrorAsync(req, 'payroll_rules', 'delete');
   if (denied) return denied;
 
-  const user = getSessionUser(req);
+  const user = await getSessionUserAsync(req);
   if (user?.role !== 'ADMINISTRATOR') {
     return NextResponse.json(
       { success: false, error: 'Only administrators can delete payroll plans.' },

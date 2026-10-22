@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../lib/db/store';
 import { enforceRateLimit } from '../../../lib/rate-limit/limiter';
-import { authorizationError } from '../../../lib/auth/server';
+import { authorizationErrorAsync } from '../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../lib/db/server-initialization';
 
 export async function GET(req: NextRequest) {
@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
 
   try {
     await ensureServerPersistence();
-    const denied = authorizationError(req, 'overview', 'view');
+    const denied = await authorizationErrorAsync(req, 'overview', 'view');
     if (denied) return denied;
     const { searchParams } = new URL(req.url);
     const branchId = searchParams.get('branchId') || undefined;

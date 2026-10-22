@@ -25,6 +25,17 @@ export function getSessionUser(req: NextRequest): CurrentUser | undefined {
   return db.getUserBySessionToken(token);
 }
 
+export async function getSessionUserAsync(req: NextRequest): Promise<CurrentUser | undefined> {
+  const cookieToken = req.cookies.get('lumentor_session')?.value;
+  const authorization = req.headers.get('authorization');
+  const bearerToken = authorization?.startsWith('Bearer ')
+    ? authorization.slice('Bearer '.length).trim()
+    : undefined;
+  return cookieToken || bearerToken
+    ? findUserBySessionToken(cookieToken || bearerToken || '')
+    : undefined;
+}
+
 export function requireUser(req: NextRequest): CurrentUser {
   const user = getSessionUser(req);
   if (!user) {

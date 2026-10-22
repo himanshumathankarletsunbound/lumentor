@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authorizationError } from '../../../../lib/auth/server';
+import { authorizationErrorAsync } from '../../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../../lib/db/server-initialization';
 import { saveNormalizedRecord } from '../../../../lib/db/state-repository';
 import { db } from '../../../../lib/db/store';
@@ -19,7 +19,7 @@ function splitName(value: string) {
 export async function POST(req: NextRequest) {
   try {
     await ensureServerPersistence();
-    const denied = authorizationError(req, 'settings', 'manage_settings');
+    const denied = await authorizationErrorAsync(req, 'settings', 'manage_settings');
     if (denied) return denied;
 
     const body = await req.json() as { rows?: StaffImportRow[] };

@@ -354,10 +354,10 @@
   ],
   "users": [
     {
-      "id": "test-operations",
+      "id": "user-super-admin",
       "email": "himanshu.m@letsunbound.com",
       "name": "Himanshu Mathankar",
-      "role": "OPERATIONS",
+      "role": "ADMINISTRATOR",
       "roleName": "Super Admin",
       "assignedBranchIds": [],
       "avatarUrl": "",
@@ -365,7 +365,8 @@
         {
           "module": "overview",
           "actions": [
-            "view"
+            "view",
+            "export"
           ]
         },
         {
@@ -373,7 +374,9 @@
           "actions": [
             "view",
             "create",
-            "edit"
+            "edit",
+            "delete",
+            "export"
           ]
         },
         {
@@ -381,7 +384,9 @@
           "actions": [
             "view",
             "create",
-            "edit"
+            "edit",
+            "delete",
+            "export"
           ]
         },
         {
@@ -389,20 +394,28 @@
           "actions": [
             "view",
             "create",
-            "edit"
+            "edit",
+            "approve",
+            "export"
           ]
         },
         {
           "module": "exceptions",
           "actions": [
             "view",
-            "edit"
+            "edit",
+            "approve",
+            "export"
           ]
         },
         {
           "module": "mentors",
           "actions": [
-            "view"
+            "view",
+            "create",
+            "edit",
+            "delete",
+            "export"
           ]
         },
         {
@@ -410,32 +423,90 @@
           "actions": [
             "view",
             "create",
-            "edit"
+            "edit",
+            "delete",
+            "export"
           ]
         },
         {
           "module": "branches",
           "actions": [
-            "view"
+            "view",
+            "create",
+            "edit",
+            "delete",
+            "manage_settings"
           ]
         },
         {
           "module": "subjects",
           "actions": [
-            "view"
+            "view",
+            "create",
+            "edit",
+            "delete",
+            "manage_settings"
           ]
         },
         {
           "module": "packages",
           "actions": [
-            "view"
+            "view",
+            "create",
+            "edit",
+            "delete",
+            "manage_settings"
+          ]
+        },
+        {
+          "module": "payroll_dashboard",
+          "actions": [
+            "view",
+            "export",
+            "view_sensitive_payroll"
+          ]
+        },
+        {
+          "module": "payroll_rules",
+          "actions": [
+            "view",
+            "create",
+            "edit",
+            "manage_settings",
+            "view_sensitive_payroll"
+          ]
+        },
+        {
+          "module": "payroll_processing",
+          "actions": [
+            "view",
+            "create",
+            "edit",
+            "approve",
+            "export",
+            "view_sensitive_payroll"
           ]
         },
         {
           "module": "penalties",
           "actions": [
             "view",
-            "create"
+            "create",
+            "edit",
+            "approve",
+            "delete",
+            "export",
+            "view_sensitive_payroll"
+          ]
+        },
+        {
+          "module": "payslips",
+          "actions": [
+            "view",
+            "create",
+            "edit",
+            "export",
+            "view_sensitive_payroll"
           ]
         },
         {
@@ -448,16 +519,49 @@
         {
           "module": "analytics",
           "actions": [
-            "view"
+            "view",
+            "export"
+          ]
+        },
+        {
+          "module": "users_roles",
+          "actions": [
+            "view",
+            "create",
+            "edit",
+            "delete",
+            "manage_settings"
+          ]
+        },
+        {
+          "module": "classcard_integration",
+          "actions": [
+            "view",
+            "create",
+            "edit",
+            "manage_settings"
+          ]
+        },
+        {
+          "module": "audit_logs",
+          "actions": [
+            "view",
+            "export"
+          ]
+        },
+        {
+          "module": "settings",
+          "actions": [
+            "view",
+            "edit",
+            "manage_settings"
           ]
         }
       ],
       "passwordHash": "435d06d2937015006c74079f799d0b92fe8fbd29d24600faffd4b474a6a0177146e7e2bd0b45eae1f1c688512d5448539b63807c2384b256a20a9efaea7cd616",
       "salt": "4bdf413f8a507f6e5046b89627425ad4",
       "status": "ACTIVE",
-      "createdAt": "2026-01-01T00:00:00Z",
-      "sessionToken": "f4f903f442e44a93f8a2d8932abf8068e41ffc7ac1138e7fa4e299c3a995e407",
-      "sessionExpiry": "2026-10-22T10:09:27.444Z"
+      "createdAt": "2026-01-01T00:00:00Z"
     }
   ],
   "branches": [],

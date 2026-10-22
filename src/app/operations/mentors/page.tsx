@@ -10,7 +10,7 @@ import { Button } from '../../../components/ui/Button';
 import { Drawer } from '../../../components/ui/Drawer';
 import { Tabs } from '../../../components/ui/Tabs';
 import { Mentor } from '../../../lib/types/models';
-import { GraduationCap, Mail, Phone, MapPin, DollarSign, Calendar, ShieldAlert, FileText, CheckCircle2, RefreshCw, Plus } from 'lucide-react';
+import { GraduationCap, Mail, Phone, MapPin, DollarSign, Calendar, ShieldAlert, FileText, CheckCircle2, RefreshCw, Plus, Upload } from 'lucide-react';
 import { formatCurrency, formatDuration, formatDate } from '../../../lib/utils/formatters';
 import Link from 'next/link';
 import { AddRecordModal } from '../../../components/operations/AddRecordModal';
@@ -146,7 +146,7 @@ export default function MentorsPage() {
               Faculty roster, branch assignments, payroll plan mappings, and teaching metrics.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -159,8 +159,9 @@ export default function MentorsPage() {
             <Button variant="primary" size="sm" leftIcon={<Plus className="w-3.5 h-3.5" />} onClick={() => setShowModal(true)}>
               Add record
             </Button>
-            <label className="inline-flex cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs">
-              {isImporting ? 'Importing...' : 'Import staff CSV'}
+            <label className="inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-xs">
+              <Upload className="w-3.5 h-3.5 text-slate-500" />
+              <span>{isImporting ? 'Importing...' : 'Import staff CSV'}</span>
               <input type="file" accept=".csv,text/csv" className="hidden" disabled={isImporting} onChange={handleStaffImport} />
             </label>
           </div>

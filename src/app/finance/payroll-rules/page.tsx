@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { AppShell } from '../../../components/layout/AppShell';
-import { db } from '../../../lib/db/store';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../../../components/ui/Table';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { Modal } from '../../../components/ui/Modal';
 import { PayrollPlan, CompensationModel } from '../../../lib/types/payroll';
+import { Mentor } from '../../../lib/types/models';
 import {
   Sliders,
   Plus,
@@ -172,13 +172,20 @@ export default function PayrollRulesPage() {
   const [customFormulaText, setCustomFormulaText] = useState('');
 
   // Load plans on mount
-  const refreshPlans = () => {
-    setPlans([...db.getPayrollPlans()]);
+  const refreshPlans = async () => {
+    const response = await fetch('/api/payroll-plans');
+    const result = await response.json();
+    if (!response.ok || !result.success) throw new Error(result.error || 'Failed to load payroll plans.');
+    setPlans(result.plans);
   };
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    refreshPlans();
+    const timer = window.setTimeout(() => {
+      void refreshPlans().catch((error: unknown) => {
+        setStatusMsg({ type: 'error', text: error instanceof Error ? error.message : 'Failed to load payroll plans.' });
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   // Compute live auto-formula whenever numerical params or model changes
@@ -280,9 +287,11 @@ export default function PayrollRulesPage() {
 
     try {
       if (editingPlanId) {
-        db.updatePayrollPlan(
-          editingPlanId,
-          {
+        const response = await fetch('/api/payroll-plans', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: editingPlanId,
             name: name.trim(),
             code: code.trim().toUpperCase(),
             description: description.trim(),
@@ -297,12 +306,16 @@ export default function PayrollRulesPage() {
             lateCancellationPayPercent: Number.isFinite(parseFloat(lateCancelPercent)) ? parseFloat(lateCancelPercent) : 0,
             groupMultiplier: parseNumericInput(groupMultiplier, 1),
             formula: formulaToSave,
-          },
-          true
-        );
+          }),
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error || 'Failed to update payroll plan.');
         setStatusMsg({ type: 'success', text: `Plan ${code} updated successfully.` });
       } else {
-        db.createPayrollPlan({
+        const response = await fetch('/api/payroll-plans', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
           name: name.trim(),
           code: code.trim().toUpperCase(),
           description: description.trim(),
@@ -320,12 +333,14 @@ export default function PayrollRulesPage() {
           formula: formulaToSave,
           effectiveFrom: new Date().toISOString(),
           isActive: true,
+          }),
         });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error || 'Failed to create payroll plan.');
         setStatusMsg({ type: 'success', text: `Plan ${code} configured and saved.` });
       }
 
-      await db.persistNow();
-      refreshPlans();
+      await refreshPlans();
       setShowModal(false);
       setTimeout(() => setStatusMsg(null), 4000);
     } catch (err: unknown) {
@@ -336,15 +351,19 @@ export default function PayrollRulesPage() {
   const handleDeletePlan = async (id: string, planCode: string) => {
     if (!confirm(`Are you sure you want to delete payroll plan ${planCode}?`)) return;
     try {
-      const mentors = db.getMentors();
+      const mentorsResponse = await fetch('/api/mentors');
+      const mentorsResult = await mentorsResponse.json();
+      if (!mentorsResponse.ok || !mentorsResult.success) throw new Error(mentorsResult.error || 'Failed to load mentors.');
+      const mentors = mentorsResult.mentors as Mentor[];
       const isUsed = mentors.some((m) => m.payrollPlanId === id);
       if (isUsed) {
         alert(`Cannot delete plan ${planCode} because active mentors are assigned to it.`);
         return;
       }
-      db.deletePayrollPlan(id);
-      await db.persistNow();
-      refreshPlans();
+      const response = await fetch(`/api/payroll-plans?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.error || 'Failed to delete payroll plan.');
+      await refreshPlans();
       setStatusMsg({ type: 'success', text: `Plan ${planCode} deleted successfully.` });
       setTimeout(() => setStatusMsg(null), 3000);
     } catch (err: unknown) {

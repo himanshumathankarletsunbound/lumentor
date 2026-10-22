@@ -182,6 +182,7 @@ model Subject {
   updatedAt              DateTime       @updatedAt
 
   classes ClassEvent[]
+  attendanceSummaries AttendanceSummary[]
 }
 
 model Package {
@@ -222,6 +223,7 @@ model Student {
   enrolments   Enrolment[]
   attendances  ClassAttendance[]
   invoices     Invoice[]
+  attendanceSummaries AttendanceSummary[]
 }
 
 model Mentor {
@@ -299,6 +301,31 @@ model ClassAttendance {
   updatedAt    DateTime         @updatedAt
 
   @@unique([classEventId, studentId])
+}
+
+model AttendanceSummary {
+  id              String    @id @default(uuid())
+  sourceKey       String    @unique
+  reportType      String
+  studentId       String?
+  student         Student?  @relation(fields: [studentId], references: [id])
+  subjectId       String?
+  subject         Subject?  @relation(fields: [subjectId], references: [id])
+  studentName     String?
+  studentExternalId String?
+  subjectName     String?
+  className       String?
+  attendanceDate  DateTime?
+  timeRange       String?
+  location        String?
+  staffName       String?
+  enrolled        Int       @default(0)
+  present         Int       @default(0)
+  absent          Int       @default(0)
+  attendancePercentage Float?
+  sourceFile      String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 
 model Enrolment {

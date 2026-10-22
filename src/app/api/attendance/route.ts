@@ -1,7 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizationErrorAsync } from '../../../lib/auth/server';
-import { recordNormalizedAttendance } from '../../../lib/db/state-repository';
+import { listAttendanceSummaries, recordNormalizedAttendance } from '../../../lib/db/state-repository';
 import { ensureServerPersistence } from '../../../lib/db/server-initialization';
+
+export async function GET(req: NextRequest) {
+  await ensureServerPersistence();
+  const denied = await authorizationErrorAsync(req);
+  if (denied) return denied;
+  const params = req.nextUrl.searchParams;
+  const reportType = params.get('reportType');
+  const summaries = await listAttendanceSummaries({
+    reportType: reportType === 'BY_CLASS' || reportType === 'BY_SUBJECT' ? reportType : undefined,
+    studentId: params.get('studentId') || undefined,
+    subjectId: params.get('subjectId') || undefined,
+    from: params.get('from') || undefined,
+    to: params.get('to') || undefined,
+  });
+  return NextResponse.json({ success: true, summaries });
+}
 
 export async function POST(req: NextRequest) {
   await ensureServerPersistence();

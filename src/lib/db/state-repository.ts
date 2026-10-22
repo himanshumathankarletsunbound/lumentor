@@ -904,6 +904,47 @@ export async function recordNormalizedAttendance(
   return result;
 }
 
+export async function listAttendanceSummaries(filters?: {
+  reportType?: 'BY_CLASS' | 'BY_SUBJECT';
+  studentId?: string;
+  subjectId?: string;
+  from?: string;
+  to?: string;
+}) {
+  const rows = await prisma.attendanceSummary.findMany({
+    where: {
+      reportType: filters?.reportType,
+      studentId: filters?.studentId,
+      subjectId: filters?.subjectId,
+      attendanceDate: filters?.from || filters?.to ? {
+        gte: filters.from ? new Date(filters.from) : undefined,
+        lte: filters.to ? new Date(filters.to) : undefined,
+      } : undefined,
+    },
+    orderBy: [{ attendanceDate: 'desc' }, { createdAt: 'desc' }],
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    reportType: row.reportType as 'BY_CLASS' | 'BY_SUBJECT',
+    studentId: row.studentId || undefined,
+    subjectId: row.subjectId || undefined,
+    studentName: row.studentName || undefined,
+    studentExternalId: row.studentExternalId || undefined,
+    subjectName: row.subjectName || undefined,
+    className: row.className || undefined,
+    attendanceDate: row.attendanceDate?.toISOString(),
+    timeRange: row.timeRange || undefined,
+    location: row.location || undefined,
+    staffName: row.staffName || undefined,
+    enrolled: row.enrolled,
+    present: row.present,
+    absent: row.absent,
+    attendancePercentage: row.attendancePercentage ?? undefined,
+    sourceFile: row.sourceFile,
+    createdAt: row.createdAt.toISOString(),
+  }));
+}
+
 async function ensurePayrollPlan(organizationId: string, id: string) {
   const existing = await prisma.payrollPlan.findUnique({ where: { id }, select: { id: true } });
   if (existing) return existing.id;

@@ -6,10 +6,33 @@ import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { Alert } from '../ui/Alert';
 import { db } from '../../lib/db/store';
-import { classcardClient } from '../../lib/integrations/classcard/client';
-import { runClasscardSync } from '../../lib/integrations/classcard/sync';
-import { RefreshCw, CheckCircle2, AlertTriangle, Key, ExternalLink, ShieldCheck, Check, Server, Lock } from 'lucide-react';
+import { RefreshCw, CheckCircle2, Key, ShieldCheck, Check, Server, Lock } from 'lucide-react';
 import { formatDateTime } from '../../lib/utils/formatters';
+
+async function readJsonResponse<T>(response: Response): Promise<T> {
+  const text = await response.text();
+  let payload: unknown;
+
+  try {
+    payload = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(
+      response.ok
+        ? 'The Classcard settings endpoint returned an invalid response. Please redeploy the latest application.'
+        : `Classcard settings request failed (${response.status} ${response.statusText}). The server returned an HTML error page; check the deployment logs.`
+    );
+  }
+
+  if (!response.ok) {
+    const message =
+      typeof payload === 'object' && payload !== null && 'error' in payload && typeof payload.error === 'string'
+        ? payload.error
+        : `Classcard settings request failed (${response.status} ${response.statusText}).`;
+    throw new Error(message);
+  }
+
+  return payload as T;
+}
 
 export function SyncStatusCard({ onSyncCompleted }: { onSyncCompleted?: () => void }) {
   const [config, setConfig] = useState(db.getClasscardConfig());
@@ -25,13 +48,19 @@ export function SyncStatusCard({ onSyncCompleted }: { onSyncCompleted?: () => vo
   // Refresh server status on mount
   React.useEffect(() => {
     fetch('/api/classcard/status')
-      .then((res) => res.json())
+      .then((res) => readJsonResponse<{
+        baseUrl?: string;
+        maskedApiKey?: string;
+        lastSuccessfulSync?: string;
+        lastFailedSync?: string;
+        lastErrorMessage?: string;
+      }>(res))
       .then((data) => {
         if (data && data.baseUrl) {
           setConfig((prev) => ({
             ...prev,
-            baseUrl: data.baseUrl,
-            apiKey: data.maskedApiKey,
+            baseUrl: data.baseUrl ?? prev.baseUrl,
+            apiKey: data.maskedApiKey ?? prev.apiKey,
             lastSuccessfulSync: data.lastSuccessfulSync,
             lastFailedSync: data.lastFailedSync,
             lastErrorMessage: data.lastErrorMessage,
@@ -46,8 +75,11 @@ export function SyncStatusCard({ onSyncCompleted }: { onSyncCompleted?: () => vo
     setTestResult(null);
     try {
       const res = await fetch('/api/classcard/test-connection', { method: 'POST' });
-      const result = await res.json();
-      setTestResult(result);
+      const result = await readJsonResponse<{ success: boolean; message?: string; error?: string }>(res);
+      setTestResult({
+        success: result.success,
+        message: result.message || result.error || 'Classcard connection test completed.',
+      });
     } catch (err: unknown) {
       setTestResult({
         success: false,
@@ -67,7 +99,14 @@ export function SyncStatusCard({ onSyncCompleted }: { onSyncCompleted?: () => vo
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jobType }),
       });
-      const job = await res.json();
+      const job = await readJsonResponse<{
+        status?: string;
+        recordsProcessed?: number;
+        recordsCreated?: number;
+        recordsUpdated?: number;
+        recordsFailed?: number;
+        errorMessage?: string;
+      }>(res);
       if (job.status === 'COMPLETED') {
         setTestResult({
           success: true,
@@ -87,7 +126,11 @@ export function SyncStatusCard({ onSyncCompleted }: { onSyncCompleted?: () => vo
 
       // Refresh status
       const statusRes = await fetch('/api/classcard/status');
-      const statusData = await statusRes.json();
+      const statusData = await readJsonResponse<{
+        lastSuccessfulSync?: string;
+        lastFailedSync?: string;
+        lastErrorMessage?: string;
+      }>(statusRes);
       setConfig((prev) => ({
         ...prev,
         lastSuccessfulSync: statusData.lastSuccessfulSync,
@@ -116,18 +159,26 @@ export function SyncStatusCard({ onSyncCompleted }: { onSyncCompleted?: () => vo
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ apiKey: newKey.trim() }),
       });
-      const data = await res.json();
+      const data = await readJsonResponse<{
+        success: boolean;
+        maskedApiKey?: string;
+        testResult?: { success: boolean; message?: string; error?: string };
+        error?: string;
+      }>(res);
       if (data.success) {
         setShowKeyModal(false);
         setNewKey('');
         setSavedSuccess(true);
         if (data.testResult) {
-          setTestResult(data.testResult);
+          setTestResult({
+            success: data.testResult.success,
+            message: data.testResult.message || data.testResult.error || 'Classcard connection test completed.',
+          });
         }
         // Update local masked display
         setConfig((prev) => ({
           ...prev,
-          apiKey: data.maskedApiKey,
+          apiKey: data.maskedApiKey ?? prev.apiKey,
         }));
         setTimeout(() => setSavedSuccess(false), 5000);
       } else {

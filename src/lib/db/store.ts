@@ -102,6 +102,7 @@ class DataStore {
   private lastMtime = 0;
   private persistenceReady: Promise<void> = Promise.resolve();
   private postgresLoadStarted = false;
+  private postgresLoadError: unknown;
 
   constructor() {
     this.data = this.getDefaultState();
@@ -140,9 +141,19 @@ class DataStore {
   }
 
   public async ready(): Promise<void> {
-    if (this.usesPostgres() && !this.postgresLoadStarted) {
+    if (!this.usesPostgres()) return;
+
+    if (this.postgresLoadError) {
+      this.postgresLoadStarted = false;
+      this.postgresLoadError = undefined;
+    }
+
+    if (!this.postgresLoadStarted) {
       this.postgresLoadStarted = true;
-      this.persistenceReady = this.loadFromPostgres();
+      this.persistenceReady = this.loadFromPostgres().catch((error: unknown) => {
+        this.postgresLoadError = error;
+        throw error;
+      });
     }
     await this.persistenceReady;
   }

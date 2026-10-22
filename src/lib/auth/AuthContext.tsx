@@ -126,7 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem('lumentor_user');
       localStorage.removeItem('classcard_mva_user_id');
       setIsAuthenticated(false);
-      window.location.href = '/login';
+      window.location.replace('/login');
     }
   };
 

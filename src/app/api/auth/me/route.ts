@@ -3,6 +3,7 @@ import { db } from '../../../../lib/db/store';
 
 export async function GET(req: NextRequest) {
   try {
+    await db.ready();
     db.reloadIfModified();
 
     // Check cookie first, then auth header
@@ -30,7 +31,9 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const { passwordHash: _h, salt: _s, ...safeUser } = user;
+    const safeUser = { ...user };
+    delete safeUser.passwordHash;
+    delete safeUser.salt;
     return NextResponse.json({
       success: true,
       user: safeUser,

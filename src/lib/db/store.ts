@@ -108,23 +108,7 @@ class DataStore {
   }
 
   private async loadFromPostgres(): Promise<void> {
-    try {
-      const repository = globalThis.lumentorPostgresRepository;
-      if (!repository) throw new Error('PostgreSQL repository is not initialized on the server.');
-      const state = await repository.loadAppState();
-      if (state) {
-        this.data = { ...this.getDefaultState(), ...state };
-        this.data.classcardConfig.apiKey = '';
-        this.data.emailConfig.oauthClientSecret = '';
-        this.data.emailConfig.oauthRefreshToken = '';
-      } else {
-        await repository.saveAppState(this.data);
-      }
-      this.initialized = true;
-    } catch (err) {
-      console.error('Failed to load PostgreSQL application state:', err);
-      throw err;
-    }
+    this.initialized = true;
   }
 
   public async ready(): Promise<void> {
@@ -234,12 +218,6 @@ class DataStore {
 
   private saveToDisk(): void {
     if (this.usesPostgres()) {
-      const repository = globalThis.lumentorPostgresRepository;
-      if (!repository) return;
-      const snapshot = this.data;
-      this.persistenceQueue = this.persistenceQueue.then(() => repository.saveAppState(snapshot)).catch((err: unknown) => {
-        console.error('Failed to persist application state to PostgreSQL:', err);
-      });
       return;
     }
 
@@ -273,12 +251,7 @@ class DataStore {
   }
 
   public async persistNow(): Promise<void> {
-    if (!this.usesPostgres()) return;
-    const repository = globalThis.lumentorPostgresRepository;
-    if (!repository) throw new Error('PostgreSQL repository is not initialized on the server.');
-    const snapshot = this.data;
-    this.persistenceQueue = this.persistenceQueue.then(() => repository.saveAppState(snapshot));
-    await this.persistenceQueue;
+    return;
   }
 
   // --- Audit Logging ---

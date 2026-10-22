@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { getCurrencySymbol } from '../utils/formatters';
 
 export interface SheetSchema {
   student_id: string | null;
@@ -772,7 +773,7 @@ export function generateSampleSheetData(): { rows: Record<string, any>[]; column
           'Date': dateStr,
           'Start Time': startTime,
           'End Time': endTime,
-          'Fees': `$${fee}.00`,
+          'Fees': `${getCurrencySymbol()}${fee}.00`,
           'Invoice Number': `INV-2026-${String(rows.length + 1001).padStart(5, '0')}`,
           'Invoice Status': invStatus,
           'Item Name': `${subject} Standard Session`,

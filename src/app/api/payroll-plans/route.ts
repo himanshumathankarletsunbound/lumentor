@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizationErrorAsync, getSessionUserAsync } from '../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../lib/db/server-initialization';
-import { db } from '../../../lib/db/store';
 import { CompensationModel } from '../../../lib/types/payroll';
+import { createPayrollPlan, deletePayrollPlan, listPayrollPlans, updatePayrollPlan } from '../../../lib/db/state-repository';
 
 export async function GET(req: NextRequest) {
   await ensureServerPersistence();
@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     success: true,
-    plans: db.getPayrollPlans(),
+    plans: await listPayrollPlans(),
   });
 }
 
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       perStudentRate?: number;
       revenuePercentage?: number;
       minEligibleDurationMinutes?: number;
-      payableClassStatuses?: any[];
+      payableClassStatuses?: ('SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'LATE_CANCELLED')[];
       lateCancellationPayPercent?: number;
       groupMultiplier?: number;
       formula?: string;
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const newPlan = db.createPayrollPlan({
+    const newPlan = await createPayrollPlan({
       name: body.name.trim(),
       code: body.code.trim().toUpperCase(),
       description: body.description?.trim() || '',
@@ -70,16 +70,16 @@ export async function POST(req: NextRequest) {
       lateCancellationPayPercent: Number(body.lateCancellationPayPercent) || 50,
       groupMultiplier: Number(body.groupMultiplier) || 1.25,
       formula: body.formula?.trim() || '',
+      version: 1,
       effectiveFrom: new Date().toISOString(),
       isActive: true,
     });
 
-    await db.persistNow();
 
     return NextResponse.json({ success: true, plan: newPlan }, { status: 201 });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return NextResponse.json(
-      { success: false, error: err.message || 'Failed to create payroll plan.' },
+      { success: false, error: err instanceof Error ? err.message : 'Failed to create payroll plan.' },
       { status: 500 }
     );
   }
@@ -122,9 +122,12 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Plan ID is required.' }, { status: 400 });
     }
 
-    const updated = db.updatePayrollPlan(
+    const current = (await listPayrollPlans()).find((plan) => plan.id === body.id);
+    if (!current) return NextResponse.json({ success: false, error: 'Plan not found.' }, { status: 404 });
+    const updated = await updatePayrollPlan(
       body.id,
       {
+        ...current,
         ...(body.name && { name: body.name.trim() }),
         ...(body.code && { code: body.code.trim().toUpperCase() }),
         ...(body.description !== undefined && { description: body.description.trim() }),
@@ -141,15 +144,12 @@ export async function PUT(req: NextRequest) {
         ...(body.formula !== undefined && { formula: body.formula.trim() }),
         ...(body.isActive !== undefined && { isActive: body.isActive }),
       },
-      true // bump version
     );
 
-    await db.persistNow();
-
     return NextResponse.json({ success: true, plan: updated });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return NextResponse.json(
-      { success: false, error: err.message || 'Failed to update payroll plan.' },
+      { success: false, error: err instanceof Error ? err.message : 'Failed to update payroll plan.' },
       { status: 500 }
     );
   }
@@ -176,7 +176,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     // Check if any mentor is using this plan
-    const mentors = db.getMentors();
+    const mentors = await import('../../../lib/db/state-repository').then(({ listMentors }) => listMentors());
     const isUsed = mentors.some((m) => m.payrollPlanId === id);
     if (isUsed) {
       return NextResponse.json(
@@ -185,16 +185,11 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    const deleted = db.deletePayrollPlan(id);
-    if (!deleted) {
-      return NextResponse.json({ success: false, error: 'Plan not found.' }, { status: 404 });
-    }
-
-    await db.persistNow();
+    await deletePayrollPlan(id);
     return NextResponse.json({ success: true, message: 'Plan deleted successfully.' });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return NextResponse.json(
-      { success: false, error: err.message || 'Failed to delete payroll plan.' },
+      { success: false, error: err instanceof Error ? err.message : 'Failed to delete payroll plan.' },
       { status: 500 }
     );
   }

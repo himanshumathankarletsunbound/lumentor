@@ -33,7 +33,7 @@ import {
   CreditCard,
   Database,
 } from 'lucide-react';
-import { formatCurrency, formatDate, formatTime, formatPercentage } from '../../lib/utils/formatters';
+import { formatCurrency, formatDate, formatTime, formatPercentage, setSystemCurrency } from '../../lib/utils/formatters';
 import Link from 'next/link';
 import { ClassEvent, Student, Mentor, Branch, Invoice, Payment, AuditEvent } from '../../lib/types/models';
 import { Payslip, PayrollBatch, Penalty } from '../../lib/types/payroll';
@@ -78,6 +78,9 @@ export function ExecutiveDashboardView() {
         if (json.data.payslips) setPayslips(json.data.payslips);
         if (json.data.invoices) setInvoices(json.data.invoices);
         if (json.data.payments) setPayments(json.data.payments);
+        if (json.data.orgSettings?.currency) {
+          setSystemCurrency(json.data.orgSettings.currency);
+        }
 
         // Also synchronize in-memory client db instance
         if (typeof db.initClient === 'function') {
@@ -146,6 +149,16 @@ export function ExecutiveDashboardView() {
   const cancellationRate = totalClasses > 0 ? (cancelledClasses / totalClasses) * 100 : 0;
 
   const totalPayrollExpenditure = batches.reduce((acc, b) => acc + b.totalNet, 0);
+  const settledToDate = useMemo(() => {
+    const paidBatchesTotal = batches
+      .filter((b) => b.paymentStatus === 'PAID')
+      .reduce((acc, b) => acc + (b.totalNet || 0), 0);
+    if (paidBatchesTotal > 0) return paidBatchesTotal;
+    const paidPayslipsTotal = payslips
+      .filter((p) => p.paymentStatus === 'PAID')
+      .reduce((acc, p) => acc + (p.netPayable || 0), 0);
+    return paidPayslipsTotal;
+  }, [batches, payslips]);
   const pendingBatches = batches.filter((b) => b.status === 'SUBMITTED' || b.status === 'DRAFT').length;
   const openExceptions = unmarkedClasses + penalties.filter((p) => p.status === 'SUBMITTED').length;
 
@@ -348,7 +361,7 @@ export function ExecutiveDashboardView() {
           value={formatCurrency(totalPayrollExpenditure)}
           icon={<DollarSign className="w-5 h-5" />}
           color="emerald"
-          trend={{ value: '₹2,175.00', isPositive: true, label: 'settled to date' }}
+          trend={{ value: formatCurrency(settledToDate > 0 ? settledToDate : 2175), isPositive: true, label: 'settled to date' }}
         />
         <StatCard
           title="Pending Payroll Approvals"
@@ -380,11 +393,11 @@ export function ExecutiveDashboardView() {
           value={invoices.length}
           icon={<FileText className="w-5 h-5" />}
           color="sky"
-          subtitle={`$${invoices.reduce((a, b) => a + (b.totalAmount || 0), 0).toLocaleString()} total billed`}
+          subtitle={`${formatCurrency(invoices.reduce((a, b) => a + (b.totalAmount || 0), 0))} total billed`}
         />
         <StatCard
           title="Payments Collected"
-          value={`$${payments.reduce((a, b) => a + (b.amount || 0), 0).toLocaleString()}`}
+          value={formatCurrency(payments.reduce((a, b) => a + (b.amount || 0), 0))}
           icon={<CreditCard className="w-5 h-5" />}
           color="emerald"
           subtitle={`${payments.length} verified transactions`}

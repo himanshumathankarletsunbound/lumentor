@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizationErrorAsync } from '../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../lib/db/server-initialization';
-import { listBranches, saveNormalizedRecord } from '../../../lib/db/state-repository';
-import { db } from '../../../lib/db/store';
+import { createBranch, listBranches } from '../../../lib/db/state-repository';
 
 export async function GET(req: NextRequest) {
   await ensureServerPersistence();
@@ -38,7 +37,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const branch = db.createBranch({
+    const branch = await createBranch({
       name,
       code: code.toUpperCase(),
       address,
@@ -49,12 +48,6 @@ export async function POST(req: NextRequest) {
       isActive: true,
       provenance: 'LOCALLY_CREATED',
     });
-
-    if (process.env.DEMO_MODE !== 'true') {
-      await saveNormalizedRecord('branch', branch, db.getSnapshot());
-    } else {
-      await db.persistNow();
-    }
 
     return NextResponse.json({
       success: true,

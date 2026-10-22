@@ -21,7 +21,7 @@ import {
   AlertCircle,
   Eye,
 } from 'lucide-react';
-import { formatCurrency } from '../../../lib/utils/formatters';
+import { formatCurrency, getCurrencySymbol, getSystemCurrency } from '../../../lib/utils/formatters';
 
 interface FormulaToken {
   label: string;
@@ -59,7 +59,7 @@ export function computeStandardFormula(params: {
   groupMultiplier: number;
   lateCancelPercent: number;
 }): string {
-  const cur = '₹';
+  const cur = getCurrencySymbol();
   const base = params.baseSalary || 0;
   const cRate = params.classRate || 0;
   const hRate = params.hourlyRate || 0;
@@ -157,7 +157,7 @@ export default function PayrollRulesPage() {
   const [code, setCode] = useState('');
   const [description, setDescription] = useState('');
   const [model, setModel] = useState<CompensationModel>('PER_CLASS');
-  const [currency, setCurrency] = useState('INR');
+  const [currency, setCurrency] = useState(() => getSystemCurrency());
   const [baseSalary, setBaseSalary] = useState('0');
   const [classRate, setClassRate] = useState('0');
   const [hourlyRate, setHourlyRate] = useState('0');
@@ -213,7 +213,7 @@ export default function PayrollRulesPage() {
     setCode('');
     setDescription('');
     setModel('PER_CLASS');
-    setCurrency('INR');
+    setCurrency(getSystemCurrency());
     setBaseSalary('0');
     setClassRate('0');
     setHourlyRate('0');
@@ -473,13 +473,13 @@ export default function PayrollRulesPage() {
                       <div className="space-y-0.5">
                         {p.baseSalary > 0 && (
                           <div className="font-semibold text-slate-900 font-mono">
-                            Base: {formatCurrency(p.baseSalary, 'INR')}/mo
+                            Base: {formatCurrency(p.baseSalary)}/mo
                           </div>
                         )}
                         <div className="text-[11px] text-slate-600 flex flex-wrap gap-x-2 gap-y-0.5">
-                          {p.defaultClassRate > 0 && <span>₹{p.defaultClassRate}/class</span>}
-                          {p.hourlyRate > 0 && <span>₹{p.hourlyRate}/hr</span>}
-                          {p.perStudentRate > 0 && <span>+₹{p.perStudentRate}/student</span>}
+                          {p.defaultClassRate > 0 && <span>{getCurrencySymbol()}{p.defaultClassRate}/class</span>}
+                          {p.hourlyRate > 0 && <span>{getCurrencySymbol()}{p.hourlyRate}/hr</span>}
+                          {p.perStudentRate > 0 && <span>+{getCurrencySymbol()}{p.perStudentRate}/student</span>}
                           {p.revenuePercentage > 0 && <span>{p.revenuePercentage}% rev</span>}
                           {p.groupMultiplier && p.groupMultiplier !== 1 && (
                             <span className="text-indigo-600 font-medium">{p.groupMultiplier}x group</span>
@@ -649,7 +649,7 @@ export default function PayrollRulesPage() {
                   <span className="text-xs font-semibold text-slate-800">
                     Rate Card & Parameter Inputs
                   </span>
-                  <span className="text-[11px] text-slate-400 font-medium">Currency: INR (₹)</span>
+                  <span className="text-[11px] text-slate-400 font-medium">Currency: {currency} ({getCurrencySymbol(currency)})</span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -659,7 +659,7 @@ export default function PayrollRulesPage() {
                         Monthly Base Salary
                       </label>
                       <div className="relative">
-                        <span className="absolute left-3 top-2 text-xs text-slate-400">₹</span>
+                        <span className="absolute left-3 top-2 text-xs text-slate-400">{getCurrencySymbol(currency)}</span>
                         <input
                           type="number"
                           value={baseSalary}
@@ -677,7 +677,7 @@ export default function PayrollRulesPage() {
                         Rate per Completed Class
                       </label>
                       <div className="relative">
-                        <span className="absolute left-3 top-2 text-xs text-slate-400">₹</span>
+                        <span className="absolute left-3 top-2 text-xs text-slate-400">{getCurrencySymbol(currency)}</span>
                         <input
                           type="number"
                           value={classRate}
@@ -695,7 +695,7 @@ export default function PayrollRulesPage() {
                         Hourly Teaching Rate
                       </label>
                       <div className="relative">
-                        <span className="absolute left-3 top-2 text-xs text-slate-400">₹</span>
+                        <span className="absolute left-3 top-2 text-xs text-slate-400">{getCurrencySymbol(currency)}</span>
                         <input
                           type="number"
                           value={hourlyRate}
@@ -714,7 +714,7 @@ export default function PayrollRulesPage() {
                         Rate per Attending Student
                       </label>
                       <div className="relative">
-                        <span className="absolute left-3 top-2 text-xs text-slate-400">₹</span>
+                        <span className="absolute left-3 top-2 text-xs text-slate-400">{getCurrencySymbol(currency)}</span>
                         <input
                           type="number"
                           value={perStudentRate}
@@ -900,7 +900,7 @@ export default function PayrollRulesPage() {
                     Simulation (10 classes, 15h teaching, 8 students):
                   </span>
                   <span className="font-bold text-slate-900 font-mono">
-                    {formatCurrency(simulatedPayout, 'INR')}
+                    {formatCurrency(simulatedPayout)}
                   </span>
                 </div>
               </div>
@@ -1004,25 +1004,25 @@ export default function PayrollRulesPage() {
                   <div>
                     <span className="text-slate-400 block text-[10px]">Base Salary</span>
                     <span className="font-mono font-semibold text-slate-800">
-                      {selectedPlan.baseSalary > 0 ? formatCurrency(selectedPlan.baseSalary, 'INR') : '-'}
+                      {selectedPlan.baseSalary > 0 ? formatCurrency(selectedPlan.baseSalary) : '-'}
                     </span>
                   </div>
                   <div>
                     <span className="text-slate-400 block text-[10px]">Class Rate</span>
                     <span className="font-mono font-semibold text-slate-800">
-                      {selectedPlan.defaultClassRate > 0 ? formatCurrency(selectedPlan.defaultClassRate, 'INR') : '-'}
+                      {selectedPlan.defaultClassRate > 0 ? formatCurrency(selectedPlan.defaultClassRate) : '-'}
                     </span>
                   </div>
                   <div>
                     <span className="text-slate-400 block text-[10px]">Hourly Rate</span>
                     <span className="font-mono font-semibold text-slate-800">
-                      {selectedPlan.hourlyRate > 0 ? formatCurrency(selectedPlan.hourlyRate, 'INR') : '-'}
+                      {selectedPlan.hourlyRate > 0 ? formatCurrency(selectedPlan.hourlyRate) : '-'}
                     </span>
                   </div>
                   <div>
                     <span className="text-slate-400 block text-[10px]">Per-Student</span>
                     <span className="font-mono font-semibold text-slate-800">
-                      {selectedPlan.perStudentRate > 0 ? formatCurrency(selectedPlan.perStudentRate, 'INR') : '-'}
+                      {selectedPlan.perStudentRate > 0 ? formatCurrency(selectedPlan.perStudentRate) : '-'}
                     </span>
                   </div>
                   <div>

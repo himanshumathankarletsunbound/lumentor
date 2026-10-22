@@ -2,7 +2,6 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { googleOAuthConfig } from '../../../../../../lib/config/server';
 import { setEncryptedSecret } from '../../../../../../lib/db/secure-storage';
-import { db } from '../../../../../../lib/db/store';
 
 function validState(state: string, expected: string): boolean {
   const [nonce, signature] = state.split('.');
@@ -16,7 +15,6 @@ function validState(state: string, expected: string): boolean {
 export async function GET(req: NextRequest) {
   const repository = await import('../../../../../../lib/db/state-repository');
   globalThis.lumentorPostgresRepository = repository;
-  await db.ready();
 
   const error = req.nextUrl.searchParams.get('error');
   if (error) {
@@ -67,14 +65,13 @@ export async function GET(req: NextRequest) {
     );
   }
   await setEncryptedSecret('email.oauth.refresh_token', token.refresh_token);
-  db.saveEmailConfig({
+  await repository.savePersistedEmailConfig({
     authType: 'OAUTH2',
     oauthClientId: config.clientId,
     user: profile.email,
     fromEmail: profile.email,
     isEnabled: false,
   });
-  await db.persistNow();
 
   const response = NextResponse.redirect(new URL('/admin/settings?emailOAuth=success', req.url));
   response.cookies.delete('lumentor_gmail_oauth_state');

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../../../lib/db/store';
 import { enforceRateLimit } from '../../../lib/rate-limit/limiter';
 import { authorizationErrorAsync } from '../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../lib/db/server-initialization';
+import { getOrganizationSettings, listBranches, listClasses, listDashboardFinance, listMentors, listPenalties, listStudents } from '../../../lib/db/state-repository';
 
 export async function GET(req: NextRequest) {
   const rateLimitError = enforceRateLimit(req, { limit: 60, windowSeconds: 60, identifierPrefix: 'dashboard-get' });
@@ -15,21 +15,10 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const branchId = searchParams.get('branchId') || undefined;
 
-    // Ensure store is fresh from disk
-    db.reloadIfModified();
-
-    const branches = db.getBranches();
-    const mentors = db.getMentors(branchId);
-    const students = db.getStudents(branchId);
-    const classes = db.getClasses({ branchId });
-    const penalties = db.getPenalties();
-    const batches = db.getPayrollBatches();
-    const syncJobs = db.getSyncJobs();
-    const auditLogs = db.getAuditLogs(10);
-    const payslips = db.getPayslips();
-    const invoices = db.getInvoices();
-    const payments = db.getPayments();
-    const classcardConfig = db.getClasscardConfig();
+    const [branches, mentors, students, classes, penalties, finance, orgSettings] = await Promise.all([
+      listBranches(), listMentors(branchId), listStudents(branchId), listClasses({ branchId }), listPenalties(), listDashboardFinance(), getOrganizationSettings().catch(() => ({ orgName: 'LUmentor', currency: 'INR', timezone: 'America/New_York', cutoffDay: 15 })),
+    ]);
+    const { batches, syncJobs, auditLogs, payslips, invoices, payments } = finance;
 
     // Aggregations
     const totalStudents = students.length;
@@ -55,12 +44,8 @@ export async function GET(req: NextRequest) {
         payslips,
         invoices,
         payments,
-        classcardConfig: {
-          ...classcardConfig,
-          apiKey: classcardConfig.apiKey
-            ? `${classcardConfig.apiKey.slice(0, 8)}••••••••${classcardConfig.apiKey.slice(-4)}`
-            : '',
-        },
+        orgSettings,
+        classcardConfig: { apiKey: '', configured: false },
         stats: {
           totalStudents,
           classcardSyncedStudents,

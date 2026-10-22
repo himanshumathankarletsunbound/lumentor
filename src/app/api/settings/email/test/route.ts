@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../../../../../lib/db/store';
 import { sendTestEmail, verifyGmailConnection } from '../../../../../lib/email/service';
 import { getServerEmailSecrets, googleOAuthConfig } from '../../../../../lib/config/server';
 import { authorizationErrorAsync } from '../../../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../../../lib/db/server-initialization';
+import { getPersistedEmailConfig, savePersistedEmailConfig } from '../../../../../lib/db/state-repository';
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,12 +15,18 @@ export async function POST(req: NextRequest) {
   if (denied) return denied;
   try {
     const body = await req.json().catch(() => ({}));
-    await db.ready();
-    const current = db.getEmailConfig();
+    const current = await getPersistedEmailConfig();
     const secrets = await getServerEmailSecrets();
     const google = googleOAuthConfig();
     const config = {
       ...current,
+      host: current.host || 'smtp.gmail.com',
+      port: current.port || 587,
+      security: current.security || 'STARTTLS',
+      authType: 'OAUTH2' as const,
+      authRequired: true,
+      pass: '',
+      allowSelfSignedCert: false,
       user: String(body.user || current.user || '').trim(),
       fromEmail: String(body.fromEmail || current.fromEmail || '').trim(),
       fromName: String(body.fromName || current.fromName || 'LUmentor Notifications').trim(),
@@ -46,7 +52,7 @@ export async function POST(req: NextRequest) {
     }
     const result = await sendTestEmail(recipient, config);
     const status = result.success ? 'SUCCESS' : 'FAILED';
-    db.saveEmailConfig({
+    await savePersistedEmailConfig({
       lastTestStatus: status,
       lastTestedAt: new Date().toISOString(),
       lastTestMessage: result.message,

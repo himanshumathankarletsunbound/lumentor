@@ -5,35 +5,15 @@ import type { Branch, ClassEvent, Mentor, Package, Student, Subject } from '../t
 import type { UserRole } from '../types/auth';
 import { SEED_ROLES } from './seedData';
 import type { CurrentUser } from '../types/auth';
-
-const STATE_ID = 'lumentor';
-const jsonState = (state: AppDatabase): Prisma.InputJsonValue => {
-  const persisted = JSON.parse(JSON.stringify(state)) as AppDatabase;
-  persisted.classcardConfig.apiKey = '';
-  persisted.emailConfig.oauthClientSecret = '';
-  persisted.emailConfig.oauthRefreshToken = '';
-  persisted.penaltyPolicies = persisted.penaltyPolicies ?? [];
-  return persisted as unknown as Prisma.InputJsonValue;
-};
-
-export async function loadAppState(): Promise<Partial<AppDatabase> | null> {
-  const record = await prisma.appState.findUnique({ where: { id: STATE_ID } });
-  return (record?.state as Partial<AppDatabase> | undefined) ?? null;
-}
-
-export async function saveAppState(state: AppDatabase): Promise<void> {
-  await prisma.appState.upsert({
-    where: { id: STATE_ID },
-    create: { id: STATE_ID, state: jsonState(state) },
-    update: { state: jsonState(state) },
-  });
-}
+import type { PayrollPlan, Penalty, PenaltyPolicy } from '../types/payroll';
+import type { AuditEvent } from '../types/models';
+import type { EmailConfig } from '../types/email';
 
 async function ensureOrganization() {
   const existing = await prisma.organization.findFirst({ select: { id: true } });
   if (existing) return existing.id;
   const organization = await prisma.organization.create({
-    data: { name: 'LUmentor', code: 'LUMENTOR' },
+    data: { name: 'LUmentor', code: 'LUMENTOR', currency: 'INR' },
     select: { id: true },
   });
   return organization.id;
@@ -93,6 +73,11 @@ export async function findUserBySessionToken(token: string): Promise<CurrentUser
   if (!user || !user.isActive || user.status !== 'ACTIVE') return undefined;
   if (user.sessionExpiry && user.sessionExpiry <= new Date()) return undefined;
   return toCurrentUser(user);
+}
+
+export async function findUserByResetToken(token: string): Promise<CurrentUser | undefined> {
+  const user = await prisma.user.findUnique({ where: { resetToken: token } });
+  return user ? toCurrentUser(user) : undefined;
 }
 
 export async function saveUser(user: CurrentUser): Promise<CurrentUser> {
@@ -227,6 +212,38 @@ export async function listBranches(): Promise<Branch[]> {
     createdAt: branch.createdAt.toISOString(),
     updatedAt: branch.updatedAt.toISOString(),
   }));
+}
+
+export async function createBranch(input: Omit<Branch, 'id' | 'createdAt' | 'updatedAt'>): Promise<Branch> {
+  const organizationId = await ensureOrganization();
+  const branch = await prisma.branch.create({
+    data: { organizationId, name: input.name, code: input.code, address: input.address, city: input.city, timezone: input.timezone, phone: input.phone, email: input.email, isActive: input.isActive, provenance: input.provenance },
+  });
+  return {
+    id: branch.id, name: branch.name, code: branch.code, address: branch.address || '', city: branch.city || '',
+    timezone: branch.timezone, phone: branch.phone || '', email: branch.email || '', isActive: branch.isActive,
+    externalId: branch.externalId || undefined, provenance: branch.provenance,
+    createdAt: branch.createdAt.toISOString(), updatedAt: branch.updatedAt.toISOString(),
+  };
+}
+
+export async function updateMentor(id: string, updates: Partial<Mentor>): Promise<Mentor> {
+  const data = {
+    branchId: updates.branchId,
+    payrollPlanId: updates.payrollPlanId,
+    status: updates.status,
+    phone: updates.phone,
+    firstName: updates.firstName,
+    lastName: updates.lastName,
+  };
+  const mentor = await prisma.mentor.update({ where: { id }, data });
+  return {
+    id: mentor.id, firstName: mentor.firstName, lastName: mentor.lastName, email: mentor.email, phone: mentor.phone || '',
+    branchId: mentor.branchId, branchName: '', subjectIds: [], payrollPlanId: mentor.payrollPlanId, status: mentor.status as Mentor['status'],
+    externalId: mentor.externalId || undefined, provenance: mentor.provenance, teachingHoursThisMonth: mentor.teachingHoursThisMonth,
+    completedClassesCount: mentor.completedClassesCount, attendanceRate: mentor.attendanceRate,
+    createdAt: mentor.createdAt.toISOString(), updatedAt: mentor.updatedAt.toISOString(),
+  };
 }
 
 export async function listSubjects(): Promise<Subject[]> {
@@ -365,6 +382,398 @@ export async function listClasses(filters: {
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),
     };
+  });
+}
+
+export async function listPayrollPlans(): Promise<PayrollPlan[]> {
+  const plans = await prisma.payrollPlan.findMany({ orderBy: { name: 'asc' } });
+  return plans.map((plan) => ({
+    id: plan.id, name: plan.name, code: plan.code, description: plan.description || '',
+    compensationModel: plan.compensationModel, currency: plan.currency,
+    baseSalary: Number(plan.baseSalary), defaultClassRate: Number(plan.defaultClassRate),
+    hourlyRate: Number(plan.hourlyRate), perStudentRate: Number(plan.perStudentRate),
+    revenuePercentage: Number(plan.revenuePercentage), minEligibleDurationMinutes: plan.minEligibleDurationMinutes,
+    payableClassStatuses: plan.payableClassStatuses, lateCancellationPayPercent: Number(plan.lateCancellationPayPercent),
+    groupMultiplier: Number(plan.groupMultiplier), subjectRates: (plan.subjectRates as Record<string, number> | null) || undefined,
+    branchRates: (plan.branchRates as Record<string, number> | null) || undefined, formula: plan.formula || undefined,
+    version: plan.version, effectiveFrom: plan.effectiveFrom.toISOString(), effectiveTo: plan.effectiveTo?.toISOString(),
+    isActive: plan.isActive, createdAt: plan.createdAt.toISOString(), updatedAt: plan.updatedAt.toISOString(),
+  }));
+}
+
+export async function createPayrollPlan(input: Omit<PayrollPlan, 'id' | 'createdAt' | 'updatedAt'>): Promise<PayrollPlan> {
+  const organizationId = await ensureOrganization();
+  const plan = await prisma.payrollPlan.create({
+    data: {
+      organizationId, name: input.name, code: input.code, description: input.description,
+      compensationModel: input.compensationModel, currency: input.currency || 'INR',
+      baseSalary: input.baseSalary, defaultClassRate: input.defaultClassRate, hourlyRate: input.hourlyRate,
+      perStudentRate: input.perStudentRate, revenuePercentage: input.revenuePercentage,
+      minEligibleDurationMinutes: input.minEligibleDurationMinutes, payableClassStatuses: input.payableClassStatuses,
+      lateCancellationPayPercent: input.lateCancellationPayPercent, groupMultiplier: input.groupMultiplier,
+      subjectRates: input.subjectRates, branchRates: input.branchRates, formula: input.formula,
+      version: input.version, effectiveFrom: new Date(input.effectiveFrom), effectiveTo: input.effectiveTo ? new Date(input.effectiveTo) : undefined,
+      isActive: input.isActive,
+    },
+  });
+  return (await listPayrollPlans()).find((item) => item.id === plan.id)!;
+}
+
+export async function updatePayrollPlan(id: string, updates: Partial<PayrollPlan>): Promise<PayrollPlan> {
+  await prisma.payrollPlan.update({
+    where: { id },
+    data: {
+      name: updates.name, code: updates.code, description: updates.description,
+      compensationModel: updates.compensationModel, currency: updates.currency,
+      baseSalary: updates.baseSalary, defaultClassRate: updates.defaultClassRate, hourlyRate: updates.hourlyRate,
+      perStudentRate: updates.perStudentRate, revenuePercentage: updates.revenuePercentage,
+      minEligibleDurationMinutes: updates.minEligibleDurationMinutes, lateCancellationPayPercent: updates.lateCancellationPayPercent,
+      groupMultiplier: updates.groupMultiplier, formula: updates.formula, isActive: updates.isActive,
+      version: updates.version, effectiveTo: updates.effectiveTo ? new Date(updates.effectiveTo) : undefined,
+    },
+  });
+  return (await listPayrollPlans()).find((item) => item.id === id)!;
+}
+
+export async function deletePayrollPlan(id: string): Promise<void> {
+  await prisma.payrollPlan.delete({ where: { id } });
+}
+
+function mapPenalty(item: Prisma.PenaltyGetPayload<{ include: { mentor: true; branch: true } }>): Penalty {
+  return {
+    id: item.id, mentorId: item.mentorId, mentorName: `${item.mentor.firstName} ${item.mentor.lastName}`,
+    classId: item.classId || undefined, branchId: item.branchId, branchName: item.branch.name,
+    category: item.category, reason: item.reason, amount: Number(item.amount), evidenceNote: item.evidenceNote || undefined,
+    evidenceUrl: item.evidenceUrl || undefined, createdBy: item.createdBy, createdByName: item.createdBy,
+    createdAt: item.createdAt.toISOString(), status: item.status, approvedBy: item.approvedBy || undefined,
+    approvedAt: item.approvedAt?.toISOString(), rejectionReason: item.rejectionReason || undefined,
+    appliedPayrollBatchId: item.appliedPayrollBatchId || undefined, appliedAt: item.appliedAt?.toISOString(),
+    reversedBy: item.reversedBy || undefined, reversedAt: item.reversedAt?.toISOString(),
+    reversalReason: item.reversalReason || undefined, disputeStatus: (item.disputeStatus || 'NONE') as Penalty['disputeStatus'],
+    disputeNote: item.disputeNote || undefined,
+  };
+}
+
+export async function listPenalties(mentorId?: string): Promise<Penalty[]> {
+  const rows = await prisma.penalty.findMany({
+    where: mentorId ? { mentorId } : undefined, include: { mentor: true, branch: true }, orderBy: { createdAt: 'desc' },
+  });
+  return rows.map(mapPenalty);
+}
+
+export async function createPenalty(input: { mentorId: string; branchId: string; classId?: string; category: string; reason: string; amount: number; evidenceNote?: string; evidenceUrl?: string; createdBy: string }): Promise<Penalty> {
+  const row = await prisma.penalty.create({ data: {
+    mentorId: input.mentorId, branchId: input.branchId, classId: input.classId, category: input.category as never,
+    reason: input.reason, amount: input.amount, evidenceNote: input.evidenceNote, evidenceUrl: input.evidenceUrl,
+    createdBy: input.createdBy, status: 'SUBMITTED',
+  }, include: { mentor: true, branch: true } });
+  return mapPenalty(row);
+}
+
+export async function listPenaltyPolicies(): Promise<PenaltyPolicy[]> {
+  const rows = await prisma.penaltyPolicy.findMany({ orderBy: { name: 'asc' } });
+  return rows.map((row) => ({ id: row.id, code: row.code || undefined, name: row.name, description: row.description || '', deductionType: row.deductionType as PenaltyPolicy['deductionType'], rateValue: Number(row.rateValue), defaultAmount: Number(row.defaultAmount), isActive: row.isActive, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() }));
+}
+
+export async function createPenaltyPolicy(input: Omit<PenaltyPolicy, 'createdAt' | 'updatedAt'>): Promise<PenaltyPolicy> {
+  await prisma.penaltyPolicy.create({ data: { id: input.id, code: input.code, name: input.name, description: input.description, deductionType: input.deductionType || 'FIXED_AMOUNT', rateValue: input.rateValue || 0, defaultAmount: input.defaultAmount, isActive: input.isActive } });
+  return (await listPenaltyPolicies()).find((item) => item.id === input.id)!;
+}
+
+export async function updatePenaltyPolicy(id: string, updates: Partial<PenaltyPolicy>): Promise<PenaltyPolicy> {
+  await prisma.penaltyPolicy.update({ where: { id }, data: { name: updates.name, description: updates.description, deductionType: updates.deductionType, rateValue: updates.rateValue, defaultAmount: updates.defaultAmount, isActive: updates.isActive } });
+  return (await listPenaltyPolicies()).find((item) => item.id === id)!;
+}
+
+export async function deletePenaltyPolicy(id: string): Promise<void> {
+  await prisma.penaltyPolicy.delete({ where: { id } });
+}
+
+export async function listAuditEvents(limit = 50): Promise<AuditEvent[]> {
+  const rows = await prisma.auditEvent.findMany({ orderBy: { timestamp: 'desc' }, take: limit, include: { user: true } });
+  return rows.map((row) => ({ id: row.id, timestamp: row.timestamp.toISOString(), userId: row.userId, userName: row.user.name, userRole: row.user.role, action: row.action, entityType: row.entityType, entityId: row.entityId, details: row.details, ipAddress: row.ipAddress || undefined, branchId: row.branchId || undefined }));
+}
+
+export async function createAuditEvent(input: Omit<AuditEvent, 'id' | 'timestamp'>): Promise<void> {
+  await prisma.auditEvent.create({ data: { userId: input.userId, action: input.action, entityType: input.entityType, entityId: input.entityId, details: input.details, ipAddress: input.ipAddress, branchId: input.branchId } });
+}
+
+export async function listCustomFields(entityType?: string) {
+  const rows = await prisma.customFieldDefinition.findMany({ where: entityType ? { entityType } : undefined, orderBy: { name: 'asc' } });
+  return rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), options: row.options as string[] | undefined }));
+}
+
+export async function createCustomField(input: { name: string; key: string; entityType: string; fieldType: string; classcardFieldKey?: string; classcardEndpoint?: string; isRequired: boolean; options?: string[]; defaultValue?: string; description?: string; isActive?: boolean }) {
+  const row = await prisma.customFieldDefinition.create({ data: input });
+  return { ...row, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), options: row.options as string[] | undefined };
+}
+
+export async function deleteCustomField(id: string): Promise<boolean> {
+  const result = await prisma.customFieldDefinition.deleteMany({ where: { id } });
+  return result.count > 0;
+}
+
+export async function getPersistedEmailConfig(): Promise<Partial<EmailConfig>> {
+  const { getEncryptedSecret } = await import('./secure-storage');
+  const value = await getEncryptedSecret('email.config');
+  return value ? JSON.parse(value) as Partial<EmailConfig> : {};
+}
+
+export async function savePersistedEmailConfig(config: Partial<EmailConfig>): Promise<void> {
+  const { setEncryptedSecret } = await import('./secure-storage');
+  await setEncryptedSecret('email.config', JSON.stringify(config));
+}
+
+export async function getOrganizationSettings() {
+  const organization = await prisma.organization.findFirst();
+  if (!organization) {
+    return {
+      orgName: 'LUmentor Educational Services',
+      currency: 'INR',
+      timezone: 'America/New_York',
+      cutoffDay: 15,
+    };
+  }
+  return {
+    orgName: organization.name,
+    currency: organization.currency || 'INR',
+    timezone: organization.timezone,
+    cutoffDay: 15,
+  };
+}
+
+export async function updateOrganizationSettings(input: { orgName?: string; currency: string; timezone: string; cutoffDay?: number }) {
+  const id = await ensureOrganization();
+  const organization = await prisma.organization.update({ where: { id }, data: { name: input.orgName || undefined, currency: input.currency, timezone: input.timezone } });
+  return { orgName: organization.name, currency: organization.currency, timezone: organization.timezone, cutoffDay: 15 };
+}
+
+export async function getSyncBranchId(): Promise<string> {
+  const branch = await prisma.branch.findFirst({ where: { isActive: true }, orderBy: { createdAt: 'asc' }, select: { id: true } });
+  if (!branch) throw new Error('Create an active branch before running Classcard synchronization.');
+  return branch.id;
+}
+
+export async function upsertClasscardStudent(input: {
+  externalId: string;
+  branchId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  dateOfBirth?: string;
+}): Promise<'created' | 'updated'> {
+  const existing = await prisma.student.findFirst({
+    where: { OR: [{ externalId: input.externalId }, { email: input.email }] },
+    select: { id: true },
+  });
+  const data = {
+    branchId: input.branchId,
+    firstName: input.firstName,
+    lastName: input.lastName,
+    email: input.email,
+    phone: input.phone || null,
+    dateOfBirth: input.dateOfBirth ? new Date(input.dateOfBirth) : null,
+    externalId: input.externalId || null,
+    provenance: 'CLASSCARD_SOURCED' as const,
+  };
+  if (existing) {
+    await prisma.student.update({ where: { id: existing.id }, data });
+    return 'updated';
+  }
+  await prisma.student.create({ data });
+  return 'created';
+}
+
+export async function upsertClasscardSubject(input: {
+  externalId: string;
+  name: string;
+  code: string;
+  category: string;
+  description: string;
+  defaultDurationMinutes: number;
+}): Promise<'created' | 'updated'> {
+  const existing = await prisma.subject.findFirst({
+    where: { OR: [{ externalId: input.externalId }, { name: input.name }] },
+    select: { id: true },
+  });
+  const data = {
+    name: input.name,
+    code: input.code,
+    category: input.category,
+    description: input.description,
+    defaultDurationMinutes: input.defaultDurationMinutes,
+    availableDurations: [30, 45, 60, 90],
+    isActive: true,
+    color: '#06b6d4',
+    externalId: input.externalId || null,
+    provenance: 'CLASSCARD_SOURCED' as const,
+  };
+  if (existing) {
+    await prisma.subject.update({ where: { id: existing.id }, data });
+    return 'updated';
+  }
+  await prisma.subject.create({ data });
+  return 'created';
+}
+
+export async function listStudentExternalIds(): Promise<Array<{ id: string; externalId: string | null; firstName: string; lastName: string }>> {
+    return prisma.student.findMany({ select: { id: true, externalId: true, firstName: true, lastName: true } });
+  }
+
+  export async function upsertClasscardInvoice(input: {
+    externalId: string;
+    invoiceNumber: string;
+    branchId: string;
+    studentId: string;
+    issueDate: string;
+    dueDate: string;
+    totalAmount: number;
+    paidAmount: number;
+    status: string;
+  }): Promise<'created' | 'updated'> {
+    const existing = await prisma.invoice.findFirst({
+      where: { OR: [{ externalId: input.externalId }, { invoiceNumber: input.invoiceNumber }] },
+      select: { id: true },
+    });
+    const data = {
+      invoiceNumber: input.invoiceNumber,
+      branchId: input.branchId,
+      studentId: input.studentId,
+      issueDate: new Date(input.issueDate),
+      dueDate: new Date(input.dueDate),
+      totalAmount: input.totalAmount,
+      paidAmount: input.paidAmount,
+      currency: 'INR',
+      status: input.status,
+      externalId: input.externalId || null,
+      provenance: 'CLASSCARD_SOURCED' as const,
+    };
+    if (existing) {
+      await prisma.invoice.update({ where: { id: existing.id }, data });
+      return 'updated';
+    }
+    await prisma.invoice.create({ data });
+    return 'created';
+  }
+
+  export async function upsertClasscardPayment(input: {
+    externalId: string;
+    invoiceId: string;
+    paymentNumber: string;
+    amount: number;
+    paymentDate: string;
+    method: string;
+  }): Promise<'created' | 'updated'> {
+    const invoice = await prisma.invoice.findFirst({
+      where: { OR: [{ id: input.invoiceId }, { externalId: input.invoiceId }] },
+      select: { id: true },
+    });
+    if (!invoice) throw new Error(`Payment ${input.externalId} references an unknown invoice ${input.invoiceId}.`);
+    const existing = await prisma.payment.findFirst({ where: { externalId: input.externalId }, select: { id: true } });
+    const data = {
+      invoiceId: invoice.id,
+      paymentNumber: input.paymentNumber,
+      amount: input.amount,
+      paymentDate: new Date(input.paymentDate),
+      method: input.method,
+      status: 'SUCCESS',
+      externalId: input.externalId || null,
+      provenance: 'CLASSCARD_SOURCED' as const,
+    };
+    if (existing) {
+      await prisma.payment.update({ where: { id: existing.id }, data });
+      return 'updated';
+    }
+    await prisma.payment.create({ data });
+    return 'created';
+  }
+
+export async function createSyncJobRecord(input: {
+  id: string;
+  jobType: string;
+  status: string;
+  startedAt: string;
+  completedAt?: string;
+  recordsProcessed: number;
+  recordsCreated: number;
+  recordsUpdated: number;
+  recordsFailed: number;
+  errorMessage?: string;
+  logSummary: string[];
+}): Promise<void> {
+  await prisma.syncJob.create({
+    data: {
+      id: input.id,
+      jobType: input.jobType,
+      status: input.status,
+      startedAt: new Date(input.startedAt),
+      completedAt: input.completedAt ? new Date(input.completedAt) : null,
+      recordsProcessed: input.recordsProcessed,
+      recordsCreated: input.recordsCreated,
+      recordsUpdated: input.recordsUpdated,
+      recordsFailed: input.recordsFailed,
+      errorMessage: input.errorMessage,
+      logSummary: input.logSummary,
+    },
+  });
+}
+
+export async function listDashboardFinance() {
+  const [batches, payslips, invoices, payments, syncJobs, auditLogs] = await Promise.all([
+    prisma.payrollBatch.findMany({ orderBy: { createdAt: 'desc' }, include: { lineItems: { include: { mentor: true } } } }),
+    prisma.payslip.findMany({ orderBy: { generatedAt: 'desc' } }),
+    prisma.invoice.findMany({ orderBy: { issueDate: 'desc' } }),
+    prisma.payment.findMany({ orderBy: { paymentDate: 'desc' } }),
+    prisma.syncJob.findMany({ orderBy: { startedAt: 'desc' } }),
+    listAuditEvents(10),
+  ]);
+  return {
+    batches: batches.map((batch) => ({ ...batch, totalGross: Number(batch.totalGross), totalPenalties: Number(batch.totalPenalties), totalAdjustments: Number(batch.totalAdjustments), totalNet: Number(batch.totalNet), currency: batch.currency, startDate: batch.startDate.toISOString(), endDate: batch.endDate.toISOString(), createdAt: batch.createdAt.toISOString(), updatedAt: batch.updatedAt.toISOString(), lineItems: batch.lineItems.map((item) => ({ ...item, mentorName: `${item.mentor.firstName} ${item.mentor.lastName}`, mentorEmail: item.mentor.email, baseSalaryAmount: Number(item.baseSalaryAmount), classEarnings: Number(item.classEarnings), durationEarnings: Number(item.durationEarnings), studentEarnings: Number(item.studentEarnings), revenueShareEarnings: Number(item.revenueShareEarnings), bonusAmount: Number(item.bonusAmount), penaltyDeductions: Number(item.penaltyDeductions), grossEarnings: Number(item.grossEarnings), netPayable: Number(item.netPayable) })) })),
+    payslips: payslips.map((slip) => ({ ...slip, grossEarnings: Number(slip.grossEarnings), totalDeductions: Number(slip.totalDeductions), netPayable: Number(slip.netPayable), startDate: slip.startDate.toISOString(), endDate: slip.endDate.toISOString(), generatedAt: slip.generatedAt.toISOString() })),
+    invoices: invoices.map((invoice) => ({ ...invoice, totalAmount: Number(invoice.totalAmount), paidAmount: Number(invoice.paidAmount), issueDate: invoice.issueDate.toISOString(), dueDate: invoice.dueDate.toISOString(), createdAt: invoice.createdAt.toISOString() })),
+    payments: payments.map((payment) => ({ ...payment, amount: Number(payment.amount), paymentDate: payment.paymentDate.toISOString(), createdAt: payment.createdAt.toISOString() })),
+    syncJobs: syncJobs.map((job) => ({ ...job, startedAt: job.startedAt.toISOString(), completedAt: job.completedAt?.toISOString() })),
+    auditLogs,
+  };
+}
+
+export async function updatePayrollBatchStatus(input: { id: string; status: 'DRAFT' | 'SUBMITTED' | 'APPROVED'; userId?: string; paymentStatus?: 'UNPAID' | 'PARTIAL' | 'PAID' }): Promise<Record<string, unknown>> {
+  const batch = await prisma.payrollBatch.update({
+    where: { id: input.id },
+    data: {
+      status: input.status,
+      submittedBy: input.status === 'SUBMITTED' ? input.userId : undefined,
+      submittedAt: input.status === 'SUBMITTED' ? new Date() : undefined,
+      approvedBy: input.status === 'APPROVED' ? input.userId : undefined,
+      approvedAt: input.status === 'APPROVED' ? new Date() : undefined,
+      paymentStatus: input.paymentStatus,
+    },
+  });
+  return { ...batch, totalGross: Number(batch.totalGross), totalPenalties: Number(batch.totalPenalties), totalAdjustments: Number(batch.totalAdjustments), totalNet: Number(batch.totalNet), startDate: batch.startDate.toISOString(), endDate: batch.endDate.toISOString(), createdAt: batch.createdAt.toISOString(), updatedAt: batch.updatedAt.toISOString() };
+}
+
+export async function listPayslips(mentorId?: string) {
+  const rows = await prisma.payslip.findMany({ where: mentorId ? { mentorId } : undefined, orderBy: { generatedAt: 'desc' } });
+  return rows.map((row) => ({
+    ...row,
+    grossEarnings: Number(row.grossEarnings), totalDeductions: Number(row.totalDeductions), netPayable: Number(row.netPayable),
+    startDate: row.startDate.toISOString(), endDate: row.endDate.toISOString(), generatedAt: row.generatedAt.toISOString(),
+    paidAt: row.paidAt?.toISOString(),
+  }));
+}
+
+export async function createAdjustment(input: { mentorId: string; type: string; reason: string; amount: number; approvedBy: string }) {
+  const row = await prisma.adjustment.create({ data: input });
+  return { ...row, amount: Number(row.amount), createdAt: row.createdAt.toISOString() };
+}
+
+export async function markPayrollBatchPaid(id: string, paymentReference: string) {
+  const paidAt = new Date();
+  return prisma.$transaction(async (transaction) => {
+    const batch = await transaction.payrollBatch.update({ where: { id }, data: { paymentStatus: 'PAID', paidAt, paymentReference } });
+    await transaction.payslip.updateMany({ where: { batchId: id }, data: { paymentStatus: 'PAID', paidAt, paymentReference } });
+    return { ...batch, totalGross: Number(batch.totalGross), totalPenalties: Number(batch.totalPenalties), totalAdjustments: Number(batch.totalAdjustments), totalNet: Number(batch.totalNet), paidAt: paidAt.toISOString() };
   });
 }
 
@@ -512,7 +921,7 @@ async function ensurePayrollPlan(organizationId: string, id: string) {
   return plan.id;
 }
 
-async function ensureBranch(organizationId: string, branchId: string, state: AppDatabase) {
+async function ensureBranch(organizationId: string, branchId: string, state: Pick<AppDatabase, 'branches'>) {
   const branch = state.branches.find((item) => item.id === branchId);
   if (!branch) throw new Error(`Branch ${branchId} must exist before creating a related record.`);
   await prisma.branch.upsert({
@@ -525,7 +934,7 @@ async function ensureBranch(organizationId: string, branchId: string, state: App
 export async function saveNormalizedRecord(
   type: 'branch' | 'subject' | 'package' | 'student' | 'mentor',
   record: Branch | Subject | Package | Student | Mentor,
-  state: AppDatabase
+  state: Pick<AppDatabase, 'branches'>
 ): Promise<void> {
   const organizationId = await ensureOrganization();
   if (type === 'branch') {

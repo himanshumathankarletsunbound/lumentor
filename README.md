@@ -65,7 +65,7 @@ Calculates mentor compensations with precision arithmetic (2 decimal places) acr
 - **Icons**: [Lucide React](https://lucide.dev/)
 - **Date Utilities**: [date-fns](https://date-fns.org/)
 - **Database Schema**: [Prisma ORM](https://www.prisma.io/) (`prisma/schema.prisma` targeting PostgreSQL)
-- **Production Persistence Layer**: PostgreSQL through Prisma normalized tables. Operational records, authentication sessions, classes, attendance, branches, subjects, packages, students, mentors, and roles are read and written through Prisma repositories. `AppState` is retained only as a migration-era compatibility table and is not a production source of truth. Encrypted credentials use `EncryptedSecret`.
+- **Production Persistence Layer**: PostgreSQL through Prisma normalized tables. Authentication, operational records, classes, attendance, payroll, penalties, settings, custom fields, audit events, sync jobs, invoices, payments, and reports are read and written through Prisma repositories. The legacy `AppState` compatibility table has been removed from the production schema. Encrypted credentials use `EncryptedSecret`.
 - **Local/test persistence (explicit opt-in only)**: Atomic JSON storage can be enabled with `DEMO_MODE=true`; it is never used by production deployments and no fabricated records are created by normal startup.
 
 ---

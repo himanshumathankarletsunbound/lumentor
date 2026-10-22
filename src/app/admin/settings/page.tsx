@@ -7,6 +7,8 @@ import { Card, CardContent, CardFooter, CardHeader } from '../../../components/u
 import { Button } from '../../../components/ui/Button';
 import { Alert } from '../../../components/ui/Alert';
 import { GoogleWorkspaceEmailSettings } from '../../../components/settings/GoogleWorkspaceEmailSettings';
+import { db } from '../../../lib/db/store';
+import { setSystemCurrency } from '../../../lib/utils/formatters';
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<'general' | 'email'>('general');
@@ -27,6 +29,9 @@ export default function SettingsPage() {
       setCurrency(data.orgSettings.currency || 'INR');
       setTimezone(data.orgSettings.timezone || 'America/New_York');
       setCutoffDay(data.orgSettings.cutoffDay || 15);
+      if (data.orgSettings?.currency) {
+        setSystemCurrency(data.orgSettings.currency);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load organization settings.');
     }
@@ -49,6 +54,10 @@ export default function SettingsPage() {
       });
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || 'Unable to save organization settings.');
+      if (data.orgSettings) {
+        db.saveOrgSettings(data.orgSettings);
+        setSystemCurrency(data.orgSettings.currency);
+      }
       setSaved(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to save organization settings.');
@@ -97,10 +106,14 @@ export default function SettingsPage() {
                 <label className="block font-semibold text-slate-700">
                   Currency
                   <select value={currency} onChange={(event) => setCurrency(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 p-2 font-normal text-slate-900">
-                    <option value="INR">INR (₹)</option>
-                    <option value="INR">INR</option>
-                    <option value="EUR">EUR</option>
-                    <option value="GBP">GBP</option>
+                    <option value="INR">INR (₹) - Indian Rupee</option>
+                    <option value="USD">USD ($) - US Dollar</option>
+                    <option value="EUR">EUR (€) - Euro</option>
+                    <option value="GBP">GBP (£) - British Pound</option>
+                    <option value="AED">AED (د.إ) - UAE Dirham</option>
+                    <option value="CAD">CAD ($) - Canadian Dollar</option>
+                    <option value="AUD">AUD ($) - Australian Dollar</option>
+                    <option value="SGD">SGD ($) - Singapore Dollar</option>
                   </select>
                 </label>
                 <label className="block font-semibold text-slate-700">

@@ -48,7 +48,7 @@ export default function PayrollProcessingPage() {
       setSelectedBatchId(batch.id);
       setNotification({
         type: 'success',
-        message: `Calculated new batch ${batch.batchNumber} with ${batch.totalMentors} mentors ($${batch.totalNet} total net).`,
+        message: `Calculated new batch ${batch.batchNumber} with ${batch.totalMentors} mentors (${formatCurrency(batch.totalNet)} total net).`,
       });
     } catch (err: unknown) {
       setNotification({
@@ -153,7 +153,7 @@ export default function PayrollProcessingPage() {
       action: 'PAYROLL_PAID',
       entityType: 'PayrollBatch',
       entityId: activeBatch.id,
-      details: `Recorded disbursement of $${activeBatch.totalNet} with reference ${paymentRef}`,
+      details: `Recorded disbursement of ${formatCurrency(activeBatch.totalNet)} with reference ${paymentRef}`,
     });
 
     setShowPaymentInput(false);

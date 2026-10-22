@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizationErrorAsync } from '../../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../../lib/db/server-initialization';
-import { saveNormalizedRecord } from '../../../../lib/db/state-repository';
-import { db } from '../../../../lib/db/store';
+import { listBranches, listMentors, listPayrollPlans, saveNormalizedRecord } from '../../../../lib/db/state-repository';
+import type { Mentor } from '../../../../lib/types/models';
+import { randomUUID } from 'node:crypto';
 
 interface StaffImportRow {
   name?: string;
@@ -27,8 +28,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'At least one staff row is required.' }, { status: 400 });
     }
 
-    const branch = db.getBranches()[0];
-    const payrollPlan = db.getPayrollPlans()[0];
+    const [branches, payrollPlans, mentors] = await Promise.all([listBranches(), listPayrollPlans(), listMentors()]);
+    const branch = branches[0];
+    const payrollPlan = payrollPlans[0];
     if (!branch || !payrollPlan) {
       return NextResponse.json(
         { success: false, error: 'Create at least one campus branch and payroll plan before importing staff.' },
@@ -48,9 +50,10 @@ export async function POST(req: NextRequest) {
     for (const row of uniqueRows.values()) {
       const email = String(row.email);
       const { firstName, lastName } = splitName(String(row.name));
-      const existing = db.getMentorByEmail(email);
-      const mentor = existing
-        ? db.updateMentor(existing.id, {
+      const existing = mentors.find((item) => item.email.toLowerCase() === email);
+      const mentor: Mentor = existing
+        ? {
+            ...existing,
             firstName,
             lastName,
             phone: String(row.phone || '').trim(),
@@ -59,8 +62,10 @@ export async function POST(req: NextRequest) {
             payrollPlanId: payrollPlan.id,
             status: 'ACTIVE',
             provenance: 'CLASSCARD_SOURCED',
-          })
-        : db.createMentor({
+            updatedAt: new Date().toISOString(),
+          }
+        : {
+            id: randomUUID(),
             firstName,
             lastName,
             email,
@@ -74,14 +79,15 @@ export async function POST(req: NextRequest) {
             teachingHoursThisMonth: 0,
             completedClassesCount: 0,
             attendanceRate: 100,
-          });
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
 
-      await saveNormalizedRecord('mentor', mentor, db.getSnapshot());
+      await saveNormalizedRecord('mentor', mentor, { branches: [branch] });
       if (existing) updated++;
       else created++;
     }
 
-    await db.persistNow();
     return NextResponse.json({
       success: true,
       totalRows: body.rows.length,

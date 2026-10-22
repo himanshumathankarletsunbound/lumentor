@@ -18,10 +18,10 @@ export default function PayrollAnalyticsPage() {
   const totalBonuses = batches.reduce((acc, b) => acc + b.totalAdjustments, 0);
 
   const spendByPeriod = [
-    { label: 'Sep Cycle 1', value: 5800, valueLabel: '₹5,800' },
-    { label: 'Sep Cycle 2', value: 6100, valueLabel: '₹6,100' },
-    { label: 'Oct Cycle 1', value: 6345, valueLabel: '₹6,345' },
-    { label: 'Oct Cycle 2 (Proj)', value: 6600, valueLabel: '₹6,600' },
+    { label: 'Sep Cycle 1', value: 5800, valueLabel: formatCurrency(5800) },
+    { label: 'Sep Cycle 2', value: 6100, valueLabel: formatCurrency(6100) },
+    { label: 'Oct Cycle 1', value: 6345, valueLabel: formatCurrency(6345) },
+    { label: 'Oct Cycle 2 (Proj)', value: 6600, valueLabel: formatCurrency(6600) },
   ];
 
   const costBreakdown = [

@@ -9,7 +9,7 @@ import { Alert } from '../ui/Alert';
 import { useAuth } from '../../lib/auth/AuthContext';
 import { db } from '../../lib/db/store';
 import { ShieldAlert, CheckCircle, XCircle, RefreshCw, AlertCircle } from 'lucide-react';
-import { formatCurrency, formatDateTime } from '../../lib/utils/formatters';
+import { formatCurrency, formatDateTime, getCurrencySymbol, getSystemCurrency } from '../../lib/utils/formatters';
 
 export interface PenaltyModalProps {
   isOpen: boolean;
@@ -108,7 +108,7 @@ export function PenaltyModal({
       action: 'PENALTY_SUBMITTED',
       entityType: 'Penalty',
       entityId: pen.id,
-      details: `Submitted ₹${parsedAmount} penalty for ${pen.mentorName} (${category}): ${reason}`,
+      details: `Submitted ${formatCurrency(parsedAmount)} penalty for ${pen.mentorName} (${category}): ${reason}`,
     });
 
     onSaved();
@@ -126,7 +126,7 @@ export function PenaltyModal({
         action: 'PENALTY_APPROVED',
         entityType: 'Penalty',
         entityId: penaltyToView.id,
-        details: `Approved penalty ${penaltyToView.id} of ₹${penaltyToView.amount} for ${penaltyToView.mentorName}`,
+        details: `Approved penalty ${penaltyToView.id} of ${formatCurrency(penaltyToView.amount)} for ${penaltyToView.mentorName}`,
       });
       onSaved();
       onClose();
@@ -475,7 +475,9 @@ export function PenaltyModal({
               </div>
 
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Penalty Amount (₹ INR) *</label>
+                <label className="font-semibold text-slate-700 block mb-1">
+                  Penalty Amount ({getCurrencySymbol()} {getSystemCurrency()}) *
+                </label>
                 <input
                   type="number"
                   step="0.01"

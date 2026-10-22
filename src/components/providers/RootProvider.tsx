@@ -3,6 +3,7 @@
 import React, { useRef } from 'react';
 import { AuthProvider } from '../../lib/auth/AuthContext';
 import { db, AppDatabase } from '../../lib/db/store';
+import { setSystemCurrency } from '../../lib/utils/formatters';
 
 export function RootProvider({
   children,
@@ -14,6 +15,9 @@ export function RootProvider({
   const initialized = useRef(false);
   if (!initialized.current && initialSnapshot) {
     db.initClient(initialSnapshot);
+    if (initialSnapshot.orgSettings?.currency) {
+      setSystemCurrency(initialSnapshot.orgSettings.currency);
+    }
     initialized.current = true;
   }
 

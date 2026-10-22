@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../../../lib/db/store';
 import { authorizationErrorAsync } from '../../../lib/auth/server';
+import { listClasses, listDashboardFinance, listPenalties } from '../../../lib/db/state-repository';
 
 export async function GET(req: NextRequest) {
   const denied = await authorizationErrorAsync(req, 'reports', 'export');
@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     let filename = `export-${type}-${new Date().toISOString().split('T')[0]}.csv`;
 
     if (type === 'payroll') {
-      const batches = db.getPayrollBatches();
+      const batches = (await listDashboardFinance()).batches;
       const batch = batchId ? batches.find((b) => b.id === batchId) || batches[0] : batches[0];
       filename = `payroll-${batch?.batchNumber || 'batch'}.csv`;
 
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
         ),
       ].join('\n');
     } else if (type === 'attendance') {
-      const classes = db.getClasses();
+      const classes = await listClasses();
       filename = `attendance-roster-${new Date().toISOString().split('T')[0]}.csv`;
 
       csvContent = [
@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
         ),
       ].join('\n');
     } else if (type === 'penalties') {
-      const penalties = db.getPenalties();
+      const penalties = await listPenalties();
       filename = `penalties-audit-${new Date().toISOString().split('T')[0]}.csv`;
 
       csvContent = [
@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
         ),
       ].join('\n');
     } else {
-      const classes = db.getClasses();
+      const classes = await listClasses();
       filename = `classes-catalog-${new Date().toISOString().split('T')[0]}.csv`;
 
       csvContent = [

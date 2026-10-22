@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../../../../lib/db/store';
 import { authorizationErrorAsync } from '../../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../../lib/db/server-initialization';
+import { getOrganizationSettings, updateOrganizationSettings } from '../../../../lib/db/state-repository';
 
 export async function GET(req: NextRequest) {
   try {
@@ -12,8 +12,7 @@ export async function GET(req: NextRequest) {
   const denied = await authorizationErrorAsync(req, 'settings', 'view');
   if (denied) return denied;
   try {
-    db.reloadIfModified();
-    const orgSettings = db.getOrgSettings();
+    const orgSettings = await getOrganizationSettings();
     return NextResponse.json({ success: true, orgSettings });
   } catch (err: unknown) {
     return NextResponse.json(
@@ -33,30 +32,17 @@ export async function POST(req: NextRequest) {
   if (denied) return denied;
   try {
     const body = await req.json().catch(() => ({}));
-    db.reloadIfModified();
-
     const orgName = String(body.orgName || '').trim();
     const currency = String(body.currency || 'INR').trim();
     const timezone = String(body.timezone || 'America/New_York').trim();
     const cutoffDay = Number(body.cutoffDay) || 15;
 
-    const updated = db.saveOrgSettings({
+    const updated = await updateOrganizationSettings({
       orgName: orgName || undefined,
       currency,
       timezone,
       cutoffDay,
     });
-
-    db.logAudit({
-      userId: 'user-admin',
-      userName: 'Administrator',
-      userRole: 'ADMINISTRATOR',
-      action: 'ORG_SETTINGS_UPDATED',
-      entityType: 'OrganizationSettings',
-      entityId: 'org-settings',
-      details: `Updated organizational preferences (Name: ${updated.orgName}, Currency: ${currency})`,
-    });
-
     return NextResponse.json({
       success: true,
       orgSettings: updated,

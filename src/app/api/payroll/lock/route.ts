@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { payrollEngine } from '../../../../lib/payroll/engine';
-import { db } from '../../../../lib/db/store';
+import { finalizeBatchAndGeneratePayslipsFromPostgres } from '../../../../lib/payroll/server-engine';
 import { enforceRateLimit } from '../../../../lib/rate-limit/limiter';
 import { authorizationErrorAsync } from '../../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../../lib/db/server-initialization';
@@ -14,14 +13,13 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { batchId, lockedBy } = body;
+    const { batchId } = body;
 
     if (!batchId) {
       return NextResponse.json({ error: 'Missing batchId' }, { status: 400 });
     }
 
-    const payslips = payrollEngine.finalizeBatchAndGeneratePayslips(batchId, lockedBy || 'Admin');
-    await db.persistNow();
+    const payslips = await finalizeBatchAndGeneratePayslipsFromPostgres(batchId);
     return NextResponse.json({ success: true, count: payslips.length, payslips });
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);

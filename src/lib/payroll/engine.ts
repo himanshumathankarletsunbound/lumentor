@@ -19,6 +19,11 @@ export interface CalculatePayrollOptions {
   payrollPlanId?: string;
 }
 
+export interface PayrollContext {
+  adjustments: Array<{ mentorId: string; amount: number; appliedPayrollBatchId?: string | null }>;
+  penalties: PayrollBatch['lineItems'][number] extends never ? never : Array<{ id: string; mentorId: string; status: string; amount: number; appliedPayrollBatchId?: string; category: string; reason: string; createdAt: string }>;
+}
+
 export class PayrollEngine {
   /**
    * Evaluates classes and computes line item for a single mentor.
@@ -29,7 +34,8 @@ export class PayrollEngine {
     classes: ClassEvent[],
     startDate: string,
     endDate: string,
-    batchId: string
+    batchId: string,
+    context?: PayrollContext
   ): PayrollLineItem {
     const periodStart = new Date(startDate);
     const periodEnd = new Date(endDate);
@@ -116,7 +122,7 @@ export class PayrollEngine {
           // 3. Fallback to baseClassRate or plan default
           let sessionRevenueBasis = plan.sessionRevenueBasis;
           if (!sessionRevenueBasis && cls.packageId) {
-            const pkg = db.getPackageById(cls.packageId);
+            const pkg = context ? undefined : db.getPackageById(cls.packageId);
             if (pkg && pkg.totalSessions > 0) {
               sessionRevenueBasis = pkg.price / pkg.totalSessions;
             }
@@ -143,13 +149,13 @@ export class PayrollEngine {
     }
 
     // Approved Bonuses / Adjustments
-    const adjustments = db.getAdjustments(mentor.id).filter(
+    const adjustments = (context?.adjustments ?? db.getAdjustments(mentor.id)).filter(
       (a) => !a.appliedPayrollBatchId || a.appliedPayrollBatchId === batchId
     );
     const bonusAmount = adjustments.reduce((sum, a) => sum + a.amount, 0);
 
     // Approved Penalties (MUST be strictly APPROVED and not already APPLIED elsewhere)
-    const approvedPenalties = db.getPenalties(mentor.id).filter(
+    const approvedPenalties = (context?.penalties ?? db.getPenalties(mentor.id)).filter(
       (p) => p.status === 'APPROVED' && (!p.appliedPayrollBatchId || p.appliedPayrollBatchId === batchId)
     );
     const penaltyDeductions = approvedPenalties.reduce((sum, p) => sum + p.amount, 0);
@@ -249,7 +255,7 @@ export class PayrollEngine {
       totalPenalties,
       totalAdjustments,
       totalNet,
-      currency: 'INR',
+      currency: db.getOrgSettings()?.currency || 'INR',
       paymentStatus: 'UNPAID',
       lineItems,
       createdAt: new Date().toISOString(),
@@ -373,6 +379,7 @@ export class PayrollEngine {
 
     return generatedPayslips;
   }
+
 }
 
 export const payrollEngine = new PayrollEngine();

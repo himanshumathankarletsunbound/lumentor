@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../../../../lib/db/store';
 import { hashPassword } from '../../../../lib/auth/crypto';
 import { enforceRateLimit } from '../../../../lib/rate-limit/limiter';
+import { findUserByResetToken, saveUser } from '../../../../lib/db/state-repository';
 
 export async function POST(req: NextRequest) {
   const rateLimitError = enforceRateLimit(req, { limit: 10, windowSeconds: 60, identifierPrefix: 'auth-reset-password' });
@@ -26,8 +26,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    db.reloadIfModified();
-    const user = db.getUserByResetToken(token);
+    const user = await findUserByResetToken(token);
 
     if (!user) {
       return NextResponse.json(
@@ -40,7 +39,7 @@ export async function POST(req: NextRequest) {
     if (user.resetTokenExpiry && new Date(user.resetTokenExpiry) <= new Date()) {
       user.resetToken = undefined;
       user.resetTokenExpiry = undefined;
-      db.saveUser(user);
+      await saveUser(user);
 
       return NextResponse.json(
         { success: false, error: 'Password reset token has expired. Please request a new link.' },
@@ -60,17 +59,7 @@ export async function POST(req: NextRequest) {
     if (user.status === 'SENT_PASSWORD_VERIFICATION') {
       user.status = 'ACTIVE';
     }
-    db.saveUser(user);
-
-    db.logAudit({
-      userId: user.id,
-      userName: user.name,
-      userRole: user.role,
-      action: 'PASSWORD_RESET_COMPLETED',
-      entityType: 'User',
-      entityId: user.id,
-      details: `Password reset completed successfully for ${user.email}`,
-    });
+    await saveUser(user);
 
     return NextResponse.json({
       success: true,

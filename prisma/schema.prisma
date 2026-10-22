@@ -97,12 +97,6 @@ model Organization {
   payrollPlans PayrollPlan[]
 }
 
-model AppState {
-  id        String   @id
-  state     Json
-  updatedAt DateTime @updatedAt
-}
-
 model EncryptedSecret {
   name      String   @id
   ciphertext String
@@ -551,4 +545,23 @@ model SyncJob {
   recordsFailed    Int      @default(0)
   errorMessage     String?
   logSummary       String[]
+}
+
+model CustomFieldDefinition {
+  id                String   @id @default(uuid())
+  name              String
+  key               String
+  entityType        String
+  fieldType         String
+  classcardFieldKey String?
+  classcardEndpoint String?
+  isRequired        Boolean  @default(false)
+  options           Json?
+  defaultValue      String?
+  description       String?
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([entityType, key])
 }

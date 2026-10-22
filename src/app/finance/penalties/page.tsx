@@ -10,7 +10,7 @@ import { Button } from '../../../components/ui/Button';
 import { PenaltyModal } from '../../../components/payroll/PenaltyModal';
 import { Penalty, PenaltyPolicy, PenaltyDeductionType } from '../../../lib/types/payroll';
 import { ShieldAlert, Plus, CheckCircle2, RotateCcw, FileText, Settings2, Trash2, Pencil, Search, AlertCircle, Percent, DollarSign, Sparkles } from 'lucide-react';
-import { formatCurrency, formatDate } from '../../../lib/utils/formatters';
+import { formatCurrency, formatDate, getCurrencySymbol, getSystemCurrency } from '../../../lib/utils/formatters';
 import { Modal } from '../../../components/ui/Modal';
 import { DeleteConfirmModal } from '../../../components/ui/DeleteConfirmModal';
 
@@ -89,7 +89,7 @@ export default function PenaltiesPage() {
         action: 'PENALTY_APPROVED',
         entityType: 'Penalty',
         entityId: penalty.id,
-        details: `Approved penalty ${penalty.id} of $${penalty.amount} for ${penalty.mentorName}`,
+        details: `Approved penalty ${penalty.id} of ${formatCurrency(penalty.amount)} for ${penalty.mentorName}`,
       });
       void db.persistNow();
       refreshPenalties();
@@ -591,18 +591,18 @@ export default function PenaltiesPage() {
                         className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
                       >
                         <option value="PERCENT">Percent (%)</option>
-                        <option value="FIXED_AMOUNT">Amount ($)</option>
+                        <option value="FIXED_AMOUNT">Fixed Amount ({getCurrencySymbol()})</option>
                       </select>
                     </div>
 
                     {/* 4. Rate / Value */}
                     <div>
                       <label className="block font-semibold text-slate-700 mb-1">
-                        {policyType === 'PERCENT' ? 'Percentage Value (%)' : 'Amount Value (₹ INR)'} <span className="text-rose-500">*</span>
+                        {policyType === 'PERCENT' ? 'Percentage Value (%)' : `Amount Value (${getCurrencySymbol()} ${getSystemCurrency()})`} <span className="text-rose-500">*</span>
                       </label>
                       <div className="relative">
                         <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400 font-bold">
-                          {policyType === 'PERCENT' ? '%' : '$'}
+                          {policyType === 'PERCENT' ? '%' : getCurrencySymbol()}
                         </div>
                         <input
                           type="number"
@@ -817,13 +817,13 @@ export default function PenaltiesPage() {
                     className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
                   >
                     <option value="PERCENT">Percent (%)</option>
-                    <option value="FIXED_AMOUNT">Amount ($)</option>
+                    <option value="FIXED_AMOUNT">Fixed Amount ({getCurrencySymbol()})</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    {editType === 'PERCENT' ? 'Percentage Rate (%)' : 'Amount (₹ INR)'} *
+                    {editType === 'PERCENT' ? 'Percentage Rate (%)' : `Amount (${getCurrencySymbol()} ${getSystemCurrency()})`} *
                   </label>
                   <input
                     type="number"

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../../../../lib/db/store';
 import { generateResetToken } from '../../../../lib/auth/crypto';
 import { enforceRateLimit } from '../../../../lib/rate-limit/limiter';
 import { sendPasswordResetEmail } from '../../../../lib/email/service';
+import { findUserByEmail, saveUser } from '../../../../lib/db/state-repository';
 
 export async function POST(req: NextRequest) {
   const rateLimitError = enforceRateLimit(req, { limit: 5, windowSeconds: 60, identifierPrefix: 'auth-forgot-password' });
@@ -19,8 +19,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    db.reloadIfModified();
-    const user = db.getUserByEmail(email);
+    const user = await findUserByEmail(email);
 
     if (!user) {
       // Return clear notification if account not found
@@ -37,17 +36,7 @@ export async function POST(req: NextRequest) {
     const { token, expiresAt } = generateResetToken(60);
     user.resetToken = token;
     user.resetTokenExpiry = expiresAt;
-    db.saveUser(user);
-
-    db.logAudit({
-      userId: user.id,
-      userName: user.name,
-      userRole: user.role,
-      action: 'PASSWORD_RESET_REQUESTED',
-      entityType: 'User',
-      entityId: user.id,
-      details: `Password reset token requested for ${user.email}`,
-    });
+    await saveUser(user);
 
     const origin = req.nextUrl.origin || 'http://localhost:3005';
     const resetUrl = `${origin}/reset-password?token=${token}`;

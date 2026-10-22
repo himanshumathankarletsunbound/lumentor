@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../../../lib/db/store';
 import { enforceRateLimit } from '../../../lib/rate-limit/limiter';
 import { authorizationErrorAsync } from '../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../lib/db/server-initialization';
+import { createPenalty, listPenalties } from '../../../lib/db/state-repository';
 
 export async function GET(req: NextRequest) {
   await ensureServerPersistence();
@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
 
   const searchParams = req.nextUrl.searchParams;
   const mentorId = searchParams.get('mentorId') || undefined;
-  const penalties = db.getPenalties(mentorId);
+  const penalties = await listPenalties(mentorId);
   return NextResponse.json(penalties);
 }
 
@@ -26,29 +26,22 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { mentorId, branchId, category, reason, amount, evidenceNote, createdBy, createdByName } = body;
+    const { mentorId, branchId, category, reason, amount, evidenceNote, createdBy } = body;
 
-    if (!reason || !amount || !mentorId) {
+    if (!reason || !amount || !mentorId || !branchId) {
       return NextResponse.json({ error: 'Missing mandatory fields' }, { status: 400 });
     }
 
-    const mentor = db.getMentorById(mentorId);
-    const branch = db.getBranchById(branchId);
-
-    const pen = db.createPenalty({
+    const pen = await createPenalty({
       mentorId,
-      mentorName: mentor ? `${mentor.firstName} ${mentor.lastName}` : 'Mentor',
-      branchId: branchId || 'branch-nyc',
-      branchName: branch?.name || 'Primary Campus',
+      branchId,
       category: category || 'OTHER',
       reason,
       amount: parseFloat(amount),
       evidenceNote,
       createdBy: createdBy || 'system',
-      createdByName: createdByName || 'Operations Staff',
+      classId: body.classId,
     });
-
-    await db.persistNow();
     return NextResponse.json(pen);
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);

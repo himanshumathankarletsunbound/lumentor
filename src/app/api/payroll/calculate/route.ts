@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { payrollEngine } from '../../../../lib/payroll/engine';
-import { db } from '../../../../lib/db/store';
+import { generateBatchFromPostgres } from '../../../../lib/payroll/server-engine';
 import { enforceRateLimit } from '../../../../lib/rate-limit/limiter';
 import { authorizationErrorAsync } from '../../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../../lib/db/server-initialization';
@@ -23,7 +22,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const batch = payrollEngine.generateBatch({
+    const batch = await generateBatchFromPostgres({
       periodId,
       startDate,
       endDate,
@@ -32,7 +31,6 @@ export async function POST(req: NextRequest) {
       payrollPlanId,
     });
 
-    await db.persistNow();
     return NextResponse.json(batch);
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);

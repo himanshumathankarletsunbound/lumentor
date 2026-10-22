@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../../../lib/db/store';
 import { authorizationErrorAsync } from '../../../lib/auth/server';
 import { CustomFieldEntityType } from '../../../lib/types/models';
+import { createCustomField, deleteCustomField, listCustomFields } from '../../../lib/db/state-repository';
 
 export async function GET(req: NextRequest) {
   const denied = await authorizationErrorAsync(req, 'settings', 'view');
@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const entityType = searchParams.get('entityType') as CustomFieldEntityType | null;
 
-    const fields = db.getCustomFields(entityType || undefined);
+    const fields = await listCustomFields(entityType || undefined);
     return NextResponse.json({
       success: true,
       count: fields.length,
@@ -40,7 +40,6 @@ export async function POST(req: NextRequest) {
       options,
       defaultValue,
       description,
-      createdBy = 'Administrator',
     } = body;
 
     if (!name || !key || !entityType || !fieldType) {
@@ -50,7 +49,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const field = db.createCustomField({
+    const field = await createCustomField({
       name,
       key,
       entityType,
@@ -63,17 +62,6 @@ export async function POST(req: NextRequest) {
       description,
       isActive: true,
     });
-
-    db.logAudit({
-      userId: 'usr-admin-1',
-      userName: createdBy,
-      userRole: 'ADMINISTRATOR',
-      action: 'CUSTOM_FIELD_MAPPED',
-      entityType: 'CustomFieldDefinition',
-      entityId: field.id,
-      details: `Configured field "${name}" (${key}) for entity ${entityType} mapped to Classcard ${classcardFieldKey || 'none'}.`,
-    });
-    await db.persistNow();
 
     return NextResponse.json({
       success: true,
@@ -102,24 +90,13 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    const deleted = db.deleteCustomField(id);
+    const deleted = await deleteCustomField(id);
     if (!deleted) {
       return NextResponse.json(
         { success: false, error: `Field ${id} not found` },
         { status: 404 }
       );
     }
-
-    db.logAudit({
-      userId: 'usr-admin-1',
-      userName: 'Administrator',
-      userRole: 'ADMINISTRATOR',
-      action: 'CUSTOM_FIELD_DELETED',
-      entityType: 'CustomFieldDefinition',
-      entityId: id,
-      details: `Removed custom field definition ${id}.`,
-    });
-    await db.persistNow();
 
     return NextResponse.json({
       success: true,

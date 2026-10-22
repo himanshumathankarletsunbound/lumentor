@@ -1,28 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../../../../lib/db/store';
 import { classcardClient } from '../../../../lib/integrations/classcard/client';
 import { authorizationErrorAsync } from '../../../../lib/auth/server';
-import { requireServerSecret } from '../../../../lib/config/server';
+import { requireServerSecret, isDemoMode } from '../../../../lib/config/server';
+import { CLASSCARD_ENDPOINTS_REGISTRY } from '../../../../lib/db/seedData';
 
 export async function GET(req: NextRequest) {
   const denied = await authorizationErrorAsync(req, 'classcard_integration', 'view');
   if (denied) return denied;
-  const config = db.getClasscardConfig();
+  const apiKey = process.env.CLASSCARD_API_KEY?.trim() || '';
+  const baseUrl = process.env.CLASSCARD_BASE_URL?.trim() || 'https://api.classcardapp.com/api/v2/public/';
   // Return masked configuration to protect API key
-  const maskedKey = config.apiKey
-    ? `${config.apiKey.slice(0, 8)}••••••••${config.apiKey.slice(-4)}`
+  const maskedKey = apiKey
+    ? `${apiKey.slice(0, 8)}••••••••${apiKey.slice(-4)}`
     : '';
 
   return NextResponse.json({
-    baseUrl: config.baseUrl,
+    baseUrl,
     maskedApiKey: maskedKey,
-    isConfigured: config.isConfigured,
-    useMockMode: config.useMockMode,
-    lastSuccessfulSync: config.lastSuccessfulSync,
-    lastFailedSync: config.lastFailedSync,
-    lastErrorMessage: config.lastErrorMessage,
-    syncIntervalMinutes: config.syncIntervalMinutes,
-    endpointsCount: db.getClasscardEndpoints().length,
+    isConfigured: Boolean(apiKey),
+    useMockMode: isDemoMode,
+    endpointsCount: CLASSCARD_ENDPOINTS_REGISTRY.length,
   });
 }
 

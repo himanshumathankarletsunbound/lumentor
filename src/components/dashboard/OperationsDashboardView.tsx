@@ -25,7 +25,7 @@ import {
   Check,
   RefreshCw,
 } from 'lucide-react';
-import { formatTime, formatDate } from '../../lib/utils/formatters';
+import { formatTime, formatDate, formatCurrency } from '../../lib/utils/formatters';
 import Link from 'next/link';
 import { ClassEvent, Student, Mentor } from '../../lib/types/models';
 import { Penalty } from '../../lib/types/payroll';
@@ -367,7 +367,7 @@ export function OperationsDashboardView() {
                       </p>
                     </div>
                     <span className="text-rose-600 font-bold text-sm shrink-0">
-                      -${pen.amount.toFixed(2)}
+                      -{formatCurrency(pen.amount)}
                     </span>
                   </div>
                 ))

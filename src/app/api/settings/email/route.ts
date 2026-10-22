@@ -1,18 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../../../../lib/db/store';
 import { getServerEmailSecrets, googleOAuthConfig } from '../../../../lib/config/server';
 import { authorizationErrorAsync } from '../../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../../lib/db/server-initialization';
+import { getPersistedEmailConfig, savePersistedEmailConfig } from '../../../../lib/db/state-repository';
 
-function safeEmailConfig() {
-  const config = db.getEmailConfig();
+function safeEmailConfig(config: Partial<import('../../../../lib/types/email').EmailConfig>) {
   const google = googleOAuthConfig();
   return {
-    user: config.user,
-    fromEmail: config.fromEmail,
-    fromName: config.fromName,
-    replyTo: config.replyTo,
-    isEnabled: config.isEnabled,
+    user: config.user || '',
+    fromEmail: config.fromEmail || '',
+    fromName: config.fromName || '',
+    replyTo: config.replyTo || '',
+    isEnabled: Boolean(config.isEnabled),
     lastTestStatus: config.lastTestStatus,
     lastTestedAt: config.lastTestedAt,
     lastTestMessage: config.lastTestMessage,
@@ -31,12 +30,11 @@ export async function GET(req: NextRequest) {
   const denied = await authorizationErrorAsync(req, 'settings', 'manage_settings');
   if (denied) return denied;
   try {
-    await db.ready();
-    db.reloadIfModified();
     const secrets = await getServerEmailSecrets();
+    const config = await getPersistedEmailConfig();
     return NextResponse.json({
       success: true,
-      emailConfig: { ...safeEmailConfig(), oauthConnected: Boolean(secrets.oauthRefreshToken) },
+      emailConfig: { ...safeEmailConfig(config), oauthConnected: Boolean(secrets.oauthRefreshToken) },
     });
   } catch (err: unknown) {
     return NextResponse.json(
@@ -56,9 +54,7 @@ export async function POST(req: NextRequest) {
   if (denied) return denied;
   try {
     const body = await req.json().catch(() => ({}));
-    await db.ready();
-    db.reloadIfModified();
-    const current = db.getEmailConfig();
+    const current = await getPersistedEmailConfig();
     const user = String(body.user ?? current.user ?? '').trim();
     const fromEmail = String(body.fromEmail ?? user ?? current.fromEmail ?? '').trim();
     const fromName = String(body.fromName ?? current.fromName ?? 'LUmentor Notifications').trim();
@@ -80,21 +76,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const updated = db.saveEmailConfig({ user, fromEmail, fromName, replyTo: replyTo || undefined, isEnabled });
-    db.logAudit({
-      userId: 'user-admin',
-      userName: 'Administrator',
-      userRole: 'ADMINISTRATOR',
-      action: 'EMAIL_CONFIG_UPDATED',
-      entityType: 'EmailConfig',
-      entityId: 'email-google-oauth',
-      details: `Updated Google Workspace outbound email configuration for ${fromEmail} (Enabled: ${isEnabled ? 'YES' : 'NO'})`,
-    });
+    const updated = { user, fromEmail, fromName, replyTo: replyTo || undefined, isEnabled };
+    await savePersistedEmailConfig(updated);
 
     return NextResponse.json({
       success: true,
       emailConfig: {
-        ...safeEmailConfig(),
+        ...safeEmailConfig(updated),
         user: updated.user,
         fromEmail: updated.fromEmail,
         fromName: updated.fromName,

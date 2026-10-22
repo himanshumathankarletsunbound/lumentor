@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizationErrorAsync, getSessionUserAsync } from '../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../lib/db/server-initialization';
-import { db } from '../../../lib/db/store';
 import { PenaltyDeductionType } from '../../../lib/types/payroll';
+import { createPenaltyPolicy, deletePenaltyPolicy, listPenaltyPolicies, updatePenaltyPolicy } from '../../../lib/db/state-repository';
 
 export async function GET(req: NextRequest) {
   await ensureServerPersistence();
@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   if (denied) return denied;
   return NextResponse.json({
     success: true,
-    policies: db.getPenaltyPolicies(),
+    policies: await listPenaltyPolicies(),
   });
 }
 
@@ -46,8 +46,12 @@ export async function POST(req: NextRequest) {
     const deductionType: PenaltyDeductionType = rawType.includes('PERCENT') ? 'PERCENT' : 'FIXED_AMOUNT';
     const rateValue = Number(body.rateValue ?? body.defaultAmount ?? 0);
 
-    const policy = db.createPenaltyPolicy({
-      id: body.id?.trim() || body.code?.trim(),
+    const policyId = body.id?.trim() || body.code?.trim();
+    if (!policyId) {
+      return NextResponse.json({ success: false, error: 'Policy ID or code is required.' }, { status: 400 });
+    }
+    const policy = await createPenaltyPolicy({
+      id: policyId,
       code: body.code?.trim() || body.id?.trim(),
       name: policyName,
       description: body.description?.trim() ?? '',
@@ -56,7 +60,6 @@ export async function POST(req: NextRequest) {
       defaultAmount: deductionType === 'FIXED_AMOUNT' ? rateValue : Number(body.defaultAmount ?? 0),
       isActive: true,
     });
-    await db.persistNow();
     return NextResponse.json({ success: true, policy }, { status: 201 });
   } catch (error) {
     return NextResponse.json(
@@ -95,11 +98,10 @@ export async function PUT(req: NextRequest) {
     }
 
     const updates = body.updates || {};
-    const updated = db.updatePenaltyPolicy(body.id, {
+    const updated = await updatePenaltyPolicy(body.id, {
       ...updates,
       name: updates.name || updates.title,
     });
-    await db.persistNow();
     return NextResponse.json({ success: true, policy: updated });
   } catch (error) {
     return NextResponse.json(
@@ -121,7 +123,6 @@ export async function DELETE(req: NextRequest) {
   }
   const id = new URL(req.url).searchParams.get('id');
   if (!id) return NextResponse.json({ success: false, error: 'Policy id is required.' }, { status: 400 });
-  db.deletePenaltyPolicy(id);
-  await db.persistNow();
+  await deletePenaltyPolicy(id);
   return NextResponse.json({ success: true });
 }

@@ -26,6 +26,34 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+async function readApiResponse<T>(response: Response): Promise<T> {
+  const text = await response.text();
+  let payload: unknown;
+
+  try {
+    payload = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(
+      response.ok
+        ? 'The authentication service returned an invalid response.'
+        : `Authentication service unavailable (${response.status}). The server returned an HTML error page; check the deployment logs.`
+    );
+  }
+
+  if (!response.ok) {
+    const error =
+      typeof payload === 'object' &&
+      payload !== null &&
+      'error' in payload &&
+      typeof payload.error === 'string'
+        ? payload.error
+        : `Authentication failed (${response.status}).`;
+    throw new Error(error);
+  }
+
+  return payload as T;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<CurrentUser>(SEED_USERS[0]);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -36,7 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const checkActiveSession = useCallback(async () => {
     try {
       const res = await fetch('/api/auth/me');
-      const data = await res.json();
+      const data = await readApiResponse<{ success?: boolean; user?: CurrentUser }>(res);
       if (data.success && data.user) {
         setCurrentUser(data.user);
         setIsAuthenticated(true);
@@ -68,7 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: usernameOrEmail, password }),
       });
-      const data = await res.json();
+      const data = await readApiResponse<{ success?: boolean; user?: CurrentUser; error?: string }>(res);
 
       if (data.success && data.user) {
         setCurrentUser(data.user);
@@ -111,7 +139,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       });
-      const data = await res.json();
+      const data = await readApiResponse<{ success?: boolean; message?: string; error?: string; resetUrl?: string }>(res);
       if (data.success) {
         return { success: true, message: data.message, resetUrl: data.resetUrl };
       }
@@ -131,7 +159,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, newPassword }),
       });
-      const data = await res.json();
+      const data = await readApiResponse<{ success?: boolean; message?: string; error?: string }>(res);
       if (data.success) {
         return { success: true, message: data.message };
       }

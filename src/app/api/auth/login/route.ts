@@ -8,6 +8,9 @@ export async function POST(req: NextRequest) {
   if (rateLimitError) return rateLimitError;
 
   try {
+    // Production state must be hydrated from PostgreSQL before credentials are read
+    // or the updated session is persisted.
+    await db.ready();
     const body = await req.json().catch(() => ({}));
     const usernameOrEmail = String(body.email || body.username || '').trim().toLowerCase();
     const password = String(body.password || '');
@@ -109,7 +112,9 @@ export async function POST(req: NextRequest) {
       details: `User ${user.email} logged in successfully`,
     });
 
-    const { passwordHash: _h, salt: _s, ...safeUser } = user;
+    const safeUser = { ...user };
+    delete safeUser.passwordHash;
+    delete safeUser.salt;
 
     const response = NextResponse.json({
       success: true,

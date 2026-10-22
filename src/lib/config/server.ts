@@ -8,17 +8,21 @@ export function requireServerSecret(name: 'DATABASE_URL' | 'CLASSCARD_API_KEY'):
   return value || '';
 }
 
-export function serverEmailSecrets() {
+interface ServerEmailSecrets {
+  oauthClientSecret: string;
+  oauthRefreshToken: string;
+}
+
+export function serverEmailSecrets(): ServerEmailSecrets {
   return {
-    pass: process.env.EMAIL_SMTP_PASSWORD || '',
     oauthClientSecret: process.env.EMAIL_OAUTH_CLIENT_SECRET || '',
-    oauthRefreshToken: process.env.EMAIL_OAUTH_REFRESH_TOKEN || '',
+    oauthRefreshToken: '',
   };
 }
 
 export async function getServerEmailSecrets() {
   const configured = serverEmailSecrets();
-  if (configured.oauthRefreshToken || isDemoMode) return configured;
+  if (isDemoMode) return { ...configured, oauthRefreshToken: '' };
 
   try {
     const { getEncryptedSecret } = await import('../db/secure-storage');

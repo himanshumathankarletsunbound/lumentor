@@ -769,41 +769,36 @@ async function runAcceptanceTests() {
     assert(db.getUserById(user.id) === undefined);
   });
 
-  // --- 27. CORPORATE EMAIL & SMTP CONFIGURATION ---
-  test('Scenario 27: Company mail server settings can be retrieved, configured, and stored securely', () => {
+  // --- 27. GOOGLE WORKSPACE OUTBOUND EMAIL CONFIGURATION ---
+  test('Scenario 27: Google Workspace outbound email settings can be retrieved and stored securely', () => {
     const initialConfig = db.getEmailConfig();
     assert(initialConfig, 'Email configuration must exist in store');
-    assert(initialConfig.host === 'smtp.letsunbound.com', 'Default host must be configured');
-    assert(initialConfig.port === 587, 'Default port must be 587');
-    assert(initialConfig.security === 'STARTTLS', 'Default security must be STARTTLS');
+    assert(initialConfig.fromName === 'LUmentor Faculty & Operations', 'Default sender name must be configured');
+    assert(initialConfig.isEnabled === false, 'Outbound email must be disabled until OAuth is connected');
 
-    // Update SMTP configuration
     const updated = db.saveEmailConfig({
-      host: 'mail.letsunbound.com',
+      host: 'smtp.gmail.com',
       port: 465,
       security: 'SSL_TLS',
       authRequired: true,
       user: 'notifications@letsunbound.com',
-      pass: 'SecretCompanyPassword@2026',
+      pass: '',
       fromEmail: 'notifications@letsunbound.com',
       fromName: 'LUmentor Faculty Notifications',
       isEnabled: true,
     });
 
-    assert(updated.host === 'mail.letsunbound.com');
-    assert(updated.port === 465);
-    assert(updated.security === 'SSL_TLS');
+    assert(updated.user === 'notifications@letsunbound.com');
+    assert(updated.fromEmail === 'notifications@letsunbound.com');
     assert(updated.isEnabled === true);
-    assert(updated.pass === 'SecretCompanyPassword@2026');
 
-    // Retrieve again to ensure persistence
     const reloaded = db.getEmailConfig();
-    assert(reloaded.host === 'mail.letsunbound.com');
-    assert(reloaded.port === 465);
+    assert(reloaded.user === 'notifications@letsunbound.com');
+    assert(reloaded.fromEmail === 'notifications@letsunbound.com');
   });
 
   // --- 28. EMAIL DISPATCH SERVICE & SIMULATED DRY-RUN ---
-  test('Scenario 28: Email service supports custom company mail templates and fallback simulation', async () => {
+  test('Scenario 28: Email service supports Google OAuth delivery and explicit demo fallback', async () => {
     const { sendEmail } = require('../src/lib/email/service');
     
     // Test simulated dispatch
@@ -812,7 +807,7 @@ async function runAcceptanceTests() {
       subject: 'Test Subject',
       text: 'Test message body',
     }, {
-      host: 'mail.letsunbound.com',
+      host: 'smtp.gmail.com',
       port: 587,
       security: 'STARTTLS',
       authRequired: true,

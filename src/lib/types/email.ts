@@ -1,22 +1,19 @@
-export type EmailSecurity = 'STARTTLS' | 'SSL_TLS' | 'NONE';
-export type EmailAuthType = 'PASSWORD' | 'OAUTH2';
-
 export interface EmailConfig {
   host: string;
   port: number;
-  security: EmailSecurity;
-  authType?: EmailAuthType; // 'PASSWORD' or 'OAUTH2'
+  security: 'STARTTLS' | 'SSL_TLS' | 'NONE';
+  authType?: 'PASSWORD' | 'OAUTH2';
   authRequired: boolean;
   user: string;
   pass: string;
-  oauthClientId?: string;
-  oauthClientSecret?: string;
-  oauthRefreshToken?: string;
   fromEmail: string;
   fromName: string;
   replyTo?: string;
   allowSelfSignedCert: boolean;
   isEnabled: boolean;
+  oauthClientId?: string;
+  oauthClientSecret?: string;
+  oauthRefreshToken?: string;
   lastTestStatus?: 'SUCCESS' | 'FAILED' | 'UNTESTED';
   lastTestedAt?: string;
   lastTestMessage?: string;

@@ -127,7 +127,6 @@ class DataStore {
       if (state) {
         this.data = { ...this.getDefaultState(), ...state };
         this.data.classcardConfig.apiKey = '';
-        this.data.emailConfig.pass = '';
         this.data.emailConfig.oauthClientSecret = '';
         this.data.emailConfig.oauthRefreshToken = '';
       } else {
@@ -200,7 +199,6 @@ class DataStore {
           const parsed = JSON.parse(raw);
           this.data = { ...this.getDefaultState(), ...parsed };
           this.data.classcardConfig.apiKey = '';
-          this.data.emailConfig.pass = '';
           this.data.emailConfig.oauthClientSecret = '';
           this.data.emailConfig.oauthRefreshToken = '';
           this.lastMtime = stat.mtimeMs;
@@ -272,7 +270,6 @@ class DataStore {
           classcardConfig: { ...this.data.classcardConfig, apiKey: '' },
           emailConfig: {
             ...this.data.emailConfig,
-            pass: '',
             oauthClientSecret: '',
             oauthRefreshToken: '',
           },

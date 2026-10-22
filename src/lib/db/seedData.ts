@@ -430,15 +430,14 @@ export const SEED_CUSTOM_FIELDS: CustomFieldDefinition[] = [
 ];
 
 export const INITIAL_EMAIL_CONFIG: EmailConfig = {
-  host: 'smtp.letsunbound.com',
-  port: 587,
-  security: 'STARTTLS',
+  host: 'smtp.gmail.com',
+  port: 465,
+  security: 'SSL_TLS',
   authRequired: true,
-  user: 'notifications@letsunbound.com',
-  pass: '',
-  fromEmail: 'notifications@letsunbound.com',
+  user: '',
+  fromEmail: '',
   fromName: 'LUmentor Faculty & Operations',
-  replyTo: 'support@letsunbound.com',
+  pass: '',
   allowSelfSignedCert: false,
   isEnabled: false,
   lastTestStatus: 'UNTESTED',

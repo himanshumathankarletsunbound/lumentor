@@ -121,7 +121,7 @@ export async function POST(req: NextRequest) {
       details: `Created user ${newUser.email} (${newUser.roleName}) with status ${newUser.status}. Invite setup: ${sendPasswordSetupEmailFlag ? 'YES' : 'NO'}`,
     });
 
-    // Send setup email via company SMTP mail server
+    // Send setup email through the configured Google Workspace OAuth account.
     if (resetUrl && sendPasswordSetupEmailFlag) {
       sendPasswordSetupEmail(newUser.email, newUser.name, resetUrl).catch((err) => {
         console.warn('Failed to dispatch password setup email:', err);

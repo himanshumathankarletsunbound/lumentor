@@ -1,5 +1,4 @@
 import nodemailer from 'nodemailer';
-import type SMTPTransport from 'nodemailer/lib/smtp-transport';
 import { EmailConfig } from '../types/email';
 import { db } from '../db/store';
 import { getServerEmailSecrets } from '../config/server';
@@ -8,78 +7,46 @@ async function resolveEmailSecrets(config: EmailConfig): Promise<EmailConfig> {
   const secrets = await getServerEmailSecrets();
   return {
     ...config,
-    pass: secrets.pass || config.pass,
     oauthClientSecret: secrets.oauthClientSecret || config.oauthClientSecret,
     oauthRefreshToken: secrets.oauthRefreshToken || config.oauthRefreshToken,
   };
 }
 
 export function createTransporter(config: EmailConfig) {
-  // Handle Google OAuth 2.0
-  if (config.authType === 'OAUTH2' && config.oauthClientId && config.oauthClientSecret && config.oauthRefreshToken) {
-    return nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        type: 'OAuth2',
-        user: config.user || config.fromEmail,
-        clientId: config.oauthClientId,
-        clientSecret: config.oauthClientSecret,
-        refreshToken: config.oauthRefreshToken,
-      },
-      tls: {
-        rejectUnauthorized: !config.allowSelfSignedCert,
-      },
-      connectionTimeout: 15000,
-      greetingTimeout: 15000,
-    });
+  if (!config.oauthClientId || !config.oauthClientSecret || !config.oauthRefreshToken) {
+    throw new Error('Gmail OAuth is not connected. Authorize the Google Workspace account first.');
   }
-
-  const isSecure = config.security === 'SSL_TLS' || config.port === 465;
-
-  const transportOptions: SMTPTransport.Options = {
-    host: config.host,
-    port: config.port,
-    secure: isSecure,
-    requireTLS: config.security === 'STARTTLS',
-    tls: {
-      rejectUnauthorized: !config.allowSelfSignedCert,
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      type: 'OAuth2',
+      user: config.user || config.fromEmail,
+      clientId: config.oauthClientId,
+      clientSecret: config.oauthClientSecret,
+      refreshToken: config.oauthRefreshToken,
     },
-    connectionTimeout: 10000, // 10 seconds
-    greetingTimeout: 10000,
-  };
-
-  if (config.authRequired && config.user) {
-    transportOptions.auth = {
-      user: config.user,
-      pass: config.pass,
-    };
-  }
-
-  return nodemailer.createTransport(transportOptions);
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+  });
 }
 
-export async function verifySmtpConnection(config: EmailConfig): Promise<{ success: boolean; message: string }> {
+export async function verifyGmailConnection(config: EmailConfig): Promise<{ success: boolean; message: string }> {
   config = await resolveEmailSecrets(config);
-  if (config.authType === 'OAUTH2') {
-    if (!config.oauthClientId || !config.oauthClientSecret || !config.oauthRefreshToken) {
-      return { success: false, message: 'Google OAuth Client ID, Secret, and Refresh Token are required.' };
-    }
-  } else if (!config.host) {
-    return { success: false, message: 'SMTP host is not configured.' };
+  if (!config.oauthClientId || !config.oauthClientSecret || !config.oauthRefreshToken || !config.user) {
+    return { success: false, message: 'Connect a Google Workspace account and provide its email address.' };
   }
 
   try {
     const transporter = createTransporter(config);
     await transporter.verify();
-    const target = config.authType === 'OAUTH2' ? 'Google OAuth 2.0 Relay' : `${config.host}:${config.port}`;
     return {
       success: true,
-      message: `Successfully connected and authenticated with ${target}.`,
+      message: `Successfully connected to Google Workspace for ${config.user}.`,
     };
   } catch (err: unknown) {
     return {
       success: false,
-      message: err instanceof Error ? err.message : 'Failed to establish connection with SMTP server.',
+      message: err instanceof Error ? err.message : 'Failed to authenticate with Google Workspace.',
     };
   }
 }
@@ -96,17 +63,14 @@ export async function sendEmail(
 ): Promise<{ success: boolean; messageId?: string; error?: string; mocked?: boolean }> {
   const config = await resolveEmailSecrets(customConfig || db.getEmailConfig());
 
-  const hasValidAuth =
-    config.authType === 'OAUTH2'
-      ? Boolean(config.oauthClientId && config.oauthClientSecret && config.oauthRefreshToken)
-      : Boolean(config.host && config.user && config.pass);
+  const hasValidAuth = Boolean(config.user && config.oauthClientId && config.oauthClientSecret && config.oauthRefreshToken);
 
   const allowSimulation = process.env.DEMO_MODE === 'true' || process.env.NODE_ENV === 'development';
   if (!config.isEnabled || !hasValidAuth) {
     if (!allowSimulation) {
       return {
         success: false,
-        error: 'Outbound email is not configured. Set the server-side SMTP or OAuth environment variables.',
+        error: 'Outbound email is not connected. Authorize the Google Workspace account in Email Settings.',
       };
     }
     console.log(`[SIMULATED EMAIL] To: ${options.to} | Subject: "${options.subject}"`);
@@ -136,10 +100,10 @@ export async function sendEmail(
       mocked: false,
     };
   } catch (err: unknown) {
-    console.error('SMTP sendEmail error:', err);
+    console.error('Gmail OAuth sendEmail error:', err);
     return {
       success: false,
-      error: err instanceof Error ? err.message : 'SMTP transmission failure',
+      error: err instanceof Error ? err.message : 'Gmail delivery failure',
     };
   }
 }
@@ -217,28 +181,25 @@ export async function sendTestEmail(
   config: EmailConfig
 ): Promise<{ success: boolean; message: string }> {
   const timestamp = new Date().toISOString();
-  const subject = `[Test Verification] LUmentor Company Mail Server (${config.host})`;
-  const text = `This is a test email sent from LUmentor via your configured company mail server.\n\nServer: ${config.host}:${config.port}\nSecurity: ${config.security}\nSender: ${config.fromEmail}\nTimestamp: ${timestamp}\n\nIf you are reading this, your corporate SMTP settings are working properly!`;
+  const subject = '[Test Verification] LUmentor Google Workspace email';
+  const text = `This is a test email sent from LUmentor using Google Workspace OAuth.\n\nSender: ${config.fromEmail}\nTimestamp: ${timestamp}\n\nIf you are reading this, outbound email is working.`;
 
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1e293b; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
       <div style="margin-bottom: 16px; border-bottom: 2px solid #10b981; padding-bottom: 12px;">
-        <h2 style="color: #0f172a; margin: 0; font-size: 20px; font-weight: 800;">LU<span style="color: #10b981;">mentor</span> SMTP Diagnostics</h2>
+        <h2 style="color: #0f172a; margin: 0; font-size: 20px; font-weight: 800;">LU<span style="color: #10b981;">mentor</span> Email Test</h2>
         <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #059669; font-weight: 700;">Connection Verified</span>
       </div>
       <p style="font-size: 14px; color: #1e293b;">
-        This test message verifies that your corporate mail server configuration is fully operational and authenticated.
+        This test message verifies that Google Workspace OAuth outbound delivery is authenticated and operational.
       </p>
       <div style="background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px; margin: 20px 0; font-family: monospace; font-size: 12px; color: #334155;">
-        <div><strong>SMTP Host:</strong> ${config.host}</div>
-        <div><strong>SMTP Port:</strong> ${config.port}</div>
-        <div><strong>Encryption:</strong> ${config.security}</div>
         <div><strong>Sender Email:</strong> ${config.fromEmail}</div>
         <div><strong>Sender Display:</strong> ${config.fromName}</div>
         <div><strong>Dispatched At:</strong> ${timestamp}</div>
       </div>
       <p style="font-size: 12px; color: #64748b;">
-        Automated emails for password invitations, password resets, and notifications will now be routed through this server.
+        Automated invitations, password resets, and notifications will be sent through this authorized Google Workspace account.
       </p>
     </div>
   `;
@@ -247,7 +208,7 @@ export async function sendTestEmail(
   if (res.success) {
     return {
       success: true,
-      message: `Test email successfully dispatched to ${to} via ${config.host}:${config.port}.`,
+      message: `Test email successfully dispatched to ${to} through Google Workspace.`,
     };
   } else {
     return {

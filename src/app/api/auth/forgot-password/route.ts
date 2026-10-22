@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     const origin = req.nextUrl.origin || 'http://localhost:3005';
     const resetUrl = `${origin}/reset-password?token=${token}`;
 
-    // Dispatch email asynchronously using company SMTP server
+    // Dispatch email asynchronously using the configured Google Workspace OAuth account.
     sendPasswordResetEmail(user.email, user.name, resetUrl).catch((e) => {
       console.warn('Failed to dispatch password reset email:', e);
     });

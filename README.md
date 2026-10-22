@@ -117,7 +117,7 @@ pnpm install
 
 ### 2. Environment Configuration
 
-Copy [`.env.example`](./.env.example) to a server-only environment file. Never expose secrets through `NEXT_PUBLIC_*` variables. Production requires PostgreSQL, live Classcard credentials, an application encryption key, and real email credentials; simulated integrations are only available with explicit `DEMO_MODE=true`.
+Copy [`.env.example`](./.env.example) to a server-only environment file. Never expose secrets through `NEXT_PUBLIC_*` variables. Production requires PostgreSQL, live Classcard credentials, an application encryption key, and a Google Workspace OAuth connection; simulated integrations are only available with explicit `DEMO_MODE=true`.
 Create a `.env.local` file in the root directory (optional, mock mode will activate automatically if unset):
 ```env
 # Classcard Public API v2 Credentials
@@ -228,11 +228,11 @@ The documented Classcard endpoints currently integrated are:
 
 Inventory ordering is allow-listed to `product_id`, `name`, or `status`, and the documented empty response from lead creation is treated as a valid successful response when Classcard returns a successful status.
 
-Set `EMAIL_SMTP_PASSWORD`, `EMAIL_OAUTH_CLIENT_SECRET`, and/or `EMAIL_OAUTH_REFRESH_TOKEN` only on the server. Email secrets are not persisted by the settings API. In production, missing or invalid email configuration is an explicit failure, not a simulated success.
+Email is outbound-only through Google Workspace OAuth. There is no SMTP-password, app-password, IMAP, POP3, or incoming-mail integration. Set `EMAIL_OAUTH_CLIENT_SECRET` only on the server; the OAuth refresh token is stored encrypted in PostgreSQL after authorization. In production, missing or invalid email configuration is an explicit failure, not a simulated success.
 
 ### Gmail OAuth
 
-Configure a Google OAuth Web application with the exact callback URL in `GOOGLE_OAUTH_REDIRECT_URI`, then set `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, and `APP_ENCRYPTION_KEY` on the server. In **Admin → Settings → Email**, choose Google OAuth and select **Connect Gmail securely**. The callback exchanges the authorization code server-side and stores only an AES-256-GCM encrypted refresh token in PostgreSQL; it is never sent to browser code or written to JSON. The Gmail account must grant the `https://mail.google.com/` scope. Run the email test after connecting and enabling outbound email.
+Configure a Google OAuth Web application with the exact callback URL in `GOOGLE_OAUTH_REDIRECT_URI`, then set `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, and `APP_ENCRYPTION_KEY` on the server. In **Admin → Settings → Email**, enter the Google Workspace sender address and select **Connect Google Workspace**. The callback exchanges the authorization code server-side and stores only an AES-256-GCM encrypted refresh token in PostgreSQL; it is never sent to browser code or written to JSON. The account must grant the `https://mail.google.com/` scope. Run the outbound test after connecting and enabling email. LUmentor never reads incoming mail.
 
 `DEMO_MODE=true` is restricted to local acceptance tests and demonstrations. It is the only mode that enables simulated Classcard responses, JSON seed behavior, or simulated email. Production must use `DEMO_MODE=false`.
 

@@ -6,7 +6,6 @@ const STATE_ID = 'lumentor';
 const jsonState = (state: AppDatabase): Prisma.InputJsonValue => {
   const persisted = JSON.parse(JSON.stringify(state)) as AppDatabase;
   persisted.classcardConfig.apiKey = '';
-  persisted.emailConfig.pass = '';
   persisted.emailConfig.oauthClientSecret = '';
   persisted.emailConfig.oauthRefreshToken = '';
   return persisted as unknown as Prisma.InputJsonValue;

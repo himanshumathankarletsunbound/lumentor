@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { AppShell } from '../../../components/layout/AppShell';
 import { db } from '../../../lib/db/store';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell, TableEmptyState } from '../../../components/ui/Table';
@@ -9,7 +9,8 @@ import { Button } from '../../../components/ui/Button';
 import { RowActions } from '../../../components/ui/RowActions';
 import { DeleteConfirmModal } from '../../../components/ui/DeleteConfirmModal';
 import { AddRecordModal } from '../../../components/operations/AddRecordModal';
-import { BookOpen, Plus, FolderKanban, Layers, Search, Sparkles } from 'lucide-react';
+import { AddSubjectOrCategoryModal } from '../../../components/operations/AddSubjectOrCategoryModal';
+import { BookOpen, Plus, FolderKanban, FolderPlus, ChevronDown, Search, Layers } from 'lucide-react';
 import { Subject } from '../../../lib/types/models';
 
 export default function SubjectsPage() {
@@ -17,10 +18,26 @@ export default function SubjectsPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [modalMode, setModalMode] = useState<'subject' | 'category'>('subject');
+  const [defaultCategoryForAdd, setDefaultCategoryForAdd] = useState<string>('');
   const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
   const [deletingSubject, setDeletingSubject] = useState<Subject | null>(null);
-  const [defaultCategoryForAdd, setDefaultCategoryForAdd] = useState<string>('');
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Dropdown menu state for header "Add" button
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const addMenuRef = useRef<HTMLDivElement>(null);
+
+  // Custom registered categories (persists empty categories created by user)
+  const [customCategories, setCustomCategories] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('lumentor_custom_subject_categories');
+        if (saved) return JSON.parse(saved);
+      } catch {}
+    }
+    return [];
+  });
 
   const refreshSubjects = async () => {
     const response = await fetch('/api/records?type=subject');
@@ -38,15 +55,30 @@ export default function SubjectsPage() {
     return () => window.clearTimeout(timer);
   }, []);
 
-  // Compute unique categories
+  // Close add menu when clicking outside
+  useEffect(() => {
+    if (!addMenuOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
+        setAddMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [addMenuOpen]);
+
+  // Compute all unique categories (derived from subjects + user-created categories)
   const categories = useMemo(() => {
     const set = new Set<string>();
     subjects.forEach((s) => {
       const cat = (s.category || 'General').trim();
       if (cat) set.add(cat);
     });
+    customCategories.forEach((cat) => {
+      if (cat.trim()) set.add(cat.trim());
+    });
     return Array.from(set).sort();
-  }, [subjects]);
+  }, [subjects, customCategories]);
 
   // Group subjects by category with search query filtering
   const categorizedSubjects = useMemo(() => {
@@ -61,6 +93,10 @@ export default function SubjectsPage() {
     });
 
     const groups: Record<string, Subject[]> = {};
+    categories.forEach((cat) => {
+      groups[cat] = [];
+    });
+
     filtered.forEach((s) => {
       const cat = (s.category || 'General').trim();
       if (!groups[cat]) groups[cat] = [];
@@ -68,42 +104,84 @@ export default function SubjectsPage() {
     });
 
     return groups;
-  }, [subjects, searchQuery]);
+  }, [subjects, categories, searchQuery]);
 
   const activeCategories = useMemo(() => {
     if (selectedCategory !== 'ALL') {
-      return Object.keys(categorizedSubjects).filter((cat) => cat === selectedCategory);
+      return categories.filter((cat) => cat === selectedCategory);
     }
-    return Object.keys(categorizedSubjects).sort();
-  }, [categorizedSubjects, selectedCategory]);
+    return categories;
+  }, [categories, selectedCategory]);
 
-  const handleCreate = async (values: Record<string, string>) => {
-    const duration = Number(values.duration) || 60;
+  const handleSaveSubject = async (data: {
+    name: string;
+    code: string;
+    category: string;
+    duration: number;
+    description?: string;
+  }) => {
     const response = await fetch('/api/records', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         type: 'subject',
         record: {
-          name: values.name.trim(),
-          code: values.code.trim().toUpperCase(),
-          category: values.category.trim() || 'General',
-          description: values.description?.trim() || '',
-          defaultDurationMinutes: duration,
-          availableDurations: [duration],
+          name: data.name,
+          code: data.code,
+          category: data.category || 'General',
+          description: data.description || '',
+          defaultDurationMinutes: data.duration,
+          availableDurations: [data.duration],
           isActive: true,
-          color: values.color || '#6366f1',
+          color: '#6366f1',
           provenance: 'LOCALLY_CREATED',
         },
       }),
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Unable to create subject.');
+
+    if (!customCategories.includes(data.category)) {
+      const updated = [...customCategories, data.category];
+      setCustomCategories(updated);
+      try {
+        localStorage.setItem('lumentor_custom_subject_categories', JSON.stringify(updated));
+      } catch {}
+    }
+
     await refreshSubjects();
-    setShowAddModal(false);
   };
 
-  const handleUpdate = async (values: Record<string, string>) => {
+  const handleSaveCategory = async (data: {
+    categoryName: string;
+    description?: string;
+    initialSubject?: {
+      name: string;
+      code: string;
+      duration: number;
+    };
+  }) => {
+    const catName = data.categoryName.trim();
+    if (!customCategories.includes(catName)) {
+      const updated = [...customCategories, catName];
+      setCustomCategories(updated);
+      try {
+        localStorage.setItem('lumentor_custom_subject_categories', JSON.stringify(updated));
+      } catch {}
+    }
+
+    if (data.initialSubject) {
+      await handleSaveSubject({
+        name: data.initialSubject.name,
+        code: data.initialSubject.code,
+        category: catName,
+        duration: data.initialSubject.duration,
+        description: data.description,
+      });
+    }
+  };
+
+  const handleUpdateSubject = async (values: Record<string, string>) => {
     if (!editingSubject) return;
     const duration = Number(values.duration) || 60;
     const response = await fetch('/api/records', {
@@ -128,7 +206,7 @@ export default function SubjectsPage() {
     setEditingSubject(null);
   };
 
-  const handleDelete = async () => {
+  const handleDeleteSubject = async () => {
     if (!deletingSubject) return;
     setIsDeleting(true);
     try {
@@ -155,25 +233,64 @@ export default function SubjectsPage() {
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Academic Subjects</h1>
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/60">
-                {subjects.length} Subjects across {categories.length || 0} Categories
+                {subjects.length} Subjects across {categories.length} Categories
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-1">
               Curriculum catalog organized by categories, course definitions, and session durations.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="primary"
-              size="sm"
-              leftIcon={<Plus className="w-4 h-4" />}
-              onClick={() => {
-                setDefaultCategoryForAdd('');
-                setShowAddModal(true);
-              }}
-            >
-              Add subject
-            </Button>
+
+          {/* Action Button: "Add" with Category and Subject Options */}
+          <div className="flex items-center gap-2" ref={addMenuRef}>
+            <div className="relative inline-block text-left">
+              <Button
+                variant="primary"
+                size="sm"
+                leftIcon={<Plus className="w-4 h-4" />}
+                rightIcon={<ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${addMenuOpen ? 'rotate-180' : ''}`} />}
+                onClick={() => setAddMenuOpen(!addMenuOpen)}
+              >
+                Add
+              </Button>
+
+              {addMenuOpen && (
+                <div className="absolute right-0 z-40 mt-1.5 w-56 origin-top-right rounded-xl bg-white p-1 text-xs shadow-xl ring-1 ring-slate-900/10 border border-slate-100 focus:outline-none animate-in fade-in-50 zoom-in-95 duration-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddMenuOpen(false);
+                      setModalMode('subject');
+                      setDefaultCategoryForAdd('');
+                      setShowAddModal(true);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 rounded-lg transition-colors"
+                  >
+                    <BookOpen className="w-4 h-4 text-indigo-600 shrink-0" />
+                    <div>
+                      <div className="font-semibold text-slate-800">Add Subject</div>
+                      <div className="text-[10px] font-normal text-slate-400">Add a course under a category</div>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddMenuOpen(false);
+                      setModalMode('category');
+                      setDefaultCategoryForAdd('');
+                      setShowAddModal(true);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 rounded-lg transition-colors"
+                  >
+                    <FolderPlus className="w-4 h-4 text-indigo-600 shrink-0" />
+                    <div>
+                      <div className="font-semibold text-slate-800">Add Category</div>
+                      <div className="text-[10px] font-normal text-slate-400">Create a curriculum category</div>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -193,7 +310,7 @@ export default function SubjectsPage() {
               All Categories ({subjects.length})
             </button>
             {categories.map((cat) => {
-              const count = subjects.filter((s) => (s.category || 'General').trim() === cat).length;
+              const count = (categorizedSubjects[cat] || []).length;
               const isActive = selectedCategory === cat;
               return (
                 <button
@@ -214,6 +331,19 @@ export default function SubjectsPage() {
                 </button>
               );
             })}
+
+            {/* Quick "+ New Category" button in the tabs bar */}
+            <button
+              type="button"
+              onClick={() => {
+                setModalMode('category');
+                setShowAddModal(true);
+              }}
+              className="px-2.5 py-1.5 rounded-lg font-medium text-indigo-600 bg-indigo-50/70 hover:bg-indigo-100 border border-indigo-200/60 transition-colors flex items-center gap-1"
+            >
+              <FolderPlus className="w-3.5 h-3.5" />
+              <span>New Category</span>
+            </button>
           </div>
 
           {/* Search Box */}
@@ -230,29 +360,38 @@ export default function SubjectsPage() {
         </div>
 
         {/* Subjects Grouped by Category */}
-        {subjects.length === 0 ? (
+        {categories.length === 0 ? (
           <div className="rounded-xl border border-slate-200 bg-white p-8">
             <TableEmptyState
               title="No Academic Subjects Found"
-              description="Create your first subject and organize it under an academic category."
+              description="Create your first subject or define a curriculum category to get started."
               action={
-                <Button
-                  variant="primary"
-                  size="sm"
-                  leftIcon={<Plus className="w-4 h-4" />}
-                  onClick={() => {
-                    setDefaultCategoryForAdd('');
-                    setShowAddModal(true);
-                  }}
-                >
-                  Create First Subject
-                </Button>
+                <div className="flex items-center justify-center gap-2">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    leftIcon={<Plus className="w-4 h-4" />}
+                    onClick={() => {
+                      setModalMode('subject');
+                      setShowAddModal(true);
+                    }}
+                  >
+                    Add Subject
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    leftIcon={<FolderPlus className="w-4 h-4 text-indigo-600" />}
+                    onClick={() => {
+                      setModalMode('category');
+                      setShowAddModal(true);
+                    }}
+                  >
+                    Add Category
+                  </Button>
+                </div>
               }
             />
-          </div>
-        ) : activeCategories.length === 0 ? (
-          <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-xs text-slate-500">
-            No subjects match your selected filters.
           </div>
         ) : (
           <div className="space-y-6">
@@ -281,6 +420,7 @@ export default function SubjectsPage() {
                       leftIcon={<Plus className="w-3.5 h-3.5 text-indigo-600" />}
                       className="text-xs text-indigo-700 hover:bg-indigo-50"
                       onClick={() => {
+                        setModalMode('subject');
                         setDefaultCategoryForAdd(categoryName);
                         setShowAddModal(true);
                       }}
@@ -290,92 +430,106 @@ export default function SubjectsPage() {
                   </div>
 
                   {/* Table of Subjects inside this Category */}
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Subject Name</TableHead>
-                        <TableHead>Subject Code</TableHead>
-                        <TableHead>Default Duration</TableHead>
-                        <TableHead>Available Durations</TableHead>
-                        <TableHead>Source</TableHead>
-                        <TableHead className="text-right">Action</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {categorySubjects.map((s) => (
-                        <TableRow key={s.id}>
-                          <TableCell className="font-bold text-slate-900">
-                            <div className="flex items-center gap-2.5">
-                              <span className="w-3 h-3 rounded-full shrink-0 shadow-2xs" style={{ backgroundColor: s.color || '#6366f1' }} />
-                              <div>
-                                <span className="font-semibold text-slate-900">{s.name}</span>
-                                {s.description && <p className="text-[11px] text-slate-400 font-normal">{s.description}</p>}
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="font-mono text-xs font-semibold text-slate-700">{s.code}</TableCell>
-                          <TableCell className="text-xs text-slate-700 font-semibold">{s.defaultDurationMinutes} mins</TableCell>
-                          <TableCell className="text-xs text-slate-500">
-                            {s.availableDurations && s.availableDurations.length > 0
-                              ? s.availableDurations.map((d) => `${d}m`).join(', ')
-                              : `${s.defaultDurationMinutes}m`}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={s.provenance === 'CLASSCARD_SOURCED' ? 'purple' : 'neutral'} size="sm">
-                              {s.provenance === 'CLASSCARD_SOURCED' ? 'Classcard' : 'Local'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <RowActions
-                              editTooltip={`Edit ${s.name}`}
-                              deleteTooltip={`Delete ${s.name}`}
-                              onEdit={() => setEditingSubject(s)}
-                              onDelete={() => setDeletingSubject(s)}
-                              extraActions={[
-                                {
-                                  label: 'View curriculum details',
-                                  onClick: () => alert(`Subject details for ${s.name} (${s.code}) will be displayed in full preview mode.`),
-                                },
-                                {
-                                  label: 'Duplicate subject',
-                                  onClick: () => {
-                                    setDefaultCategoryForAdd(s.category);
-                                    setShowAddModal(true);
-                                  },
-                                },
-                                {
-                                  label: 'Assign to mentors',
-                                  onClick: () => alert(`Direct mentor assignment for ${s.name} will open mentor matrix.`),
-                                },
-                              ]}
-                            />
-                          </TableCell>
+                  {categorySubjects.length === 0 ? (
+                    <div className="p-6 text-center text-xs text-slate-400 bg-slate-50/50">
+                      No subjects configured under <span className="font-semibold text-slate-700">{categoryName}</span> yet.{' '}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setModalMode('subject');
+                          setDefaultCategoryForAdd(categoryName);
+                          setShowAddModal(true);
+                        }}
+                        className="text-indigo-600 font-semibold hover:underline ml-1"
+                      >
+                        + Add first subject
+                      </button>
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Subject Name</TableHead>
+                          <TableHead>Subject Code</TableHead>
+                          <TableHead>Default Duration</TableHead>
+                          <TableHead>Available Durations</TableHead>
+                          <TableHead>Source</TableHead>
+                          <TableHead className="text-right">Action</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {categorySubjects.map((s) => (
+                          <TableRow key={s.id}>
+                            <TableCell className="font-bold text-slate-900">
+                              <div className="flex items-center gap-2.5">
+                                <span className="w-3 h-3 rounded-full shrink-0 shadow-2xs" style={{ backgroundColor: s.color || '#6366f1' }} />
+                                <div>
+                                  <span className="font-semibold text-slate-900">{s.name}</span>
+                                  {s.description && <p className="text-[11px] text-slate-400 font-normal">{s.description}</p>}
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="font-mono text-xs font-semibold text-slate-700">{s.code}</TableCell>
+                            <TableCell className="text-xs text-slate-700 font-semibold">{s.defaultDurationMinutes} mins</TableCell>
+                            <TableCell className="text-xs text-slate-500">
+                              {s.availableDurations && s.availableDurations.length > 0
+                                ? s.availableDurations.map((d) => `${d}m`).join(', ')
+                                : `${s.defaultDurationMinutes}m`}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={s.provenance === 'CLASSCARD_SOURCED' ? 'purple' : 'neutral'} size="sm">
+                                {s.provenance === 'CLASSCARD_SOURCED' ? 'Classcard' : 'Local'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <RowActions
+                                editTooltip={`Edit ${s.name}`}
+                                deleteTooltip={`Delete ${s.name}`}
+                                onEdit={() => setEditingSubject(s)}
+                                onDelete={() => setDeletingSubject(s)}
+                                extraActions={[
+                                  {
+                                    label: 'View curriculum details',
+                                    onClick: () => alert(`Subject details for ${s.name} (${s.code}) will be displayed in full preview mode.`),
+                                  },
+                                  {
+                                    label: 'Duplicate subject',
+                                    onClick: () => {
+                                      setDefaultCategoryForAdd(s.category);
+                                      setModalMode('subject');
+                                      setShowAddModal(true);
+                                    },
+                                  },
+                                  {
+                                    label: 'Assign to mentors',
+                                    onClick: () => alert(`Direct mentor assignment for ${s.name} will open mentor matrix.`),
+                                  },
+                                ]}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
                 </div>
               );
             })}
           </div>
         )}
 
-        {/* Add Subject Modal */}
-        <AddRecordModal
-          title="Add Academic Subject"
+        {/* Unified Add Modal: Handles Adding Category OR Subject */}
+        <AddSubjectOrCategoryModal
           isOpen={showAddModal}
           onClose={() => {
             setShowAddModal(false);
             setDefaultCategoryForAdd('');
           }}
-          initialValues={defaultCategoryForAdd ? { category: defaultCategoryForAdd } : undefined}
-          fields={[
-            { name: 'name', label: 'Subject name', placeholder: 'e.g. Advanced Calculus' },
-            { name: 'code', label: 'Subject code', placeholder: 'e.g. MATH-201' },
-            { name: 'category', label: 'Category', placeholder: 'e.g. STEM, Languages, Arts' },
-            { name: 'duration', label: 'Default duration (minutes)', type: 'number', placeholder: '60' },
-          ]}
-          onSave={handleCreate}
+          initialMode={modalMode}
+          defaultCategory={defaultCategoryForAdd}
+          existingCategories={categories}
+          onSaveSubject={handleSaveSubject}
+          onSaveCategory={handleSaveCategory}
         />
 
         {/* Edit Subject Modal */}
@@ -397,7 +551,7 @@ export default function SubjectsPage() {
               { name: 'category', label: 'Category' },
               { name: 'duration', label: 'Default duration (minutes)', type: 'number' },
             ]}
-            onSave={handleUpdate}
+            onSave={handleUpdateSubject}
           />
         )}
 
@@ -408,7 +562,7 @@ export default function SubjectsPage() {
             recordName={deletingSubject.name}
             recordType="subject"
             isDeleting={isDeleting}
-            onConfirm={handleDelete}
+            onConfirm={handleDeleteSubject}
             onClose={() => setDeletingSubject(null)}
           />
         )}

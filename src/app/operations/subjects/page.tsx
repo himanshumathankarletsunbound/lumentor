@@ -10,7 +10,7 @@ import { RowActions } from '../../../components/ui/RowActions';
 import { DeleteConfirmModal } from '../../../components/ui/DeleteConfirmModal';
 import { AddRecordModal } from '../../../components/operations/AddRecordModal';
 import { AddSubjectOrCategoryModal } from '../../../components/operations/AddSubjectOrCategoryModal';
-import { BookOpen, Plus, FolderKanban, FolderPlus, ChevronDown, Search, Layers } from 'lucide-react';
+import { BookOpen, Plus, FolderKanban, FolderPlus, ChevronDown, Search } from 'lucide-react';
 import { Subject } from '../../../lib/types/models';
 
 export default function SubjectsPage() {

@@ -130,7 +130,7 @@ export async function runClasscardSync(jobType: SyncJobType = 'ALL'): Promise<Sy
               dueDate: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10),
               totalAmount: amount,
               paidAmount: status === 'PAID' ? amount : 0,
-              currency: 'USD',
+              currency: 'INR',
               status,
               items: [
                 {

@@ -37,7 +37,7 @@ export default function PayrollRulesPage() {
       code,
       description,
       compensationModel: model,
-      currency: 'USD',
+      currency: 'INR',
       baseSalary: parseFloat(baseSalary) || 0,
       defaultClassRate: parseFloat(classRate) || 0,
       hourlyRate: parseFloat(hourlyRate) || 0,

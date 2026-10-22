@@ -11,7 +11,7 @@ import { GoogleWorkspaceEmailSettings } from '../../../components/settings/Googl
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<'general' | 'email'>('general');
   const [orgName, setOrgName] = useState('LUmentor Educational Services');
-  const [currency, setCurrency] = useState('USD');
+  const [currency, setCurrency] = useState('INR');
   const [timezone, setTimezone] = useState('America/New_York');
   const [cutoffDay, setCutoffDay] = useState(15);
   const [saved, setSaved] = useState(false);
@@ -24,7 +24,7 @@ export default function SettingsPage() {
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || 'Unable to load organization settings.');
       setOrgName(data.orgSettings.orgName || 'LUmentor Educational Services');
-      setCurrency(data.orgSettings.currency || 'USD');
+      setCurrency(data.orgSettings.currency || 'INR');
       setTimezone(data.orgSettings.timezone || 'America/New_York');
       setCutoffDay(data.orgSettings.cutoffDay || 15);
     } catch (err) {
@@ -97,7 +97,7 @@ export default function SettingsPage() {
                 <label className="block font-semibold text-slate-700">
                   Currency
                   <select value={currency} onChange={(event) => setCurrency(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 p-2 font-normal text-slate-900">
-                    <option value="USD">USD ($)</option>
+                    <option value="INR">INR (₹)</option>
                     <option value="INR">INR</option>
                     <option value="EUR">EUR</option>
                     <option value="GBP">GBP</option>

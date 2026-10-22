@@ -4,6 +4,8 @@ A high-performance SaaS management platform built for tutoring and education bus
 
 This system provides a unified operational and financial layer: bi-directional synchronisation with Classcard Public API v2, role-based access control (RBAC), multi-view unified calendar, attendance marking, an anti-tamper multi-model mentor payroll calculation engine, dispute and penalty management, and audit logging.
 
+All monetary values in the application are denominated and displayed in Indian rupees (INR/₹), including payroll, penalties, incentives, packages, invoices, payments, and payslips. Legacy records carrying a USD currency tag are normalized to INR for display.
+
 ---
 
 ## 🌟 Key Features

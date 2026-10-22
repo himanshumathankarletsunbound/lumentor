@@ -244,7 +244,7 @@ export class PayrollEngine {
       totalPenalties,
       totalAdjustments,
       totalNet,
-      currency: 'USD',
+      currency: 'INR',
       paymentStatus: 'UNPAID',
       lineItems,
       createdAt: new Date().toISOString(),

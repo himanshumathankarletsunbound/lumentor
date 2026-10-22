@@ -96,7 +96,7 @@ export function PenaltyModal({
       action: 'PENALTY_SUBMITTED',
       entityType: 'Penalty',
       entityId: pen.id,
-      details: `Submitted $${parsedAmount} penalty for ${pen.mentorName} (${category}): ${reason}`,
+      details: `Submitted ₹${parsedAmount} penalty for ${pen.mentorName} (${category}): ${reason}`,
     });
 
     onSaved();
@@ -114,7 +114,7 @@ export function PenaltyModal({
         action: 'PENALTY_APPROVED',
         entityType: 'Penalty',
         entityId: penaltyToView.id,
-        details: `Approved penalty ${penaltyToView.id} of $${penaltyToView.amount} for ${penaltyToView.mentorName}`,
+        details: `Approved penalty ${penaltyToView.id} of ₹${penaltyToView.amount} for ${penaltyToView.mentorName}`,
       });
       onSaved();
       onClose();
@@ -462,7 +462,7 @@ export function PenaltyModal({
               </div>
 
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Penalty Amount ($ USD) *</label>
+                <label className="font-semibold text-slate-700 block mb-1">Penalty Amount (₹ INR) *</label>
                 <input
                   type="number"
                   step="0.01"

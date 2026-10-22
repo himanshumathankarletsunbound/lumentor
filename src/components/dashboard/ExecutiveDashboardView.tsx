@@ -348,7 +348,7 @@ export function ExecutiveDashboardView() {
           value={formatCurrency(totalPayrollExpenditure)}
           icon={<DollarSign className="w-5 h-5" />}
           color="emerald"
-          trend={{ value: '$2,175.00', isPositive: true, label: 'settled to date' }}
+          trend={{ value: '₹2,175.00', isPositive: true, label: 'settled to date' }}
         />
         <StatCard
           title="Pending Payroll Approvals"

@@ -598,7 +598,7 @@ export default function PenaltiesPage() {
                     {/* 4. Rate / Value */}
                     <div>
                       <label className="block font-semibold text-slate-700 mb-1">
-                        {policyType === 'PERCENT' ? 'Percentage Value (%)' : 'Amount Value ($ USD)'} <span className="text-rose-500">*</span>
+                        {policyType === 'PERCENT' ? 'Percentage Value (%)' : 'Amount Value (₹ INR)'} <span className="text-rose-500">*</span>
                       </label>
                       <div className="relative">
                         <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400 font-bold">
@@ -823,7 +823,7 @@ export default function PenaltiesPage() {
 
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    {editType === 'PERCENT' ? 'Percentage Rate (%)' : 'Amount ($ USD)'} *
+                    {editType === 'PERCENT' ? 'Percentage Rate (%)' : 'Amount (₹ INR)'} *
                   </label>
                   <input
                     type="number"

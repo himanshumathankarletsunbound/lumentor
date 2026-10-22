@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     db.reloadIfModified();
 
     const orgName = String(body.orgName || '').trim();
-    const currency = String(body.currency || 'USD').trim();
+    const currency = String(body.currency || 'INR').trim();
     const timezone = String(body.timezone || 'America/New_York').trim();
     const cutoffDay = Number(body.cutoffDay) || 15;
 

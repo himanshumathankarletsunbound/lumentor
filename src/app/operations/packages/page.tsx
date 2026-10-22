@@ -49,7 +49,7 @@ export default function PackagesPage() {
           totalSessions: Number(values.sessions) || 1,
           validityDays: Number(values.validity) || 30,
           price: Number(values.price) || 0,
-          currency: values.currency?.trim().toUpperCase() || 'USD',
+          currency: values.currency?.trim().toUpperCase() || 'INR',
           subjectIds: [],
           branchIds: [],
           isActive: true,
@@ -238,7 +238,7 @@ export default function PackagesPage() {
             { name: 'sessions', label: 'Included sessions', type: 'number', placeholder: '12' },
             { name: 'validity', label: 'Validity (days)', type: 'number', placeholder: '90' },
             { name: 'price', label: 'Tuition price', type: 'number', placeholder: '1200' },
-            { name: 'currency', label: 'Currency', placeholder: 'USD' },
+            { name: 'currency', label: 'Currency', placeholder: 'INR' },
           ]}
           onSave={handleCreate}
         />
@@ -256,7 +256,7 @@ export default function PackagesPage() {
               sessions: String(editingPackage.totalSessions),
               validity: String(editingPackage.validityDays),
               price: String(editingPackage.price),
-              currency: editingPackage.currency,
+              currency: editingPackage.currency || 'INR',
             }}
             fields={[
               { name: 'name', label: 'Package name' },

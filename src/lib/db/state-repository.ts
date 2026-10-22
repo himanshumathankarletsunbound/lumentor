@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
 import type { AppDatabase } from './store';
 import type { Branch, Mentor, Package, Student, Subject } from '../types/models';
+import type { CurrentUser } from '../types/auth';
 
 const STATE_ID = 'lumentor';
 const jsonState = (state: AppDatabase): Prisma.InputJsonValue => {
@@ -34,6 +35,90 @@ async function ensureOrganization() {
     select: { id: true },
   });
   return organization.id;
+}
+
+function toCurrentUser(user: {
+  id: string;
+  email: string;
+  name: string;
+  role: CurrentUser['role'];
+  roleName: string | null;
+  permissions: unknown;
+  status: string;
+  passwordHash: string;
+  salt: string;
+  sessionToken: string | null;
+  sessionExpiry: Date | null;
+  mentorId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}): CurrentUser {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    roleName: user.roleName || user.role,
+    permissions: Array.isArray(user.permissions) ? user.permissions as CurrentUser['permissions'] : [],
+    status: user.status as CurrentUser['status'],
+    passwordHash: user.passwordHash,
+    salt: user.salt,
+    sessionToken: user.sessionToken || undefined,
+    sessionExpiry: user.sessionExpiry?.toISOString(),
+    mentorId: user.mentorId || undefined,
+    assignedBranchIds: [],
+    createdAt: user.createdAt.toISOString(),
+    updatedAt: user.updatedAt.toISOString(),
+  };
+}
+
+export async function findUserByEmail(email: string): Promise<CurrentUser | undefined> {
+  const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+  return user ? toCurrentUser(user) : undefined;
+}
+
+export async function findUserBySessionToken(token: string): Promise<CurrentUser | undefined> {
+  const user = await prisma.user.findUnique({ where: { sessionToken: token } });
+  if (!user || !user.isActive || user.status !== 'ACTIVE') return undefined;
+  if (user.sessionExpiry && user.sessionExpiry <= new Date()) return undefined;
+  return toCurrentUser(user);
+}
+
+export async function saveUser(user: CurrentUser): Promise<CurrentUser> {
+  const organizationId = await ensureOrganization();
+  const saved = await prisma.user.upsert({
+    where: { email: user.email.toLowerCase() },
+    create: {
+      id: user.id,
+      organizationId,
+      email: user.email.toLowerCase(),
+      name: user.name,
+      passwordHash: user.passwordHash || '',
+      salt: user.salt || '',
+      role: user.role,
+      roleName: user.roleName,
+      permissions: JSON.parse(JSON.stringify(user.permissions)) as Prisma.InputJsonValue,
+      status: user.status || 'ACTIVE',
+      isActive: user.status !== 'DISABLED',
+      sessionToken: user.sessionToken,
+      sessionExpiry: user.sessionExpiry ? new Date(user.sessionExpiry) : null,
+      mentorId: user.mentorId,
+    },
+    update: {
+      name: user.name,
+      passwordHash: user.passwordHash || '',
+      salt: user.salt || '',
+      role: user.role,
+      roleName: user.roleName,
+      permissions: JSON.parse(JSON.stringify(user.permissions)) as Prisma.InputJsonValue,
+      status: user.status || 'ACTIVE',
+      isActive: user.status !== 'DISABLED',
+      sessionToken: user.sessionToken,
+      sessionExpiry: user.sessionExpiry ? new Date(user.sessionExpiry) : null,
+      mentorId: user.mentorId,
+    },
+  });
+  return toCurrentUser(saved);
 }
 
 async function ensurePayrollPlan(organizationId: string, id: string) {

@@ -3,6 +3,7 @@ import { db } from '../../../../lib/db/store';
 import { verifyPassword, generateSessionToken } from '../../../../lib/auth/crypto';
 import { enforceRateLimit } from '../../../../lib/rate-limit/limiter';
 import { ensureServerPersistence } from '../../../../lib/db/server-initialization';
+import { findUserByEmail, saveUser } from '../../../../lib/db/state-repository';
 
 export async function POST(req: NextRequest) {
   const rateLimitError = enforceRateLimit(req, { limit: 10, windowSeconds: 60, identifierPrefix: 'auth-login' });
@@ -21,14 +22,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    db.reloadIfModified();
-    const users = db.getUsers();
-
-    // Match by email or username prefix
-    const user = users.find((u) => {
-      const email = u.email.toLowerCase();
-      return email === usernameOrEmail || email.split('@')[0] === usernameOrEmail;
-    });
+    let user = await findUserByEmail(usernameOrEmail);
+    if (!user && !usernameOrEmail.includes('@')) {
+      user = await findUserByEmail(`${usernameOrEmail}@letsunbound.com`);
+    }
 
     if (!user) {
       return NextResponse.json(
@@ -99,17 +96,7 @@ export async function POST(req: NextRequest) {
     if (user.status === 'SENT_PASSWORD_VERIFICATION') {
       user.status = 'ACTIVE';
     }
-    db.saveUser(user);
-
-    db.logAudit({
-      userId: user.id,
-      userName: user.name,
-      userRole: user.role,
-      action: 'LOGIN_SUCCESS',
-      entityType: 'User',
-      entityId: user.id,
-      details: `User ${user.email} logged in successfully`,
-    });
+    user = await saveUser(user);
 
     const safeUser = { ...user };
     delete safeUser.passwordHash;

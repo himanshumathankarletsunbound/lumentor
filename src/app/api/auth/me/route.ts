@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../../../../lib/db/store';
 import { ensureServerPersistence } from '../../../../lib/db/server-initialization';
+import { findUserBySessionToken } from '../../../../lib/db/state-repository';
 
 export async function GET(req: NextRequest) {
   try {
     await ensureServerPersistence();
-    db.reloadIfModified();
 
     // Check cookie first, then auth header
     let token = req.cookies.get('lumentor_session')?.value;
@@ -24,7 +23,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const user = db.getUserBySessionToken(token);
+    const user = await findUserBySessionToken(token);
     if (!user) {
       return NextResponse.json(
         { success: false, error: 'Session expired or invalid.' },

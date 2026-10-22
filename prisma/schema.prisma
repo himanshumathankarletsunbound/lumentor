@@ -139,7 +139,13 @@ model User {
   email        String     @unique
   name         String
   passwordHash String
+  salt         String
   role         SystemRole @default(OPERATIONS)
+  roleName     String?
+  permissions  Json       @default("[]")
+  status       String     @default("ACTIVE")
+  sessionToken String?    @unique
+  sessionExpiry DateTime?
   roleId       String?
   roleDef      Role?      @relation(fields: [roleId], references: [id])
   mentorId     String?    @unique

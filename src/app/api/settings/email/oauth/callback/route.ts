@@ -53,16 +53,28 @@ export async function GET(req: NextRequest) {
   const profileResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
     headers: { Authorization: `Bearer ${token.access_token}` },
   });
+  if (!profileResponse.ok) {
+    return NextResponse.json(
+      { success: false, error: 'Google authorization succeeded, but LUmentor could not determine the Workspace account email.' },
+      { status: 502 }
+    );
+  }
   const profile = (await profileResponse.json()) as { email?: string };
+  if (!profile.email) {
+    return NextResponse.json(
+      { success: false, error: 'Google authorization succeeded, but no Workspace account email was returned.' },
+      { status: 502 }
+    );
+  }
   await setEncryptedSecret('email.oauth.refresh_token', token.refresh_token);
-  await db.ready();
   db.saveEmailConfig({
     authType: 'OAUTH2',
     oauthClientId: config.clientId,
-    user: profile.email || db.getEmailConfig().user,
-    fromEmail: profile.email || db.getEmailConfig().fromEmail,
+    user: profile.email,
+    fromEmail: profile.email,
     isEnabled: false,
   });
+  await db.persistNow();
 
   const response = NextResponse.redirect(new URL('/admin/settings?emailOAuth=success', req.url));
   response.cookies.delete('lumentor_gmail_oauth_state');

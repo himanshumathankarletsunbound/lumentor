@@ -255,6 +255,7 @@ class DataStore {
       });
       return;
     }
+
     try {
       const node = getNodeFsAndPath();
       if (node) {
@@ -282,6 +283,13 @@ class DataStore {
     } catch (err) {
       console.warn('Failed to persist db to disk:', err);
     }
+  }
+
+  public async persistNow(): Promise<void> {
+    if (!this.usesPostgres()) return;
+    const repository = globalThis.lumentorPostgresRepository;
+    if (!repository) throw new Error('PostgreSQL repository is not initialized on the server.');
+    await repository.saveAppState(this.data);
   }
 
   // --- Audit Logging ---

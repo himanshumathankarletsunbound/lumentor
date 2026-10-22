@@ -29,6 +29,12 @@ export async function POST(req: NextRequest) {
       oauthRefreshToken: secrets.oauthRefreshToken,
       isEnabled: true,
     };
+    if (!config.user || !config.fromEmail) {
+      return NextResponse.json(
+        { success: false, error: 'Google Workspace is connected, but no sender email is configured. Reconnect Google Workspace or enter the Workspace email and save settings.' },
+        { status: 400 }
+      );
+    }
     const recipient = String(body.to || config.user).trim();
     if (!recipient.includes('@')) {
       return NextResponse.json({ success: false, error: 'Enter a valid recipient email address.' }, { status: 400 });

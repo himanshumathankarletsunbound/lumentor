@@ -1,14 +1,30 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Menu, Building2, Bell, RefreshCw, LogOut, User, Shield } from 'lucide-react';
 import { useAuth } from '../../lib/auth/AuthContext';
 import { RoleSwitcher } from './RoleSwitcher';
-import { SEED_BRANCHES } from '../../lib/db/seedData';
 import Link from 'next/link';
+import type { Branch } from '../../lib/types/models';
 
 export function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const { selectedBranch, setSelectedBranch, isMentor, currentUser, logout } = useAuth();
+  const [branches, setBranches] = useState<Branch[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/records?type=branch')
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: { records?: Branch[] } | null) => {
+        if (active && payload?.records) setBranches(payload.records);
+      })
+      .catch(() => {
+        // The branch filter remains usable with its global option when the API is unavailable.
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <header className="h-16 bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between gap-4 sticky top-0 z-30 shadow-2xs">
@@ -31,7 +47,7 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
               className="text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
             >
               <option value="ALL">All Campus Branches</option>
-              {SEED_BRANCHES.map((b) => (
+              {branches.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name} ({b.code})
                 </option>

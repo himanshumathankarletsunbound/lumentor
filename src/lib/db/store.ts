@@ -23,27 +23,8 @@ import {
 import { UserRole, CurrentUser } from '../types/auth';
 import { ClasscardConfig, ClasscardEndpointInfo, SyncJob } from '../types/classcard';
 import {
-  SEED_ROLES,
-  SEED_USERS,
-  SEED_BRANCHES,
-  SEED_SUBJECTS,
-  SEED_PACKAGES,
-  SEED_PAYROLL_PLANS,
-  SEED_MENTORS,
-  SEED_STUDENTS,
-  SEED_CLASSES,
-  SEED_PENALTIES,
-  SEED_PENALTY_POLICIES,
-  SEED_ADJUSTMENTS,
-  SEED_PAYROLL_PERIODS,
-  SEED_PAYSLIPS,
-  SEED_INVOICES,
-  SEED_PAYMENTS,
-  SEED_AUDIT_LOGS,
   INITIAL_CLASSCARD_CONFIG,
   CLASSCARD_ENDPOINTS_REGISTRY,
-  SEED_SYNC_JOBS,
-  SEED_CUSTOM_FIELDS,
   INITIAL_EMAIL_CONFIG,
   INITIAL_ORG_SETTINGS,
 } from './seedData';
@@ -163,28 +144,28 @@ class DataStore {
 
   private getDefaultState(): AppDatabase {
     return {
-      roles: [...SEED_ROLES],
-      users: [...SEED_USERS],
-      branches: [...SEED_BRANCHES],
-      subjects: [...SEED_SUBJECTS],
-      packages: [...SEED_PACKAGES],
-      payrollPlans: [...SEED_PAYROLL_PLANS],
-      mentors: [...SEED_MENTORS],
-      students: [...SEED_STUDENTS],
-      classes: [...SEED_CLASSES],
-      penalties: [...SEED_PENALTIES],
-      penaltyPolicies: [...SEED_PENALTY_POLICIES],
-      adjustments: [...SEED_ADJUSTMENTS],
-      payrollPeriods: [...SEED_PAYROLL_PERIODS],
+      roles: [],
+      users: [],
+      branches: [],
+      subjects: [],
+      packages: [],
+      payrollPlans: [],
+      mentors: [],
+      students: [],
+      classes: [],
+      penalties: [],
+      penaltyPolicies: [],
+      adjustments: [],
+      payrollPeriods: [],
       payrollBatches: [],
-      payslips: [...SEED_PAYSLIPS],
-      invoices: [...SEED_INVOICES],
-      payments: [...SEED_PAYMENTS],
-      auditLogs: [...SEED_AUDIT_LOGS],
+      payslips: [],
+      invoices: [],
+      payments: [],
+      auditLogs: [],
       classcardConfig: { ...INITIAL_CLASSCARD_CONFIG },
       classcardEndpoints: [...CLASSCARD_ENDPOINTS_REGISTRY],
-      syncJobs: [...SEED_SYNC_JOBS],
-      customFields: [...SEED_CUSTOM_FIELDS],
+      syncJobs: [],
+      customFields: [],
       emailConfig: { ...INITIAL_EMAIL_CONFIG },
       orgSettings: { ...INITIAL_ORG_SETTINGS },
     };
@@ -205,9 +186,6 @@ class DataStore {
           this.data = { ...this.getDefaultState(), ...parsed };
           if (!this.data.payrollPlans) {
             this.data.payrollPlans = [];
-          }
-          if (!this.data.penaltyPolicies || this.data.penaltyPolicies.length === 0) {
-            this.data.penaltyPolicies = [...SEED_PENALTY_POLICIES];
           }
           this.data.classcardConfig.apiKey = '';
           this.data.emailConfig.oauthClientSecret = '';
@@ -235,21 +213,8 @@ class DataStore {
           const parsed = JSON.parse(raw);
           this.data = { ...this.getDefaultState(), ...parsed };
 
-          // If mentors or classes are empty (e.g. from purge), re-populate baseline so system remains functional
-          if (!this.data.mentors || this.data.mentors.length === 0) {
-            this.data.mentors = [...SEED_MENTORS];
-          }
-          if (!this.data.classes || this.data.classes.length === 0) {
-            this.data.classes = [...SEED_CLASSES];
-          }
           if (!this.data.payrollPlans) {
             this.data.payrollPlans = [];
-          }
-          if (!this.data.penaltyPolicies || this.data.penaltyPolicies.length === 0) {
-            this.data.penaltyPolicies = [...SEED_PENALTY_POLICIES];
-          }
-          if (!this.data.students || this.data.students.length === 0) {
-            this.data.students = [...SEED_STUDENTS];
           }
 
           const stat = node.fs.statSync(dbFile);
@@ -1099,7 +1064,7 @@ class DataStore {
   // --- Custom Fields & Mappings ---
   public getCustomFields(entityType?: CustomFieldEntityType): CustomFieldDefinition[] {
     if (!this.data.customFields) {
-      this.data.customFields = [...SEED_CUSTOM_FIELDS];
+      this.data.customFields = [];
     }
     if (!entityType || (entityType as string) === 'ALL') return this.data.customFields;
     return this.data.customFields.filter((cf) => cf.entityType === entityType);

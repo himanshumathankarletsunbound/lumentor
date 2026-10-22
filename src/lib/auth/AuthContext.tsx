@@ -2,8 +2,17 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { CurrentUser, PermissionModule, PermissionAction } from '../types/auth';
-import { SEED_USERS } from '../db/seedData';
 import { hasPermission as checkPermission, canAccessModule } from './permissions';
+
+const ANONYMOUS_USER: CurrentUser = {
+  id: '',
+  email: '',
+  name: '',
+  role: 'MENTOR',
+  roleName: '',
+  assignedBranchIds: [],
+  permissions: [],
+};
 
 interface AuthContextType {
   currentUser: CurrentUser;
@@ -55,7 +64,7 @@ async function readApiResponse<T>(response: Response): Promise<T> {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<CurrentUser>(SEED_USERS[0]);
+  const [currentUser, setCurrentUser] = useState<CurrentUser>(ANONYMOUS_USER);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [selectedBranch, setSelectedBranch] = useState<string>('ALL');
@@ -69,6 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setCurrentUser(data.user);
         setIsAuthenticated(true);
         localStorage.setItem('lumentor_user', JSON.stringify(data.user));
+        setIsLoading(false);
         return;
       }
     } catch {
@@ -170,11 +180,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const switchUser = (userId: string) => {
-    const found = SEED_USERS.find((u) => u.id === userId);
-    if (found) {
-      setCurrentUser(found);
-      localStorage.setItem('lumentor_user', JSON.stringify(found));
-    }
+    void userId;
   };
 
   const hasPerm = (module: PermissionModule, action: PermissionAction, branchId?: string) => {
@@ -200,7 +206,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         logout,
         requestPasswordReset,
         resetPassword,
-        availableUsers: SEED_USERS,
+        availableUsers: [],
         selectedBranch,
         setSelectedBranch,
         hasPermission: hasPerm,

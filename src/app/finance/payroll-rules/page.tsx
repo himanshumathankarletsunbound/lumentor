@@ -62,7 +62,7 @@ export function computeStandardFormula(params: {
   const sRate = params.perStudentRate || 0;
   const rev = params.revenuePercentage || 0;
   const grp = params.groupMultiplier || 1.0;
-  const late = params.lateCancelPercent || 50;
+  const late = Number.isFinite(params.lateCancelPercent) ? params.lateCancelPercent : 0;
 
   switch (params.compensationModel) {
     case 'PER_CLASS': {
@@ -154,13 +154,13 @@ export default function PayrollRulesPage() {
   const [model, setModel] = useState<CompensationModel>('PER_CLASS');
   const [currency, setCurrency] = useState('INR');
   const [baseSalary, setBaseSalary] = useState('0');
-  const [classRate, setClassRate] = useState('65');
-  const [hourlyRate, setHourlyRate] = useState('50');
-  const [perStudentRate, setPerStudentRate] = useState('15');
-  const [revenuePercentage, setRevenuePercentage] = useState('30');
-  const [groupMultiplier, setGroupMultiplier] = useState('1.25');
-  const [minDuration, setMinDuration] = useState('45');
-  const [lateCancelPercent, setLateCancelPercent] = useState('50');
+  const [classRate, setClassRate] = useState('0');
+  const [hourlyRate, setHourlyRate] = useState('0');
+  const [perStudentRate, setPerStudentRate] = useState('0');
+  const [revenuePercentage, setRevenuePercentage] = useState('0');
+  const [groupMultiplier, setGroupMultiplier] = useState('1');
+  const [minDuration, setMinDuration] = useState('0');
+  const [lateCancelPercent, setLateCancelPercent] = useState('0');
 
   // Formula state
   const [isCustomFormula, setIsCustomFormula] = useState(false);
@@ -184,7 +184,7 @@ export default function PayrollRulesPage() {
     perStudentRate: parseFloat(perStudentRate) || 0,
     revenuePercentage: parseFloat(revenuePercentage) || 0,
     groupMultiplier: parseFloat(groupMultiplier) || 1.0,
-    lateCancelPercent: parseFloat(lateCancelPercent) || 50,
+    lateCancelPercent: Number.isFinite(parseFloat(lateCancelPercent)) ? parseFloat(lateCancelPercent) : 0,
   });
 
   // Effective formula string
@@ -209,13 +209,13 @@ export default function PayrollRulesPage() {
     setModel('PER_CLASS');
     setCurrency('INR');
     setBaseSalary('0');
-    setClassRate('65');
-    setHourlyRate('50');
-    setPerStudentRate('15');
-    setRevenuePercentage('30');
-    setGroupMultiplier('1.25');
-    setMinDuration('45');
-    setLateCancelPercent('50');
+    setClassRate('0');
+    setHourlyRate('0');
+    setPerStudentRate('0');
+    setRevenuePercentage('0');
+    setGroupMultiplier('1');
+    setMinDuration('0');
+    setLateCancelPercent('0');
     setIsCustomFormula(false);
     setCustomFormulaText('');
     setShowModal(true);
@@ -235,7 +235,7 @@ export default function PayrollRulesPage() {
     setRevenuePercentage(String(p.revenuePercentage || 0));
     setGroupMultiplier(String(p.groupMultiplier || 1.25));
     setMinDuration(String(p.minEligibleDurationMinutes || 30));
-    setLateCancelPercent(String(p.lateCancellationPayPercent || 50));
+    setLateCancelPercent(String(p.lateCancellationPayPercent ?? 0));
 
     if (p.formula && p.formula.trim().length > 0) {
       setIsCustomFormula(true);
@@ -288,7 +288,7 @@ export default function PayrollRulesPage() {
             perStudentRate: parseFloat(perStudentRate) || 0,
             revenuePercentage: parseFloat(revenuePercentage) || 0,
             minEligibleDurationMinutes: parseInt(minDuration) || 30,
-            lateCancellationPayPercent: parseFloat(lateCancelPercent) || 50,
+            lateCancellationPayPercent: Number.isFinite(parseFloat(lateCancelPercent)) ? parseFloat(lateCancelPercent) : 0,
             groupMultiplier: parseFloat(groupMultiplier) || 1.25,
             formula: formulaToSave,
           },
@@ -309,7 +309,7 @@ export default function PayrollRulesPage() {
           revenuePercentage: parseFloat(revenuePercentage) || 0,
           minEligibleDurationMinutes: parseInt(minDuration) || 30,
           payableClassStatuses: ['COMPLETED', 'LATE_CANCELLED'],
-          lateCancellationPayPercent: parseFloat(lateCancelPercent) || 50,
+          lateCancellationPayPercent: Number.isFinite(parseFloat(lateCancelPercent)) ? parseFloat(lateCancelPercent) : 0,
           groupMultiplier: parseFloat(groupMultiplier) || 1.25,
           formula: formulaToSave,
           effectiveFrom: new Date().toISOString(),

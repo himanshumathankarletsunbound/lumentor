@@ -284,6 +284,7 @@ export async function runClasscardSync(jobType: SyncJobType = 'ALL'): Promise<Sy
     }
 
     db.addSyncJob(job);
+    await db.persistNow();
     return job;
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
@@ -299,6 +300,7 @@ export async function runClasscardSync(jobType: SyncJobType = 'ALL'): Promise<Sy
     });
 
     db.addSyncJob(job);
+    await db.persistNow();
     return job;
   }
 }

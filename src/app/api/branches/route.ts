@@ -56,6 +56,7 @@ export async function POST(req: NextRequest) {
       details: `Created new campus branch "${name}" (${branch.code}) in ${city}.`,
       branchId: branch.id,
     });
+    await db.persistNow();
 
     return NextResponse.json({
       success: true,

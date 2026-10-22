@@ -118,6 +118,7 @@ export async function POST(req: NextRequest) {
       details: `Scheduled instructional session "${title}" with mentor ${newClass.mentorName} at ${newClass.branchName}.`,
       branchId,
     });
+    await db.persistNow();
 
     return NextResponse.json({
       success: true,
@@ -178,6 +179,7 @@ export async function PATCH(req: NextRequest) {
       details: `Updated class "${cls.title}" (status: ${status || cls.status}).`,
       branchId: cls.branchId,
     });
+    await db.persistNow();
 
     return NextResponse.json({
       success: true,

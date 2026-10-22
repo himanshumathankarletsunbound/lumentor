@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authorizationError } from '../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../lib/db/server-initialization';
 import { db } from '../../../lib/db/store';
+import { saveNormalizedRecord } from '../../../lib/db/state-repository';
 
 const allowedTypes = ['mentor', 'student', 'branch', 'subject', 'package'] as const;
 type RecordType = (typeof allowedTypes)[number];
@@ -35,6 +36,9 @@ export async function POST(req: NextRequest) {
       case 'package':
         created = db.createPackage(record as Parameters<typeof db.createPackage>[0]);
         break;
+    }
+    if (process.env.DEMO_MODE !== 'true') {
+      await saveNormalizedRecord(body.type, created as never, db.getSnapshot());
     }
     await db.persistNow();
     return NextResponse.json({ success: true, record: created }, { status: 201 });

@@ -73,6 +73,7 @@ export async function POST(req: NextRequest) {
       entityId: field.id,
       details: `Configured field "${name}" (${key}) for entity ${entityType} mapped to Classcard ${classcardFieldKey || 'none'}.`,
     });
+    await db.persistNow();
 
     return NextResponse.json({
       success: true,
@@ -118,6 +119,7 @@ export async function DELETE(req: NextRequest) {
       entityId: id,
       details: `Removed custom field definition ${id}.`,
     });
+    await db.persistNow();
 
     return NextResponse.json({
       success: true,

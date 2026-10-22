@@ -83,6 +83,7 @@ export async function PATCH(req: NextRequest) {
       details: `Updated mentor ${mentor.firstName} ${mentor.lastName} (plan: ${updates.payrollPlanId || mentor.payrollPlanId}, branch: ${updates.branchId || mentor.branchId}).`,
       branchId: updates.branchId || mentor.branchId,
     });
+    await db.persistNow();
 
     return NextResponse.json({
       success: true,

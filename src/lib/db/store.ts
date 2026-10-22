@@ -101,6 +101,7 @@ class DataStore {
   private initialized = false;
   private lastMtime = 0;
   private persistenceReady: Promise<void> = Promise.resolve();
+  private persistenceQueue: Promise<void> = Promise.resolve();
   private postgresLoadStarted = false;
   private postgresLoadError: unknown;
 
@@ -250,7 +251,9 @@ class DataStore {
   private saveToDisk(): void {
     if (this.usesPostgres()) {
       const repository = globalThis.lumentorPostgresRepository;
-      void repository?.saveAppState(this.data).catch((err: unknown) => {
+      if (!repository) return;
+      const snapshot = this.data;
+      this.persistenceQueue = this.persistenceQueue.then(() => repository.saveAppState(snapshot)).catch((err: unknown) => {
         console.error('Failed to persist application state to PostgreSQL:', err);
       });
       return;
@@ -289,7 +292,9 @@ class DataStore {
     if (!this.usesPostgres()) return;
     const repository = globalThis.lumentorPostgresRepository;
     if (!repository) throw new Error('PostgreSQL repository is not initialized on the server.');
-    await repository.saveAppState(this.data);
+    const snapshot = this.data;
+    this.persistenceQueue = this.persistenceQueue.then(() => repository.saveAppState(snapshot));
+    await this.persistenceQueue;
   }
 
   // --- Audit Logging ---

@@ -33,6 +33,7 @@ import {
   SEED_STUDENTS,
   SEED_CLASSES,
   SEED_PENALTIES,
+  SEED_PENALTY_POLICIES,
   SEED_ADJUSTMENTS,
   SEED_PAYROLL_PERIODS,
   SEED_PAYSLIPS,
@@ -172,7 +173,7 @@ class DataStore {
       students: [...SEED_STUDENTS],
       classes: [...SEED_CLASSES],
       penalties: [...SEED_PENALTIES],
-      penaltyPolicies: [],
+      penaltyPolicies: [...SEED_PENALTY_POLICIES],
       adjustments: [...SEED_ADJUSTMENTS],
       payrollPeriods: [...SEED_PAYROLL_PERIODS],
       payrollBatches: [],
@@ -204,6 +205,9 @@ class DataStore {
           this.data = { ...this.getDefaultState(), ...parsed };
           if (!this.data.payrollPlans || this.data.payrollPlans.length === 0) {
             this.data.payrollPlans = [...SEED_PAYROLL_PLANS];
+          }
+          if (!this.data.penaltyPolicies || this.data.penaltyPolicies.length === 0) {
+            this.data.penaltyPolicies = [...SEED_PENALTY_POLICIES];
           }
           this.data.classcardConfig.apiKey = '';
           this.data.emailConfig.oauthClientSecret = '';
@@ -240,6 +244,9 @@ class DataStore {
           }
           if (!this.data.payrollPlans || this.data.payrollPlans.length === 0) {
             this.data.payrollPlans = [...SEED_PAYROLL_PLANS];
+          }
+          if (!this.data.penaltyPolicies || this.data.penaltyPolicies.length === 0) {
+            this.data.penaltyPolicies = [...SEED_PENALTY_POLICIES];
           }
           if (!this.data.students || this.data.students.length === 0) {
             this.data.students = [...SEED_STUDENTS];
@@ -800,16 +807,57 @@ class DataStore {
     return this.data.penaltyPolicies ?? [];
   }
 
-  public createPenaltyPolicy(policy: Omit<PenaltyPolicy, 'id' | 'createdAt' | 'updatedAt'>): PenaltyPolicy {
+  public createPenaltyPolicy(
+    policy: Omit<PenaltyPolicy, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
+  ): PenaltyPolicy {
     const normalizedName = policy.name.trim().toLowerCase();
+    const policyId = policy.id?.trim() || policy.code?.trim() || `POL-${Date.now().toString().slice(-6)}`;
     if (this.getPenaltyPolicies().some((item) => item.name.trim().toLowerCase() === normalizedName)) {
       throw new Error('A penalty policy with this name already exists.');
     }
+    if (this.getPenaltyPolicies().some((item) => item.id.toLowerCase() === policyId.toLowerCase())) {
+      throw new Error(`A penalty policy with ID "${policyId}" already exists.`);
+    }
     const now = new Date().toISOString();
-    const record = { ...policy, id: `penalty-policy-${Date.now()}`, createdAt: now, updatedAt: now };
+    const rate = Number(policy.rateValue ?? policy.defaultAmount ?? 0);
+    const deductionType = policy.deductionType || (rate <= 100 && policy.rateValue !== undefined ? 'PERCENT' : 'FIXED_AMOUNT');
+    const record: PenaltyPolicy = {
+      ...policy,
+      id: policyId,
+      code: policy.code || policyId,
+      name: policy.name.trim(),
+      description: policy.description?.trim() ?? '',
+      deductionType,
+      rateValue: rate,
+      defaultAmount: deductionType === 'FIXED_AMOUNT' ? rate : policy.defaultAmount ?? 0,
+      isActive: policy.isActive ?? true,
+      createdAt: now,
+      updatedAt: now,
+    };
     this.data.penaltyPolicies = [...this.getPenaltyPolicies(), record];
     this.saveToDisk();
     return record;
+  }
+
+  public updatePenaltyPolicy(id: string, updates: Partial<PenaltyPolicy>): PenaltyPolicy {
+    const policies = this.getPenaltyPolicies();
+    const idx = policies.findIndex((p) => p.id === id);
+    if (idx === -1) throw new Error(`Penalty policy ${id} not found`);
+    const existing = policies[idx];
+    const deductionType = updates.deductionType ?? existing.deductionType ?? 'FIXED_AMOUNT';
+    const rateValue = updates.rateValue !== undefined ? Number(updates.rateValue) : existing.rateValue ?? existing.defaultAmount ?? 0;
+    const updated: PenaltyPolicy = {
+      ...existing,
+      ...updates,
+      deductionType,
+      rateValue,
+      defaultAmount: deductionType === 'FIXED_AMOUNT' ? rateValue : updates.defaultAmount ?? existing.defaultAmount ?? 0,
+      updatedAt: new Date().toISOString(),
+    };
+    policies[idx] = updated;
+    this.data.penaltyPolicies = policies;
+    this.saveToDisk();
+    return updated;
   }
 
   public deletePenaltyPolicy(id: string): void {

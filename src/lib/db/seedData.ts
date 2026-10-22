@@ -13,6 +13,7 @@ import {
 import {
   PayrollPlan,
   Penalty,
+  PenaltyPolicy,
   Adjustment,
   PayrollPeriod,
   PayrollBatch,
@@ -261,6 +262,45 @@ export const SEED_STUDENTS: Student[] = [];
 export const SEED_CLASSES: ClassEvent[] = [];
 
 export const SEED_PENALTIES: Penalty[] = [];
+
+export const SEED_PENALTY_POLICIES: PenaltyPolicy[] = [
+  {
+    id: 'POL-LATE-CANCEL',
+    code: 'POL-LATE-CANCEL',
+    name: 'Late Class Cancellation',
+    description: 'Deduction applied when a mentor cancels within 2 hours of scheduled session start.',
+    deductionType: 'PERCENT',
+    rateValue: 50,
+    defaultAmount: 0,
+    isActive: true,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: 'POL-NO-SHOW',
+    code: 'POL-NO-SHOW',
+    name: 'Unexcused Absence / No-Show',
+    description: 'Deduction for failure to attend a scheduled session without advance notification.',
+    deductionType: 'FIXED_AMOUNT',
+    rateValue: 75,
+    defaultAmount: 75,
+    isActive: true,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: 'POL-LATE-ATTEND',
+    code: 'POL-LATE-ATTEND',
+    name: 'Late Attendance Submission',
+    description: 'Deduction for submitting student attendance more than 48 hours after class conclusion.',
+    deductionType: 'FIXED_AMOUNT',
+    rateValue: 20,
+    defaultAmount: 20,
+    isActive: true,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+  },
+];
 
 export const SEED_ADJUSTMENTS: Adjustment[] = [];
 

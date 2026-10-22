@@ -44,10 +44,15 @@ export type PenaltyCategory =
   | 'OTHER'
   | (string & {});
 
+export type PenaltyDeductionType = 'PERCENT' | 'FIXED_AMOUNT';
+
 export interface PenaltyPolicy {
   id: string;
+  code?: string;
   name: string;
   description: string;
+  deductionType?: PenaltyDeductionType;
+  rateValue?: number;
   defaultAmount: number;
   isActive: boolean;
   createdAt: string;

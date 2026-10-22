@@ -996,6 +996,7 @@ export async function deleteNormalizedRecord(
     } else if (type === 'mentor') {
       await prisma.mentor.delete({ where: { id } }).catch(() => {});
     }
+
   } catch (error) {
     console.warn(`Could not delete normalized ${type} with id ${id} from Prisma:`, error);
   }

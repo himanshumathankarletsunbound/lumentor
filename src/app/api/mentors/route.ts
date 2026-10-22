@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../../../lib/db/store';
 import { authorizationErrorAsync } from '../../../lib/auth/server';
-import { listMentors, saveNormalizedRecord } from '../../../lib/db/state-repository';
+import { createAuditEvent, listBranches, listMentors, listPayrollPlans, updateMentor } from '../../../lib/db/state-repository';
 import { Mentor } from '../../../lib/types/models';
 import { ensureServerPersistence } from '../../../lib/db/server-initialization';
 
@@ -57,7 +56,7 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    const mentor = db.getMentorById(id);
+    const mentor = (await listMentors()).find((item) => item.id === id);
     if (!mentor) {
       return NextResponse.json(
         { success: false, error: `Mentor ${id} not found` },
@@ -67,7 +66,7 @@ export async function PATCH(req: NextRequest) {
 
     const updates: Partial<Mentor> = {};
     if (payrollPlanId) {
-      const plan = db.getPayrollPlans().find((p) => p.id === payrollPlanId);
+      const plan = (await listPayrollPlans()).find((p) => p.id === payrollPlanId);
       if (!plan) {
         return NextResponse.json({ success: false, error: 'Invalid payrollPlanId' }, { status: 400 });
       }
@@ -75,7 +74,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (branchId) {
-      const branch = db.getBranches().find((b) => b.id === branchId);
+      const branch = (await listBranches()).find((b) => b.id === branchId);
       if (!branch) {
         return NextResponse.json({ success: false, error: 'Invalid branchId' }, { status: 400 });
       }
@@ -86,14 +85,8 @@ export async function PATCH(req: NextRequest) {
     if (status) updates.status = status;
     if (hourlyRate !== undefined) updates.hourlyRate = Number(hourlyRate);
 
-    const updated = db.updateMentor(id, updates);
-    if (process.env.DEMO_MODE !== 'true') {
-      await saveNormalizedRecord('mentor', updated, db.getSnapshot());
-    } else {
-      await db.persistNow();
-    }
-
-    db.logAudit({
+    const updated = await updateMentor(id, updates);
+    await createAuditEvent({
       userId: 'usr-admin-1',
       userName: updatedBy,
       userRole: 'ADMINISTRATOR',
@@ -103,8 +96,6 @@ export async function PATCH(req: NextRequest) {
       details: `Updated mentor ${mentor.firstName} ${mentor.lastName} (plan: ${updates.payrollPlanId || mentor.payrollPlanId}, branch: ${updates.branchId || mentor.branchId}).`,
       branchId: updates.branchId || mentor.branchId,
     });
-    if (process.env.DEMO_MODE === 'true') await db.persistNow();
-
     return NextResponse.json({
       success: true,
       message: 'Mentor updated successfully',

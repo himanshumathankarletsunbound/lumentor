@@ -1,8 +1,64 @@
 import { db } from '../../db/store';
 import { classcardClient } from './client';
 import { SyncJob, SyncJobType } from '../../types/classcard';
+import {
+  createSyncJobRecord,
+  getSyncBranchId,
+  listStudentExternalIds,
+  upsertClasscardInvoice,
+  upsertClasscardPayment,
+  upsertClasscardStudent,
+  upsertClasscardSubject,
+} from '../../db/state-repository';
+
+async function runDemoSync(jobType: SyncJobType): Promise<SyncJob> {
+  const job: SyncJob = {
+    id: `sync-${Date.now()}`,
+    jobType,
+    status: 'RUNNING',
+    startedAt: new Date().toISOString(),
+    recordsProcessed: 0,
+    recordsCreated: 0,
+    recordsUpdated: 0,
+    recordsFailed: 0,
+    logSummary: [`Starting Classcard ${jobType} synchronization in explicit demo mode...`],
+  };
+  if (jobType === 'ALL' || jobType === 'STUDENTS') {
+    const result = await classcardClient.getStudents();
+    const students = Array.isArray(result.data) ? result.data as Array<Record<string, unknown>> : [];
+    for (const item of students) {
+      job.recordsProcessed++;
+      const externalId = String(item.id || item.student_id || '');
+      const email = String(item.email || `${externalId}@classcard.demo`).toLowerCase();
+      const existing = db.getStudents().find((student) => student.externalId === externalId || student.email.toLowerCase() === email);
+      if (existing) {
+        db.updateStudent(existing.id, { externalId, email, provenance: 'CLASSCARD_SOURCED' });
+        job.recordsUpdated++;
+      } else {
+        const branch = db.getBranches()[0];
+        if (!branch) throw new Error('Demo synchronization requires a demo branch.');
+        db.createStudent({
+          firstName: String(item.first_name || 'Student'),
+          lastName: String(item.last_name || 'Learner'),
+          email,
+          phone: String(item.phone || ''),
+          branchId: branch.id,
+          enrolledPackageIds: [],
+          status: 'ACTIVE',
+          externalId,
+          provenance: 'CLASSCARD_SOURCED',
+        });
+        job.recordsCreated++;
+      }
+    }
+  }
+  job.status = 'COMPLETED';
+  job.completedAt = new Date().toISOString();
+  return job;
+}
 
 export async function runClasscardSync(jobType: SyncJobType = 'ALL'): Promise<SyncJob> {
+  if (process.env.DEMO_MODE === 'true') return runDemoSync(jobType);
   const startTime = Date.now();
   const job: SyncJob = {
     id: `sync-${Date.now()}`,
@@ -16,8 +72,7 @@ export async function runClasscardSync(jobType: SyncJobType = 'ALL'): Promise<Sy
     logSummary: [`Starting Classcard ${jobType} synchronization...`],
   };
 
-  const defaultBranch = db.getBranches().find((b) => b.isActive) || db.getBranches()[0];
-  const branchId = defaultBranch ? defaultBranch.id : 'branch-nyc';
+  const branchId = await getSyncBranchId();
 
   try {
     // 1. Sync Students
@@ -26,10 +81,10 @@ export async function runClasscardSync(jobType: SyncJobType = 'ALL'): Promise<Sy
       const rawData = res.data;
       const studentItems: Array<Record<string, unknown>> = Array.isArray(rawData)
         ? (rawData as Array<Record<string, unknown>>)
-        : Array.isArray((rawData as any)?.data)
-        ? (rawData as any).data
-        : Array.isArray((rawData as any)?.students)
-        ? (rawData as any).students
+        : Array.isArray((rawData as unknown as Record<string, unknown>)?.data)
+        ? (rawData as unknown as Record<string, unknown>).data as Array<Record<string, unknown>>
+        : Array.isArray((rawData as unknown as Record<string, unknown>)?.students)
+        ? (rawData as unknown as Record<string, unknown>).students as Array<Record<string, unknown>>
         : [];
 
       if (res.success && studentItems.length > 0) {
@@ -50,36 +105,17 @@ export async function runClasscardSync(jobType: SyncJobType = 'ALL'): Promise<Sy
           const phone = String(item.phone1 || item.phone || '').trim();
           const dateOfBirth = item.dob ? String(item.dob) : undefined;
 
-          // Deduplication: Look up by externalId first, then by email
-          const existing = db.getStudents().find(
-            (s) => (s.externalId && extId && s.externalId === extId) || (email && s.email.toLowerCase() === email)
-          );
-
-          if (existing) {
-            db.updateStudent(existing.id, {
-              firstName: firstName || existing.firstName,
-              lastName: lastName || existing.lastName,
-              phone: phone || existing.phone,
-              externalId: extId || existing.externalId,
-              dateOfBirth: dateOfBirth || existing.dateOfBirth,
-              provenance: 'CLASSCARD_SOURCED',
-            });
-            job.recordsUpdated++;
-          } else {
-            db.createStudent({
-              firstName: firstName || 'Student',
-              lastName: lastName || 'Learner',
-              email: email || `student-${extId || Date.now()}@classcard.imported`,
-              phone,
-              dateOfBirth,
-              branchId,
-              enrolledPackageIds: [],
-              status: 'ACTIVE',
-              externalId: extId || undefined,
-              provenance: 'CLASSCARD_SOURCED',
-            });
-            job.recordsCreated++;
-          }
+          const result = await upsertClasscardStudent({
+            externalId: extId || `student-${Date.now()}-${job.recordsProcessed}`,
+            firstName: firstName || 'Student',
+            lastName: lastName || 'Learner',
+            email: email || `student-${extId || Date.now()}@classcard.imported`,
+            phone,
+            dateOfBirth,
+            branchId,
+          });
+          if (result === 'created') job.recordsCreated++;
+          else job.recordsUpdated++;
         }
       } else if (!res.success) {
         job.recordsFailed++;
@@ -93,59 +129,41 @@ export async function runClasscardSync(jobType: SyncJobType = 'ALL'): Promise<Sy
       const rawData = res.data;
       const invoiceItems: Array<Record<string, unknown>> = Array.isArray(rawData)
         ? (rawData as Array<Record<string, unknown>>)
-        : Array.isArray((rawData as any)?.data)
-        ? (rawData as any).data
+        : Array.isArray((rawData as unknown as Record<string, unknown>)?.data)
+        ? (rawData as unknown as Record<string, unknown>).data as Array<Record<string, unknown>>
         : [];
 
       if (res.success && invoiceItems.length > 0) {
         job.logSummary.push(`Fetched ${invoiceItems.length} tuition invoices from Classcard.`);
-        const allStudents = db.getStudents();
+        const allStudents = await listStudentExternalIds();
         for (const item of invoiceItems) {
           job.recordsProcessed++;
           const extId = String(item.invoice_id || item.id || '');
           const studentExtId = String(item.student_id || '');
           const matchedStudent = allStudents.find((s) => s.externalId === studentExtId);
-          const studentName = matchedStudent ? `${matchedStudent.firstName} ${matchedStudent.lastName}` : `Student #${studentExtId}`;
           const invNum = item.inv_prefix ? `${item.inv_prefix}-${item.inv_number_string || item.invoice_id}` : String(item.inv_number_string || item.invoice_id || `INV-${Date.now()}`);
           const amount = parseFloat(String(item.amount || '0')) || 0;
           const rawStatus = String(item.invoice_status || item.status || 'UNPAID').toUpperCase();
           const status = rawStatus === 'OVERDUE' ? 'OVERDUE' : rawStatus === 'PAID' ? 'PAID' : rawStatus === 'PARTIAL' ? 'PARTIAL' : 'UNPAID';
 
-          const existing = db.getInvoices().find((inv) => inv.externalId === extId || inv.invoiceNumber === invNum);
-          if (existing) {
-            db.updateInvoice(existing.id, {
-              totalAmount: amount,
-              status,
-              studentName,
-              provenance: 'CLASSCARD_SOURCED',
-            });
-            job.recordsUpdated++;
-          } else {
-            db.createInvoice({
-              invoiceNumber: invNum,
-              studentId: matchedStudent?.id || `stud-${studentExtId}`,
-              studentName,
-              branchId,
-              issueDate: new Date().toISOString().slice(0, 10),
-              dueDate: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10),
-              totalAmount: amount,
-              paidAmount: status === 'PAID' ? amount : 0,
-              currency: 'INR',
-              status,
-              items: [
-                {
-                  id: `item-${extId}`,
-                  description: 'Instructional Tutoring Package',
-                  quantity: 1,
-                  unitPrice: amount,
-                  amount,
-                },
-              ],
-              externalId: extId,
-              provenance: 'CLASSCARD_SOURCED',
-            });
-            job.recordsCreated++;
+          if (!matchedStudent) {
+            job.recordsFailed++;
+            job.logSummary.push(`Warning: Invoice ${invNum} skipped because student ${studentExtId} is not synchronized.`);
+            continue;
           }
+          const result = await upsertClasscardInvoice({
+            externalId: extId,
+            invoiceNumber: invNum,
+            studentId: matchedStudent.id,
+            branchId,
+            issueDate: new Date().toISOString().slice(0, 10),
+            dueDate: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10),
+            totalAmount: amount,
+            paidAmount: status === 'PAID' ? amount : 0,
+            status,
+          });
+          if (result === 'created') job.recordsCreated++;
+          else job.recordsUpdated++;
         }
       }
     }
@@ -156,8 +174,8 @@ export async function runClasscardSync(jobType: SyncJobType = 'ALL'): Promise<Sy
       const rawData = res.data;
       const paymentItems: Array<Record<string, unknown>> = Array.isArray(rawData)
         ? (rawData as Array<Record<string, unknown>>)
-        : Array.isArray((rawData as any)?.data)
-        ? (rawData as any).data
+        : Array.isArray((rawData as unknown as Record<string, unknown>)?.data)
+        ? (rawData as unknown as Record<string, unknown>).data as Array<Record<string, unknown>>
         : [];
 
       if (res.success && paymentItems.length > 0) {
@@ -177,30 +195,16 @@ export async function runClasscardSync(jobType: SyncJobType = 'ALL'): Promise<Sy
             ? 'BANK_TRANSFER'
             : 'OTHER';
 
-          const existing = db.getPayments().find((p) => p.externalId === extId);
-          if (existing) {
-            db.updatePayment(existing.id, {
-              amount,
-              method,
-              paymentDate: date,
-              provenance: 'CLASSCARD_SOURCED',
-            });
-            job.recordsUpdated++;
-          } else {
-            db.createPayment({
-              paymentNumber: `PAY-${extId || Date.now()}`,
-              invoiceId: `inv-${invoiceId}`,
-              studentId: 'student-general',
-              studentName: 'Enrolled Student',
-              amount,
-              paymentDate: date,
-              method,
-              status: 'SUCCESS',
-              externalId: extId,
-              provenance: 'CLASSCARD_SOURCED',
-            });
-            job.recordsCreated++;
-          }
+          const result = await upsertClasscardPayment({
+            externalId: extId,
+            invoiceId,
+            paymentNumber: `PAY-${extId || Date.now()}`,
+            amount,
+            paymentDate: date,
+            method,
+          });
+          if (result === 'created') job.recordsCreated++;
+          else job.recordsUpdated++;
         }
       }
     }
@@ -213,20 +217,17 @@ export async function runClasscardSync(jobType: SyncJobType = 'ALL'): Promise<Sy
         job.logSummary.push(`Synchronized ${rawData.fees.length} service/course catalog definitions from Classcard.`);
         for (const fee of rawData.fees) {
           const subjectName = String(fee.subject_name || fee.name || '');
-          if (subjectName && !db.getSubjects().some((s) => s.name.toLowerCase() === subjectName.toLowerCase())) {
-            db.createSubject({
+          if (subjectName) {
+            const result = await upsertClasscardSubject({
               name: subjectName,
               code: String(fee.subject_id || subjectName.slice(0, 6).toUpperCase()),
               category: String(fee.course_name || 'General'),
               description: String(fee.description || fee.name || ''),
               defaultDurationMinutes: Number(fee.duration) || 60,
-              availableDurations: [30, 45, 60, 90],
-              isActive: true,
-              color: '#06b6d4',
               externalId: String(fee.id),
-              provenance: 'CLASSCARD_SOURCED',
             });
-            job.recordsCreated++;
+            if (result === 'created') job.recordsCreated++;
+            else job.recordsUpdated++;
           }
         }
       }
@@ -268,23 +269,14 @@ export async function runClasscardSync(jobType: SyncJobType = 'ALL'): Promise<Sy
       job.logSummary.push(
         `Sync aborted after ${(job.durationMs / 1000).toFixed(2)}s: ${job.errorMessage}`
       );
-      db.updateClasscardConfig({
-        lastFailedSync: new Date().toISOString(),
-        lastErrorMessage: job.errorMessage,
-      });
     } else {
       job.status = job.recordsFailed > 0 ? 'PARTIAL' : 'COMPLETED';
       job.logSummary.push(
         `Sync finalized in ${(job.durationMs / 1000).toFixed(2)}s. Processed: ${job.recordsProcessed}, Created: ${job.recordsCreated}, Updated: ${job.recordsUpdated}, Failed: ${job.recordsFailed}.`
       );
-      db.updateClasscardConfig({
-        lastSuccessfulSync: new Date().toISOString(),
-        lastErrorMessage: undefined,
-      });
     }
 
-    db.addSyncJob(job);
-    await db.persistNow();
+    await createSyncJobRecord(job);
     return job;
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
@@ -294,13 +286,7 @@ export async function runClasscardSync(jobType: SyncJobType = 'ALL'): Promise<Sy
     job.errorMessage = errorMsg;
     job.logSummary.push(`Fatal sync error: ${errorMsg}`);
 
-    db.updateClasscardConfig({
-      lastFailedSync: new Date().toISOString(),
-      lastErrorMessage: errorMsg,
-    });
-
-    db.addSyncJob(job);
-    await db.persistNow();
+    await createSyncJobRecord(job);
     return job;
   }
 }

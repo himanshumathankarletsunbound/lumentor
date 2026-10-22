@@ -22,10 +22,10 @@ export class ClasscardApiClient {
   private useMockMode: boolean = false;
 
   constructor() {
-    const config = db.getClasscardConfig();
-    this.baseUrl = (config.baseUrl || 'https://api.classcardapp.com/api/v2/public/').replace(/\/+$/, '');
+    const configuredBaseUrl = process.env.CLASSCARD_API_BASE_URL || 'https://api.classcardapp.com/api/v2/public/';
+    this.baseUrl = configuredBaseUrl.replace(/\/+$/, '');
     this.apiKey = requireServerSecret('CLASSCARD_API_KEY');
-    this.useMockMode = isDemoMode;
+    this.useMockMode = isDemoMode && (process.env.CLASSCARD_USE_MOCKS === 'true' || db.getClasscardConfig().useMockMode);
   }
 
   /**
@@ -37,10 +37,9 @@ export class ClasscardApiClient {
     body?: unknown,
     retries: number = 2
   ): Promise<ClasscardApiResponse<T>> {
-    const config = db.getClasscardConfig();
     const effectiveApiKey = requireServerSecret('CLASSCARD_API_KEY');
-    const effectiveBaseUrl = (config.baseUrl || 'https://api.classcardapp.com/api/v2/public/').replace(/\/+$/, '');
-    const isMock = isDemoMode && config.useMockMode;
+    const effectiveBaseUrl = this.baseUrl;
+    const isMock = this.useMockMode;
 
     // If mock mode is enabled or running in test runner without live key, return simulated response
     if (isMock) {
@@ -242,8 +241,7 @@ export class ClasscardApiClient {
   // --- Specific Documented Endpoint Implementations ---
 
   public async testConnection(): Promise<{ success: boolean; message: string; isMock: boolean }> {
-    const config = db.getClasscardConfig();
-    const isMock = isDemoMode && config.useMockMode;
+    const isMock = this.useMockMode;
 
     if (isMock) {
       return {

@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../../../lib/db/store';
 import { hashPassword, generateResetToken } from '../../../lib/auth/crypto';
 import { SystemRole, UserStatus, RolePermission, CurrentUser } from '../../../lib/types/auth';
 import { sendPasswordSetupEmail } from '../../../lib/email/service';
-import { authorizationErrorAsync } from '../../../lib/auth/server';
-import { listUsers, listRoles, findUserByEmail, findUserById, saveUser, deleteUser as deleteNormalizedUser } from '../../../lib/db/state-repository';
+import { authorizationErrorAsync, getSessionUserAsync } from '../../../lib/auth/server';
+import { createAuditEvent, listUsers, listRoles, findUserByEmail, findUserById, saveUser, deleteUser as deleteNormalizedUser } from '../../../lib/db/state-repository';
 import { ensureServerPersistence } from '../../../lib/db/server-initialization';
 
 function sanitizeUser(u: CurrentUser) {
@@ -17,6 +16,20 @@ function sanitizeUser(u: CurrentUser) {
     status: (u.status || 'ACTIVE') as UserStatus,
     hasConfiguredPassword: Boolean(u.passwordHash && u.salt),
   };
+}
+
+async function auditUserAction(req: NextRequest, action: string, entityId: string, details: string): Promise<void> {
+  const actor = await getSessionUserAsync(req);
+  if (!actor) return;
+  await createAuditEvent({
+    userId: actor.id,
+    userName: actor.name,
+    userRole: actor.role,
+    action,
+    entityType: 'User',
+    entityId,
+    details,
+  });
 }
 
 export async function GET(req: NextRequest) {
@@ -114,15 +127,7 @@ export async function POST(req: NextRequest) {
       resetTokenExpiry,
     });
 
-    db.logAudit({
-      userId: 'user-admin',
-      userName: 'Administrator',
-      userRole: 'ADMINISTRATOR',
-      action: 'USER_CREATED',
-      entityType: 'User',
-      entityId: newUser.id,
-      details: `Created user ${newUser.email} (${newUser.roleName}) with status ${newUser.status}. Invite setup: ${sendPasswordSetupEmailFlag ? 'YES' : 'NO'}`,
-    });
+    await auditUserAction(req, 'USER_CREATED', newUser.id, `Created user ${newUser.email} (${newUser.roleName}) with status ${newUser.status}. Invite setup: ${sendPasswordSetupEmailFlag ? 'YES' : 'NO'}`);
 
     // Send setup email through the configured Google Workspace OAuth account.
     if (resetUrl && sendPasswordSetupEmailFlag) {
@@ -176,15 +181,7 @@ export async function PATCH(req: NextRequest) {
       const origin = req.nextUrl.origin || 'http://localhost:3005';
       const resetUrl = `${origin}/reset-password?token=${encodeURIComponent(tokenInfo.token)}`;
 
-      db.logAudit({
-        userId: 'user-admin',
-        userName: 'Administrator',
-        userRole: 'ADMINISTRATOR',
-        action: 'PASSWORD_RESET_RESENT',
-        entityType: 'User',
-        entityId: user.id,
-        details: `Resent password setup link to ${user.email}`,
-      });
+      await auditUserAction(req, 'PASSWORD_RESET_RESENT', user.id, `Resent password setup link to ${user.email}`);
 
       // Dispatch email
       sendPasswordSetupEmail(user.email, user.name, resetUrl).catch((err) => {
@@ -233,15 +230,7 @@ export async function PATCH(req: NextRequest) {
 
     await saveUser(user);
 
-    db.logAudit({
-      userId: 'user-admin',
-      userName: 'Administrator',
-      userRole: 'ADMINISTRATOR',
-      action: 'USER_UPDATED',
-      entityType: 'User',
-      entityId: user.id,
-      details: `Updated user profile/status for ${user.email} (Status: ${user.status}, Role: ${user.role})`,
-    });
+    await auditUserAction(req, 'USER_UPDATED', user.id, `Updated user profile/status for ${user.email} (Status: ${user.status}, Role: ${user.role})`);
 
     return NextResponse.json({
       success: true,
@@ -283,15 +272,7 @@ export async function DELETE(req: NextRequest) {
 
     await deleteNormalizedUser(id);
 
-    db.logAudit({
-      userId: 'user-admin',
-      userName: 'Administrator',
-      userRole: 'ADMINISTRATOR',
-      action: 'USER_DELETED',
-      entityType: 'User',
-      entityId: id,
-      details: `Deleted user account ${user.email} (${user.name})`,
-    });
+    await auditUserAction(req, 'USER_DELETED', id, `Deleted user account ${user.email} (${user.name})`);
 
     return NextResponse.json({ success: true, message: `User ${user.email} has been removed.` });
   } catch (err: unknown) {

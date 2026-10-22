@@ -68,9 +68,7 @@ export async function POST(req: NextRequest) {
         created = db.createPackage(record as Parameters<typeof db.createPackage>[0]);
         break;
     }
-    if (process.env.DEMO_MODE !== 'true') {
-      await saveNormalizedRecord(body.type, created as never, db.getSnapshot());
-    }
+    if (process.env.DEMO_MODE !== 'true') await saveNormalizedRecord(body.type, created as never, db.getSnapshot());
     if (process.env.DEMO_MODE === 'true') await db.persistNow();
     return NextResponse.json({ success: true, record: created }, { status: 201 });
   } catch (error) {
@@ -117,14 +115,8 @@ export async function PUT(req: NextRequest) {
         updated = db.updatePackage(body.id, body.updates as Parameters<typeof db.updatePackage>[1]);
         break;
     }
+    if (process.env.DEMO_MODE !== 'true') await saveNormalizedRecord(body.type, updated as never, db.getSnapshot());
 
-    if (process.env.DEMO_MODE !== 'true') {
-      try {
-        await saveNormalizedRecord(body.type, updated as never, db.getSnapshot());
-      } catch (err) {
-        console.warn('Prisma save error during update:', err);
-      }
-    }
     if (process.env.DEMO_MODE === 'true') await db.persistNow();
     return NextResponse.json({ success: true, record: updated });
   } catch (error) {
@@ -178,14 +170,8 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    if (process.env.DEMO_MODE !== 'true') {
-      try {
-        await deleteNormalizedRecord(type, id);
-      } catch (err) {
-        console.warn('Prisma delete error:', err);
-      }
-    }
     if (process.env.DEMO_MODE === 'true') await db.persistNow();
+    if (process.env.DEMO_MODE !== 'true') await deleteNormalizedRecord(type, id);
     return NextResponse.json({ success: true, id });
   } catch (error) {
     return NextResponse.json(

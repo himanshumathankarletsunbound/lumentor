@@ -6,23 +6,21 @@ import { db } from '../../../lib/db/store';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../../../components/ui/Table';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
-import { Card, CardHeader, CardContent } from '../../../components/ui/Card';
 import { Modal } from '../../../components/ui/Modal';
 import { PayrollPlan, CompensationModel } from '../../../lib/types/payroll';
 import {
   Sliders,
   Plus,
   CheckCircle2,
-  History,
   Calculator,
   Edit3,
   Copy,
   Check,
   RotateCcw,
   Sparkles,
-  Code2,
   Trash2,
   AlertCircle,
+  Eye,
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../../lib/utils/formatters';
 
@@ -33,18 +31,18 @@ interface FormulaToken {
 }
 
 const FORMULA_TOKENS: FormulaToken[] = [
-  { label: 'Base Salary', token: '[Base Salary]', desc: 'Fixed monthly or prorated cycle base' },
-  { label: 'Classes Count', token: '[Classes Count]', desc: 'Total eligible sessions completed' },
-  { label: 'Class Rate', token: '[Class Rate]', desc: 'Contracted rate per class' },
-  { label: 'Teaching Hours', token: '[Teaching Hours]', desc: 'Calculated teaching hours from class duration' },
-  { label: 'Hourly Rate', token: '[Hourly Rate]', desc: 'Hourly instructional pay rate' },
-  { label: 'Attending Students', token: '[Attending Students]', desc: 'Count of present/checked-in learners' },
-  { label: 'Student Rate', token: '[Student Rate]', desc: 'Per-student attendance incentive' },
-  { label: 'Group Multiplier', token: '[Group Multiplier]', desc: 'Multiplier applied to group classes' },
-  { label: 'Late Cancel %', token: '[Late Cancel %]', desc: 'Pay rate percentage on late cancellations' },
-  { label: 'Rev Share %', token: '[Rev Share %]', desc: 'Percentage of verified session tuition' },
-  { label: 'Penalties', token: '[Approved Penalties]', desc: 'Operations policy deductions' },
-  { label: 'Adjustments', token: '[Adjustments]', desc: 'Manual bonus or one-time adjustment items' },
+  { label: 'Base', token: '[Base Salary]', desc: 'Fixed monthly base salary' },
+  { label: 'Classes', token: '[Classes Count]', desc: 'Completed sessions' },
+  { label: 'Class Rate', token: '[Class Rate]', desc: 'Rate per class' },
+  { label: 'Hours', token: '[Teaching Hours]', desc: 'Instructional teaching hours' },
+  { label: 'Hourly Rate', token: '[Hourly Rate]', desc: 'Hourly pay rate' },
+  { label: 'Students', token: '[Attending Students]', desc: 'Present learners count' },
+  { label: 'Student Rate', token: '[Student Rate]', desc: 'Per-student rate' },
+  { label: 'Group Multiplier', token: '[Group Multiplier]', desc: 'Group multiplier' },
+  { label: 'Late Cancel %', token: '[Late Cancel %]', desc: 'Late cancel pay percentage' },
+  { label: 'Rev Share %', token: '[Rev Share %]', desc: 'Revenue share percentage' },
+  { label: 'Deductions', token: '[Approved Penalties]', desc: 'Policy penalties' },
+  { label: 'Bonuses', token: '[Adjustments]', desc: 'Manual bonus adjustments' },
 ];
 
 export function computeStandardFormula(params: {
@@ -68,33 +66,33 @@ export function computeStandardFormula(params: {
 
   switch (params.compensationModel) {
     case 'PER_CLASS': {
-      const grpStr = grp !== 1.0 ? ` × ${grp.toFixed(2)}x [Group]` : '';
-      return `Gross = (Completed Classes × ${cur}${cRate.toFixed(2)}${grpStr}) + (Late Cancellations × ${cur}${cRate.toFixed(2)} × ${late}%) - Approved Penalties + Adjustments`;
+      const grpStr = grp !== 1.0 ? ` × ${grp.toFixed(2)}x` : '';
+      return `Gross = (Classes × ${cur}${cRate.toFixed(2)}${grpStr}) + (Late Cancel × ${cur}${cRate.toFixed(2)} × ${late}%) - Deductions`;
     }
     case 'DURATION_BASED': {
-      return `Gross = (Teaching Hours × ${cur}${hRate.toFixed(2)}/hr) - Approved Penalties + Adjustments`;
+      return `Gross = (Hours × ${cur}${hRate.toFixed(2)}/hr) - Deductions`;
     }
     case 'PER_STUDENT': {
-      return `Gross = (Attending Students × ${cur}${sRate.toFixed(2)}/student) - Approved Penalties + Adjustments`;
+      return `Gross = (Students × ${cur}${sRate.toFixed(2)}/student) - Deductions`;
     }
     case 'FIXED_SALARY': {
-      return `Gross = Monthly Base Salary (${cur}${base.toFixed(2)}) - Absence Deductions - Approved Penalties + Adjustments`;
+      return `Gross = Base (${cur}${base.toFixed(2)}/mo) - Absence Deductions - Penalties`;
     }
     case 'PERCENTAGE_BASED': {
-      return `Gross = (Session Revenue Basis × ${rev.toFixed(1)}%) + (Late Cancellations × ${late}%) - Approved Penalties + Adjustments`;
+      return `Gross = (Session Revenue × ${rev.toFixed(1)}%) + (Late Cancel × ${late}%) - Deductions`;
     }
     case 'HYBRID': {
       const parts: string[] = [];
       if (base > 0) parts.push(`Base (${cur}${base.toFixed(2)})`);
-      if (cRate > 0) parts.push(`(Classes × ${cur}${cRate.toFixed(2)}${grp !== 1.0 ? ` × ${grp.toFixed(2)}x Group` : ''})`);
+      if (cRate > 0) parts.push(`(Classes × ${cur}${cRate.toFixed(2)}${grp !== 1.0 ? ` × ${grp.toFixed(2)}x` : ''})`);
       if (hRate > 0) parts.push(`(Hours × ${cur}${hRate.toFixed(2)})`);
       if (sRate > 0) parts.push(`(Students × ${cur}${sRate.toFixed(2)})`);
       if (rev > 0) parts.push(`(Revenue × ${rev.toFixed(1)}%)`);
       if (parts.length === 0) parts.push(`Base (${cur}0.00)`);
-      return `Gross = ${parts.join(' + ')} - Approved Penalties + Adjustments`;
+      return `Gross = ${parts.join(' + ')} - Deductions + Adjustments`;
     }
     default:
-      return `Gross = Base (${cur}${base.toFixed(2)}) + (Classes × ${cur}${cRate.toFixed(2)}) - Approved Penalties + Adjustments`;
+      return `Gross = Base (${cur}${base.toFixed(2)}) + (Classes × ${cur}${cRate.toFixed(2)}) - Deductions`;
   }
 }
 
@@ -115,7 +113,7 @@ export function simulateGrossPayout(params: {
   let total = 0;
   switch (params.compensationModel) {
     case 'PER_CLASS':
-      total = sampleClasses * params.classRate;
+      total = sampleClasses * params.classRate * (params.groupMultiplier || 1.0);
       break;
     case 'DURATION_BASED':
       total = sampleHours * params.hourlyRate;
@@ -132,7 +130,7 @@ export function simulateGrossPayout(params: {
     case 'HYBRID':
       total =
         params.baseSalary +
-        sampleClasses * params.classRate +
+        sampleClasses * params.classRate * (params.groupMultiplier || 1.0) +
         sampleHours * params.hourlyRate +
         sampleStudents * params.perStudentRate +
         sampleTuition * (params.revenuePercentage / 100);
@@ -276,7 +274,6 @@ export default function PayrollRulesPage() {
 
     try {
       if (editingPlanId) {
-        // Edit existing plan
         db.updatePayrollPlan(
           editingPlanId,
           {
@@ -299,7 +296,6 @@ export default function PayrollRulesPage() {
         );
         setStatusMsg({ type: 'success', text: `Plan ${code} updated successfully.` });
       } else {
-        // Create new plan
         db.createPayrollPlan({
           name: name.trim(),
           code: code.trim().toUpperCase(),
@@ -319,7 +315,7 @@ export default function PayrollRulesPage() {
           effectiveFrom: new Date().toISOString(),
           isActive: true,
         });
-        setStatusMsg({ type: 'success', text: `Plan ${code} configured and saved to database.` });
+        setStatusMsg({ type: 'success', text: `Plan ${code} configured and saved.` });
       }
 
       await db.persistNow();
@@ -352,13 +348,13 @@ export default function PayrollRulesPage() {
 
   return (
     <AppShell>
-      <div className="space-y-6">
+      <div className="space-y-5">
         {/* Top Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Configurable Payroll Plans</h1>
-            <p className="text-xs text-slate-500 mt-1">
-              Multi-model compensation formulas, mathematical rule sets, eligibility criteria, and rate cards.
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Mentor Payroll Plans</h1>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Multi-model compensation formulas, rate cards, and mathematical rule sets.
             </p>
           </div>
           <Button
@@ -397,188 +393,203 @@ export default function PayrollRulesPage() {
           </div>
         )}
 
-        {/* Plans Table */}
-        <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
-          <Table>
-            <TableHeader>
+        {/* Streamlined Plans Table: Fits perfectly on all screens without horizontal scroll */}
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[30%]">Plan & Model</TableHead>
+              <TableHead className="w-[26%]">Compensation Rates</TableHead>
+              <TableHead className="w-[24%]">Calculation Formula</TableHead>
+              <TableHead className="w-[10%]">Policy</TableHead>
+              <TableHead className="w-[10%] text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {plans.length === 0 ? (
               <TableRow>
-                <TableHead>Plan Name & Version</TableHead>
-                <TableHead>Compensation Model</TableHead>
-                <TableHead>Base Salary</TableHead>
-                <TableHead>Class / Hourly Rates</TableHead>
-                <TableHead className="min-w-[280px]">Compensation Formula</TableHead>
-                <TableHead>Eligibility</TableHead>
-                <TableHead>Late Cancel</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {plans.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="py-12 text-center">
-                    <div className="flex flex-col items-center justify-center space-y-2">
-                      <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
-                        <Sliders className="w-5 h-5" />
-                      </div>
-                      <p className="font-semibold text-slate-700 text-sm">No payroll plans configured</p>
-                      <p className="text-xs text-slate-400 max-w-sm">
-                        Create your first mentor payroll plan with customizable compensation models and mathematical calculation formulas.
-                      </p>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        leftIcon={<Plus className="w-4 h-4" />}
-                        onClick={openCreateModal}
-                        className="mt-2"
-                      >
-                        Configure New Plan
-                      </Button>
+                <TableCell colSpan={5} className="py-12 text-center">
+                  <div className="flex flex-col items-center justify-center space-y-2">
+                    <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+                      <Sliders className="w-5 h-5" />
                     </div>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                plans.map((p) => {
-                  const planFormula =
-                    p.formula ||
-                    computeStandardFormula({
-                      compensationModel: p.compensationModel,
-                      baseSalary: p.baseSalary,
-                      classRate: p.defaultClassRate,
-                      hourlyRate: p.hourlyRate,
-                      perStudentRate: p.perStudentRate,
-                      revenuePercentage: p.revenuePercentage,
-                      groupMultiplier: p.groupMultiplier,
-                      lateCancelPercent: p.lateCancellationPayPercent,
-                    });
+                    <p className="font-semibold text-slate-700 text-sm">No payroll plans configured</p>
+                    <p className="text-xs text-slate-400 max-w-sm">
+                      Create your first mentor payroll plan with customizable compensation models and mathematical calculation formulas.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      leftIcon={<Plus className="w-4 h-4" />}
+                      onClick={openCreateModal}
+                      className="mt-2"
+                    >
+                      Configure New Plan
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : (
+              plans.map((p) => {
+                const planFormula =
+                  p.formula ||
+                  computeStandardFormula({
+                    compensationModel: p.compensationModel,
+                    baseSalary: p.baseSalary,
+                    classRate: p.defaultClassRate,
+                    hourlyRate: p.hourlyRate,
+                    perStudentRate: p.perStudentRate,
+                    revenuePercentage: p.revenuePercentage,
+                    groupMultiplier: p.groupMultiplier,
+                    lateCancelPercent: p.lateCancellationPayPercent,
+                  });
 
-                  return (
-                    <TableRow key={p.id}>
-                      <TableCell className="font-semibold text-slate-900">
-                        <div className="flex items-center gap-2">
-                          <span>{p.name}</span>
-                          <Badge variant="purple" size="sm">
-                            v{p.version}
-                          </Badge>
-                        </div>
-                        <p className="text-[11px] text-slate-400 font-mono mt-0.5">{p.code}</p>
-                      </TableCell>
-                      <TableCell>
+                return (
+                  <TableRow key={p.id}>
+                    {/* Column 1: Plan Details & Model */}
+                    <TableCell>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-semibold text-slate-900 text-xs">{p.name}</span>
+                        <Badge variant="purple" size="sm">
+                          v{p.version}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[11px] text-slate-400 font-mono">{p.code}</span>
+                        <span className="text-slate-300">•</span>
                         <Badge variant="default" size="sm">
                           {p.compensationModel.replace(/_/g, ' ')}
                         </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs font-mono font-semibold text-slate-800">
-                        {p.baseSalary > 0 ? formatCurrency(p.baseSalary) : '-'}
-                      </TableCell>
-                      <TableCell className="text-xs text-slate-700">
-                        {p.defaultClassRate > 0 && <span className="font-medium">{formatCurrency(p.defaultClassRate)}/class </span>}
-                        {p.hourlyRate > 0 && <span className="font-medium">{formatCurrency(p.hourlyRate)}/hr </span>}
-                        {p.perStudentRate > 0 && <span>+{formatCurrency(p.perStudentRate)}/student </span>}
-                        {p.revenuePercentage > 0 && <span>{p.revenuePercentage}% rev-share</span>}
-                        {p.groupMultiplier && p.groupMultiplier !== 1 && (
-                          <span className="block text-[10px] text-indigo-600 font-medium mt-0.5">
-                            {p.groupMultiplier}x group multiplier
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1.5 group">
-                          <div
-                            className="font-mono text-[11px] bg-slate-900 text-emerald-300 px-2.5 py-1.5 rounded-md border border-slate-800 max-w-[280px] truncate"
-                            title={planFormula}
-                          >
-                            {planFormula}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleCopyFormula(planFormula, p.id)}
-                            className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
-                            title="Copy formula"
-                          >
-                            {copiedId === p.id ? (
-                              <Check className="w-3.5 h-3.5 text-emerald-600" />
-                            ) : (
-                              <Copy className="w-3.5 h-3.5" />
-                            )}
-                          </button>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-xs text-slate-600">
-                        Min {p.minEligibleDurationMinutes}m
-                      </TableCell>
-                      <TableCell className="text-xs text-slate-700 font-semibold">
-                        {p.lateCancellationPayPercent}%
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setSelectedPlan(p)}
-                            className="text-xs"
-                          >
-                            Inspect
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openEditModal(p)}
-                            className="text-xs text-indigo-600 hover:text-indigo-800"
-                          >
-                            Edit
-                          </Button>
-                          <button
-                            onClick={() => handleDeletePlan(p.id, p.code)}
-                            className="p-1.5 text-slate-400 hover:text-rose-600 rounded-md transition-colors"
-                            title="Delete plan"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                      </div>
+                    </TableCell>
 
-        {/* Configure / Edit Plan Modal */}
+                    {/* Column 2: Compensation Rates */}
+                    <TableCell className="text-xs text-slate-700">
+                      <div className="space-y-0.5">
+                        {p.baseSalary > 0 && (
+                          <div className="font-semibold text-slate-900 font-mono">
+                            Base: {formatCurrency(p.baseSalary, 'INR')}/mo
+                          </div>
+                        )}
+                        <div className="text-[11px] text-slate-600 flex flex-wrap gap-x-2 gap-y-0.5">
+                          {p.defaultClassRate > 0 && <span>₹{p.defaultClassRate}/class</span>}
+                          {p.hourlyRate > 0 && <span>₹{p.hourlyRate}/hr</span>}
+                          {p.perStudentRate > 0 && <span>+₹{p.perStudentRate}/student</span>}
+                          {p.revenuePercentage > 0 && <span>{p.revenuePercentage}% rev</span>}
+                          {p.groupMultiplier && p.groupMultiplier !== 1 && (
+                            <span className="text-indigo-600 font-medium">{p.groupMultiplier}x group</span>
+                          )}
+                          {!p.baseSalary && !p.defaultClassRate && !p.hourlyRate && !p.perStudentRate && !p.revenuePercentage && (
+                            <span className="text-slate-400">-</span>
+                          )}
+                        </div>
+                      </div>
+                    </TableCell>
+
+                    {/* Column 3: Calculation Formula (Compact, elegant, clickable pill) */}
+                    <TableCell>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPlan(p)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-[11px] font-mono text-slate-700 hover:text-indigo-900 transition-colors max-w-[210px] truncate text-left"
+                          title="Click to inspect full formula"
+                        >
+                          <Calculator className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                          <span className="truncate">{planFormula}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyFormula(planFormula, p.id)}
+                          className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors shrink-0"
+                          title="Copy formula"
+                        >
+                          {copiedId === p.id ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </div>
+                    </TableCell>
+
+                    {/* Column 4: Eligibility & Policy */}
+                    <TableCell className="text-xs text-slate-600">
+                      <div>Min {p.minEligibleDurationMinutes}m</div>
+                      <div className="text-[11px] text-slate-400">{p.lateCancellationPayPercent}% late pay</div>
+                    </TableCell>
+
+                    {/* Column 5: Actions */}
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedPlan(p)}
+                          className="text-xs h-7 px-2 text-slate-600 hover:text-slate-900"
+                          title="Inspect Formula"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openEditModal(p)}
+                          className="text-xs h-7 px-2 text-indigo-600 hover:text-indigo-800"
+                          title="Edit Plan & Formula"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </Button>
+                        <button
+                          onClick={() => handleDeletePlan(p.id, p.code)}
+                          className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors"
+                          title="Delete plan"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
+
+        {/* Redesigned Edit / Configure Plan Modal (Clean, Cohesive Light Theme) */}
         {showModal && (
           <Modal
             isOpen={showModal}
             onClose={() => setShowModal(false)}
-            maxWidth="xl"
-            title={editingPlanId ? 'Edit Mentor Payroll Plan & Formula' : 'Configure New Mentor Payroll Plan'}
-            subtitle="Define compensation rules, instructional rate cards, and configure mathematical formula parameters."
+            maxWidth="lg"
+            title={editingPlanId ? 'Edit Mentor Payroll Plan' : 'Configure New Mentor Payroll Plan'}
+            subtitle="Configure compensation structure, rate cards, and mathematical payout formulas."
             footer={
               <div className="flex items-center justify-between w-full">
-                <span className="text-[11px] text-slate-500 font-medium">
-                  {isCustomFormula ? 'Customized formula set' : 'Standard dynamic formula active'}
+                <span className="text-[11px] text-slate-400 font-medium">
+                  {isCustomFormula ? 'Custom formula expression active' : 'Auto-computed formula active'}
                 </span>
                 <div className="flex items-center gap-2">
                   <Button variant="ghost" size="sm" onClick={() => setShowModal(false)}>
                     Cancel
                   </Button>
                   <Button variant="primary" size="sm" onClick={handleSavePlan} disabled={!name || !code}>
-                    {editingPlanId ? 'Update Payroll Plan' : 'Save Payroll Plan'}
+                    {editingPlanId ? 'Update Plan' : 'Save Plan'}
                   </Button>
                 </div>
               </div>
             }
           >
             <div className="space-y-4 text-xs max-h-[75vh] overflow-y-auto pr-1">
-              {/* Row 1: Plan Name and Code */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
+              {/* Section 1: Plan Identity */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
                   <label className="font-semibold text-slate-700 block mb-1">Plan Name *</label>
                   <input
                     type="text"
                     placeholder="e.g. Senior STEM Master Mentor"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:bg-white focus:border-indigo-500 focus:outline-none"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs focus:border-indigo-500 focus:outline-none"
                   />
                 </div>
                 <div>
@@ -588,24 +599,23 @@ export default function PayrollRulesPage() {
                     placeholder="PLAN-STEM-SR"
                     value={code}
                     onChange={(e) => setCode(e.target.value.toUpperCase())}
-                    className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono focus:bg-white focus:border-indigo-500 focus:outline-none"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono focus:border-indigo-500 focus:outline-none"
                   />
                 </div>
               </div>
 
-              {/* Description */}
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Plan Description</label>
+                <label className="font-semibold text-slate-700 block mb-1">Description</label>
                 <input
                   type="text"
-                  placeholder="e.g. Multi-tier hybrid plan for full-time senior instructors with student bonuses."
+                  placeholder="e.g. Hybrid plan with fixed base salary plus per-class incentives and student bonuses."
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:bg-white focus:border-indigo-500 focus:outline-none"
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs focus:border-indigo-500 focus:outline-none"
                 />
               </div>
 
-              {/* Compensation Model */}
+              {/* Section 2: Compensation Model */}
               <div>
                 <label className="font-semibold text-slate-700 block mb-1">Compensation Model *</label>
                 <select
@@ -616,7 +626,7 @@ export default function PayrollRulesPage() {
                       setCustomFormulaText('');
                     }
                   }}
-                  className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium focus:bg-white focus:border-indigo-500 focus:outline-none"
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium focus:border-indigo-500 focus:outline-none text-slate-800"
                 >
                   <option value="PER_CLASS">A. Per-Class Payroll (Fixed payment per completed session)</option>
                   <option value="DURATION_BASED">B. Duration-Based Payroll (Hourly teaching rate)</option>
@@ -627,201 +637,246 @@ export default function PayrollRulesPage() {
                 </select>
               </div>
 
-              {/* Dynamic Rates Configuration Inputs */}
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+              {/* Section 3: Rate Configuration Card (Clean, aligned 2-col inputs) */}
+              <div className="bg-slate-50/70 border border-slate-200 rounded-xl p-3.5 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-800 text-[11px] uppercase tracking-wider">
-                    Rate Card & Compensation Inputs
+                  <span className="text-xs font-semibold text-slate-800">
+                    Rate Card & Parameter Inputs
                   </span>
-                  <Badge variant="purple" size="sm">
-                    Currency: {currency}
-                  </Badge>
+                  <span className="text-[11px] text-slate-400 font-medium">Currency: INR (₹)</span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {(model === 'FIXED_SALARY' || model === 'HYBRID') && (
                     <div>
-                      <label className="font-semibold text-slate-700 block mb-1">Monthly Base Salary (₹)</label>
-                      <input
-                        type="number"
-                        value={baseSalary}
-                        onChange={(e) => setBaseSalary(e.target.value)}
-                        className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono"
-                      />
+                      <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                        Monthly Base Salary
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2 text-xs text-slate-400">₹</span>
+                        <input
+                          type="number"
+                          value={baseSalary}
+                          onChange={(e) => setBaseSalary(e.target.value)}
+                          className="w-full pl-7 pr-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono focus:border-indigo-500 focus:outline-none"
+                          placeholder="2500"
+                        />
+                      </div>
                     </div>
                   )}
 
                   {(model === 'PER_CLASS' || model === 'HYBRID') && (
                     <div>
-                      <label className="font-semibold text-slate-700 block mb-1">Rate per Class (₹)</label>
-                      <input
-                        type="number"
-                        value={classRate}
-                        onChange={(e) => setClassRate(e.target.value)}
-                        className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono"
-                      />
+                      <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                        Rate per Completed Class
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2 text-xs text-slate-400">₹</span>
+                        <input
+                          type="number"
+                          value={classRate}
+                          onChange={(e) => setClassRate(e.target.value)}
+                          className="w-full pl-7 pr-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono focus:border-indigo-500 focus:outline-none"
+                          placeholder="65"
+                        />
+                      </div>
                     </div>
                   )}
 
                   {(model === 'DURATION_BASED' || model === 'HYBRID') && (
                     <div>
-                      <label className="font-semibold text-slate-700 block mb-1">Hourly Teaching Rate (₹/hr)</label>
-                      <input
-                        type="number"
-                        value={hourlyRate}
-                        onChange={(e) => setHourlyRate(e.target.value)}
-                        className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono"
-                      />
+                      <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                        Hourly Teaching Rate
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2 text-xs text-slate-400">₹</span>
+                        <input
+                          type="number"
+                          value={hourlyRate}
+                          onChange={(e) => setHourlyRate(e.target.value)}
+                          className="w-full pl-7 pr-10 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono focus:border-indigo-500 focus:outline-none"
+                          placeholder="50"
+                        />
+                        <span className="absolute right-3 top-2 text-[10px] text-slate-400">/hr</span>
+                      </div>
                     </div>
                   )}
 
                   {(model === 'PER_STUDENT' || model === 'HYBRID') && (
                     <div>
-                      <label className="font-semibold text-slate-700 block mb-1">Rate per Attending Student (₹)</label>
-                      <input
-                        type="number"
-                        value={perStudentRate}
-                        onChange={(e) => setPerStudentRate(e.target.value)}
-                        className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono"
-                      />
+                      <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                        Rate per Attending Student
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2 text-xs text-slate-400">₹</span>
+                        <input
+                          type="number"
+                          value={perStudentRate}
+                          onChange={(e) => setPerStudentRate(e.target.value)}
+                          className="w-full pl-7 pr-14 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono focus:border-indigo-500 focus:outline-none"
+                          placeholder="15"
+                        />
+                        <span className="absolute right-3 top-2 text-[10px] text-slate-400">/student</span>
+                      </div>
                     </div>
                   )}
 
                   {(model === 'PERCENTAGE_BASED' || model === 'HYBRID') && (
                     <div>
-                      <label className="font-semibold text-slate-700 block mb-1">Revenue Share %</label>
-                      <input
-                        type="number"
-                        value={revenuePercentage}
-                        onChange={(e) => setRevenuePercentage(e.target.value)}
-                        className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono"
-                      />
+                      <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                        Revenue Share Percentage
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={revenuePercentage}
+                          onChange={(e) => setRevenuePercentage(e.target.value)}
+                          className="w-full pl-3 pr-7 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono focus:border-indigo-500 focus:outline-none"
+                          placeholder="30"
+                        />
+                        <span className="absolute right-3 top-2 text-xs text-slate-400">%</span>
+                      </div>
                     </div>
                   )}
+                </div>
 
+                {/* Policies & Multipliers Subrow */}
+                <div className="pt-2.5 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Group Session Multiplier</label>
-                    <input
-                      type="number"
-                      step="0.05"
-                      value={groupMultiplier}
-                      onChange={(e) => setGroupMultiplier(e.target.value)}
-                      className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono"
-                      placeholder="1.25"
-                    />
+                    <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                      Group Multiplier
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="0.05"
+                        value={groupMultiplier}
+                        onChange={(e) => setGroupMultiplier(e.target.value)}
+                        className="w-full pl-3 pr-6 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono focus:border-indigo-500 focus:outline-none"
+                        placeholder="1.25"
+                      />
+                      <span className="absolute right-3 top-2 text-xs text-slate-400">x</span>
+                    </div>
                   </div>
 
                   <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Min Duration (mins)</label>
-                    <input
-                      type="number"
-                      value={minDuration}
-                      onChange={(e) => setMinDuration(e.target.value)}
-                      className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono"
-                    />
+                    <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                      Min Duration
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        value={minDuration}
+                        onChange={(e) => setMinDuration(e.target.value)}
+                        className="w-full pl-3 pr-10 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono focus:border-indigo-500 focus:outline-none"
+                        placeholder="45"
+                      />
+                      <span className="absolute right-3 top-2 text-[10px] text-slate-400">mins</span>
+                    </div>
                   </div>
 
                   <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Late Cancel Pay %</label>
-                    <input
-                      type="number"
-                      value={lateCancelPercent}
-                      onChange={(e) => setLateCancelPercent(e.target.value)}
-                      className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono"
-                    />
+                    <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                      Late Cancel Pay
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        value={lateCancelPercent}
+                        onChange={(e) => setLateCancelPercent(e.target.value)}
+                        className="w-full pl-3 pr-7 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono focus:border-indigo-500 focus:outline-none"
+                        placeholder="50"
+                      />
+                      <span className="absolute right-3 top-2 text-xs text-slate-400">%</span>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* CORE REQUIREMENT: FORMULA DISPLAY & CONFIGURATION BOX */}
-              <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl space-y-3 text-white shadow-sm">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              {/* Section 4: Mathematical Formula Card (Clean, refined light theme) */}
+              <div className="bg-gradient-to-b from-indigo-50/50 via-slate-50/70 to-white border border-indigo-100 rounded-xl p-3.5 space-y-3 shadow-2xs">
+                <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Calculator className="w-4 h-4 text-emerald-400" />
-                    <span className="font-bold text-xs text-slate-100">
-                      Payroll Compensation Formula
-                    </span>
-                    <Badge variant={isCustomFormula ? 'purple' : 'success'} size="sm">
-                      {isCustomFormula ? 'Custom Expression' : 'Standard Formula'}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {isCustomFormula ? (
-                      <button
-                        type="button"
-                        onClick={handleResetToAuto}
-                        className="text-[11px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 transition-colors"
-                      >
-                        <RotateCcw className="w-3 h-3" /> Reset to standard formula
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsCustomFormula(true);
-                          setCustomFormulaText(autoGeneratedFormula);
-                        }}
-                        className="text-[11px] text-slate-400 hover:text-purple-300 flex items-center gap-1 transition-colors"
-                      >
-                        <Edit3 className="w-3 h-3" /> Set custom formula
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <p className="text-[11px] text-slate-400">
-                  Mathematical equation executed by the payroll engine during batch calculations.
-                </p>
-
-                {/* Live Formula Display Screen */}
-                <div className="p-3 bg-slate-950/90 rounded-lg border border-slate-800 font-mono text-xs leading-relaxed text-emerald-300 flex items-start justify-between gap-2">
-                  <span className="break-all">{activeFormula}</span>
-                  <button
-                    type="button"
-                    onClick={() => handleCopyFormula(activeFormula, 'modal')}
-                    className="p-1 rounded text-slate-500 hover:text-emerald-400 shrink-0 transition-colors"
-                    title="Copy formula"
-                  >
-                    {copiedId === 'modal' ? (
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    ) : (
-                      <Copy className="w-3.5 h-3.5" />
-                    )}
-                  </button>
-                </div>
-
-                {/* Custom Formula Editor & Variables Picker */}
-                {isCustomFormula && (
-                  <div className="space-y-2 pt-2 border-t border-slate-800">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[11px] text-slate-300 font-semibold">
-                        Set / Edit Custom Mathematical Expression:
-                      </label>
-                      <span className="text-[10px] text-slate-500 font-mono">
-                        Supports arithmetic operators (+, -, *, /) and tokens
-                      </span>
+                    <div className="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600">
+                      <Calculator className="w-4 h-4" />
                     </div>
+                    <div>
+                      <h4 className="font-semibold text-xs text-slate-900">Calculation Formula</h4>
+                      <p className="text-[11px] text-slate-500">Mathematical rule applied during payroll batch run</p>
+                    </div>
+                  </div>
 
+                  {/* Mode switch */}
+                  <div className="flex items-center p-0.5 bg-slate-200/80 rounded-lg text-[11px]">
+                    <button
+                      type="button"
+                      onClick={handleResetToAuto}
+                      className={`px-2.5 py-1 rounded-md font-medium transition-all ${
+                        !isCustomFormula
+                          ? 'bg-white text-indigo-700 shadow-2xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Auto Formula
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCustomFormula(true);
+                        if (!customFormulaText) setCustomFormulaText(autoGeneratedFormula);
+                      }}
+                      className={`px-2.5 py-1 rounded-md font-medium transition-all ${
+                        isCustomFormula
+                          ? 'bg-white text-indigo-700 shadow-2xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Custom Formula
+                    </button>
+                  </div>
+                </div>
+
+                {/* Formula Display / Editor */}
+                {!isCustomFormula ? (
+                  <div className="p-3 bg-white border border-indigo-100 rounded-lg shadow-2xs flex items-center justify-between gap-2">
+                    <div className="font-mono text-xs text-slate-800 leading-relaxed break-words flex-1">
+                      {activeFormula}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyFormula(activeFormula, 'modal')}
+                      className="p-1.5 rounded-md hover:bg-slate-100 text-slate-400 hover:text-slate-700 shrink-0 transition-colors"
+                      title="Copy formula"
+                    >
+                      {copiedId === 'modal' ? (
+                        <Check className="w-4 h-4 text-emerald-600" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
                     <textarea
                       rows={2}
                       value={customFormulaText}
                       onChange={(e) => setCustomFormulaText(e.target.value)}
-                      placeholder="e.g. Gross = Base + (ClassesCount * ClassRate) + Bonuses - ApprovedPenalties"
-                      className="w-full p-2.5 bg-slate-950 border border-slate-700 rounded-lg text-xs font-mono text-emerald-300 focus:outline-none focus:border-purple-500 leading-relaxed"
+                      placeholder="e.g. Gross = Base + (ClassesCount * ClassRate) - Deductions"
+                      className="w-full p-2.5 bg-white border border-indigo-300 rounded-lg text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 leading-relaxed shadow-2xs"
                     />
 
-                    {/* Variable Tokens Chips */}
-                    <div className="space-y-1.5 pt-1">
-                      <div className="flex items-center gap-1 text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
-                        <Code2 className="w-3 h-3 text-purple-400" /> Click to Insert Formula Token:
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
+                    {/* Variable tokens helper */}
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
+                        Click to Insert Variable:
+                      </span>
+                      <div className="flex flex-wrap gap-1">
                         {FORMULA_TOKENS.map((item) => (
                           <button
                             key={item.token}
                             type="button"
                             onClick={() => handleInsertToken(item.token)}
-                            className="px-2 py-0.5 rounded text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-purple-500 transition-colors"
+                            className="px-2 py-0.5 text-[10px] font-medium rounded bg-white hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 border border-slate-200 hover:border-indigo-300 transition-colors shadow-2xs"
                             title={item.desc}
                           >
                             + {item.label}
@@ -833,13 +888,13 @@ export default function PayrollRulesPage() {
                 )}
 
                 {/* Simulation Summary Bar */}
-                <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-[11px]">
-                  <span className="text-slate-400 flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                    Sample Simulation (10 classes, 15h teaching, 8 students):
+                <div className="pt-2 border-t border-indigo-100/60 flex items-center justify-between text-xs">
+                  <span className="text-slate-500 flex items-center gap-1.5 text-[11px]">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                    Simulation (10 classes, 15h teaching, 8 students):
                   </span>
-                  <span className="font-bold text-emerald-400 font-mono">
-                    {formatCurrency(simulatedPayout)}
+                  <span className="font-bold text-slate-900 font-mono">
+                    {formatCurrency(simulatedPayout, 'INR')}
                   </span>
                 </div>
               </div>
@@ -847,12 +902,12 @@ export default function PayrollRulesPage() {
           </Modal>
         )}
 
-        {/* Inspect Plan Modal */}
+        {/* Inspect Plan Modal (Matching clean light theme) */}
         {selectedPlan && (
           <Modal
             isOpen={Boolean(selectedPlan)}
             onClose={() => setSelectedPlan(null)}
-            maxWidth="lg"
+            maxWidth="md"
             title={selectedPlan.name}
             subtitle={`Plan Code: ${selectedPlan.code} • Version: v${selectedPlan.version}`}
             footer={
@@ -867,7 +922,7 @@ export default function PayrollRulesPage() {
                   }}
                   leftIcon={<Edit3 className="w-3.5 h-3.5" />}
                 >
-                  Edit This Plan & Formula
+                  Edit This Plan
                 </Button>
                 <Button variant="primary" size="sm" onClick={() => setSelectedPlan(null)}>
                   Close
@@ -878,12 +933,12 @@ export default function PayrollRulesPage() {
             <div className="space-y-4 text-xs">
               <p className="text-slate-600 leading-relaxed">{selectedPlan.description || 'No description provided.'}</p>
 
-              {/* Formula Block */}
-              <div className="p-4 bg-slate-900 rounded-xl border border-slate-800 space-y-2 text-white">
+              {/* Clean Formula Card */}
+              <div className="p-3.5 bg-gradient-to-b from-indigo-50/50 to-slate-50 border border-indigo-100 rounded-xl space-y-2">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Calculator className="w-4 h-4 text-emerald-400" />
-                    <p className="font-bold text-xs text-slate-100">Configured Mathematical Formula:</p>
+                  <div className="flex items-center gap-1.5 text-slate-800 font-semibold text-xs">
+                    <Calculator className="w-4 h-4 text-indigo-600" />
+                    <span>Calculation Formula</span>
                   </div>
                   <button
                     type="button"
@@ -903,17 +958,17 @@ export default function PayrollRulesPage() {
                         'inspect'
                       )
                     }
-                    className="p-1 rounded text-slate-400 hover:text-emerald-400"
+                    className="p-1 rounded text-slate-400 hover:text-slate-700"
                     title="Copy formula"
                   >
                     {copiedId === 'inspect' ? (
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
                     ) : (
                       <Copy className="w-3.5 h-3.5" />
                     )}
                   </button>
                 </div>
-                <div className="font-mono text-xs bg-slate-950 p-3 rounded-lg border border-slate-800 leading-relaxed text-emerald-300">
+                <div className="p-2.5 bg-white border border-indigo-100 rounded-lg font-mono text-xs text-slate-800 leading-relaxed break-words shadow-2xs">
                   {selectedPlan.formula ||
                     computeStandardFormula({
                       compensationModel: selectedPlan.compensationModel,
@@ -928,12 +983,12 @@ export default function PayrollRulesPage() {
                 </div>
               </div>
 
-              {/* Breakdown Grid */}
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-                <p className="font-bold text-slate-900 text-[11px] uppercase tracking-wider">
-                  Compensation Model Parameters
+              {/* Parameter Breakdown Grid */}
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+                <p className="font-semibold text-slate-800 text-[11px] uppercase tracking-wider">
+                  Parameters & Thresholds
                 </p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
                   <div>
                     <span className="text-slate-400 block text-[10px]">Model</span>
                     <span className="font-semibold text-slate-800">
@@ -943,25 +998,25 @@ export default function PayrollRulesPage() {
                   <div>
                     <span className="text-slate-400 block text-[10px]">Base Salary</span>
                     <span className="font-mono font-semibold text-slate-800">
-                      {selectedPlan.baseSalary > 0 ? formatCurrency(selectedPlan.baseSalary) : '-'}
+                      {selectedPlan.baseSalary > 0 ? formatCurrency(selectedPlan.baseSalary, 'INR') : '-'}
                     </span>
                   </div>
                   <div>
                     <span className="text-slate-400 block text-[10px]">Class Rate</span>
                     <span className="font-mono font-semibold text-slate-800">
-                      {selectedPlan.defaultClassRate > 0 ? formatCurrency(selectedPlan.defaultClassRate) : '-'}
+                      {selectedPlan.defaultClassRate > 0 ? formatCurrency(selectedPlan.defaultClassRate, 'INR') : '-'}
                     </span>
                   </div>
                   <div>
                     <span className="text-slate-400 block text-[10px]">Hourly Rate</span>
                     <span className="font-mono font-semibold text-slate-800">
-                      {selectedPlan.hourlyRate > 0 ? formatCurrency(selectedPlan.hourlyRate) : '-'}
+                      {selectedPlan.hourlyRate > 0 ? formatCurrency(selectedPlan.hourlyRate, 'INR') : '-'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block text-[10px]">Per-Student Rate</span>
+                    <span className="text-slate-400 block text-[10px]">Per-Student</span>
                     <span className="font-mono font-semibold text-slate-800">
-                      {selectedPlan.perStudentRate > 0 ? formatCurrency(selectedPlan.perStudentRate) : '-'}
+                      {selectedPlan.perStudentRate > 0 ? formatCurrency(selectedPlan.perStudentRate, 'INR') : '-'}
                     </span>
                   </div>
                   <div>
@@ -977,14 +1032,10 @@ export default function PayrollRulesPage() {
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block text-[10px]">Min Session Duration</span>
+                    <span className="text-slate-400 block text-[10px]">Min Duration</span>
                     <span className="font-semibold text-slate-800">
                       {selectedPlan.minEligibleDurationMinutes} mins
                     </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[10px]">Version</span>
-                    <span className="font-semibold text-indigo-600">v{selectedPlan.version}</span>
                   </div>
                 </div>
               </div>

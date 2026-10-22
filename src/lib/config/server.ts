@@ -15,7 +15,7 @@ interface ServerEmailSecrets {
 
 export function serverEmailSecrets(): ServerEmailSecrets {
   return {
-    oauthClientSecret: process.env.EMAIL_OAUTH_CLIENT_SECRET || '',
+    oauthClientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET?.trim() || '',
     oauthRefreshToken: '',
   };
 }

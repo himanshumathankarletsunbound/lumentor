@@ -228,7 +228,7 @@ The documented Classcard endpoints currently integrated are:
 
 Inventory ordering is allow-listed to `product_id`, `name`, or `status`, and the documented empty response from lead creation is treated as a valid successful response when Classcard returns a successful status.
 
-Email is outbound-only through Google Workspace OAuth. There is no SMTP-password, app-password, IMAP, POP3, or incoming-mail integration. Set `EMAIL_OAUTH_CLIENT_SECRET` only on the server; the OAuth refresh token is stored encrypted in PostgreSQL after authorization. In production, missing or invalid email configuration is an explicit failure, not a simulated success.
+Email is outbound-only through Google Workspace OAuth. There is no SMTP-password, app-password, IMAP, POP3, or incoming-mail integration. Set `GOOGLE_OAUTH_CLIENT_SECRET` only on the server; the OAuth refresh token is stored encrypted in PostgreSQL after authorization. `EMAIL_OAUTH_CLIENT_SECRET` is obsolete and ignored. In production, missing or invalid email configuration is an explicit failure, not a simulated success.
 
 ### Gmail OAuth
 

@@ -36,6 +36,7 @@ enum ClassStatus {
 enum AttendanceStatus {
   PRESENT
   ABSENT
+  ABSENT_BILLABLE
   LATE
   EXCUSED
   UNMARKED

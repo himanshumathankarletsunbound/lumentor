@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
 import type { AppDatabase } from './store';
-import type { Branch, Mentor, Package, Student, Subject } from '../types/models';
+import type { Branch, ClassEvent, Mentor, Package, Student, Subject } from '../types/models';
 import type { UserRole } from '../types/auth';
 import { SEED_ROLES } from './seedData';
 import type { CurrentUser } from '../types/auth';
@@ -291,6 +291,81 @@ export async function listStudents(branchId?: string): Promise<Student[]> {
     createdAt: student.createdAt.toISOString(),
     updatedAt: student.updatedAt.toISOString(),
   }));
+}
+
+export async function listClasses(filters: {
+  mentorId?: string;
+  branchId?: string;
+  status?: string;
+  startDate?: string;
+  endDate?: string;
+} = {}): Promise<ClassEvent[]> {
+  const classes = await prisma.classEvent.findMany({
+    where: {
+      mentorId: filters.mentorId,
+      branchId: filters.branchId,
+      status: filters.status && filters.status !== 'ALL' ? filters.status as never : undefined,
+      startTime: filters.startDate || filters.endDate ? {
+        gte: filters.startDate ? new Date(filters.startDate) : undefined,
+        lte: filters.endDate ? new Date(filters.endDate) : undefined,
+      } : undefined,
+    },
+    include: {
+      branch: true,
+      subject: true,
+      mentor: true,
+      attendances: { include: { student: true } },
+    },
+    orderBy: { startTime: 'desc' },
+  });
+  return classes.map((item) => {
+    const statuses = item.attendances.map((attendance) => attendance.status);
+    const summary: ClassEvent['attendanceStatusSummary'] =
+      statuses.length === 0 || statuses.some((status) => status === 'UNMARKED')
+        ? 'UNMARKED'
+        : statuses.every((status) => status === 'PRESENT' || status === 'LATE')
+        ? 'ALL_PRESENT'
+        : statuses.every((status) => status === 'ABSENT' || status === 'ABSENT_BILLABLE')
+        ? 'ALL_ABSENT'
+        : 'PARTIAL';
+    return {
+      id: item.id,
+      title: item.title,
+      subjectId: item.subjectId,
+      subjectName: item.subject.name,
+      mentorId: item.mentorId,
+      mentorName: `${item.mentor.firstName} ${item.mentor.lastName}`,
+      branchId: item.branchId,
+      branchName: item.branch.name,
+      startTime: item.startTime.toISOString(),
+      endTime: item.endTime.toISOString(),
+      durationMinutes: item.durationMinutes,
+      isGroup: item.isGroup,
+      capacity: item.capacity,
+      students: item.attendances.map((attendance) => ({
+        studentId: attendance.studentId,
+        studentName: `${attendance.student.firstName} ${attendance.student.lastName}`,
+        studentEmail: attendance.student.email,
+        attendanceStatus: attendance.status,
+        markedAt: attendance.markedAt?.toISOString(),
+        markedBy: attendance.markedBy || undefined,
+        notes: attendance.notes || undefined,
+      })),
+      status: item.status,
+      attendanceStatusSummary: summary,
+      cancellationReason: item.cancellationReason || undefined,
+      cancelledAt: item.cancelledAt?.toISOString(),
+      cancelledBy: item.cancelledBy || undefined,
+      isLateCancellation: item.isLateCancellation,
+      room: item.room || undefined,
+      meetingLink: item.meetingLink || undefined,
+      externalId: item.externalId || undefined,
+      provenance: item.provenance,
+      notes: item.notes || undefined,
+      createdAt: item.createdAt.toISOString(),
+      updatedAt: item.updatedAt.toISOString(),
+    };
+  });
 }
 
 async function ensurePayrollPlan(organizationId: string, id: string) {

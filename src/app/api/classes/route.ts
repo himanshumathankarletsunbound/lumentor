@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../lib/db/store';
-import { authorizationError } from '../../../lib/auth/server';
+import { authorizationError, authorizationErrorAsync } from '../../../lib/auth/server';
+import { listClasses } from '../../../lib/db/state-repository';
 import { ClassEvent, ClassStudentRoster } from '../../../lib/types/models';
 import { ensureServerPersistence } from '../../../lib/db/server-initialization';
 
 export async function GET(req: NextRequest) {
   await ensureServerPersistence();
-  const denied = authorizationError(req);
+  const denied = await authorizationErrorAsync(req);
   if (denied) return denied;
   try {
     const { searchParams } = new URL(req.url);
@@ -16,11 +17,7 @@ export async function GET(req: NextRequest) {
     const startDate = searchParams.get('startDate') || undefined;
     const endDate = searchParams.get('endDate') || undefined;
 
-    let classes = db.getClasses({ mentorId, branchId, startDate, endDate });
-
-    if (status && status !== 'ALL') {
-      classes = classes.filter((c) => c.status === status);
-    }
+    const classes = await listClasses({ mentorId, branchId, startDate, endDate, status });
 
     return NextResponse.json({
       success: true,

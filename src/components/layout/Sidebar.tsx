@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '../../lib/auth/AuthContext';
@@ -52,14 +52,84 @@ interface NavGroup {
   items: NavItem[];
 }
 
+let globalSidebarScrollTop = 0;
+
 export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const pathname = usePathname();
   const { currentUser, isMentor, canAccess } = useAuth();
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Persist collapsed groups state across page navigation
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('lumentor_sidebar_collapsed_groups');
+        if (saved) return JSON.parse(saved);
+      } catch {}
+    }
+    return {};
+  });
 
   const toggleGroup = (name: string) => {
-    setCollapsedGroups((prev) => ({ ...prev, [name]: !prev[name] }));
+    setCollapsedGroups((prev) => {
+      const updated = { ...prev, [name]: !prev[name] };
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('lumentor_sidebar_collapsed_groups', JSON.stringify(updated));
+        } catch {}
+      }
+      return updated;
+    });
   };
+
+  // Synchronously restore scroll position as soon as DOM element mounts
+  const setScrollContainerRef = useCallback((node: HTMLDivElement | null) => {
+    scrollContainerRef.current = node;
+    if (node) {
+      let topToRestore = globalSidebarScrollTop;
+      if (topToRestore === 0 && typeof window !== 'undefined') {
+        try {
+          const saved = sessionStorage.getItem('lumentor_sidebar_scroll_top');
+          if (saved) topToRestore = Number(saved);
+        } catch {}
+      }
+      if (topToRestore > 0) {
+        node.scrollTop = topToRestore;
+      }
+    }
+  }, []);
+
+  // Keep scroll position static across page changes or ensure active link is visible
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    let targetScroll = globalSidebarScrollTop;
+    if (targetScroll === 0 && typeof window !== 'undefined') {
+      try {
+        const saved = sessionStorage.getItem('lumentor_sidebar_scroll_top');
+        if (saved) targetScroll = Number(saved);
+      } catch {}
+    }
+
+    if (targetScroll > 0) {
+      container.scrollTop = targetScroll;
+    }
+
+    // If active link is outside visible container bounds, scroll it into view
+    const activeLink = container.querySelector<HTMLElement>('[data-active="true"]');
+    if (activeLink) {
+      const linkRect = activeLink.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      if (linkRect.top < containerRect.top || linkRect.bottom > containerRect.bottom) {
+        activeLink.scrollIntoView({ block: 'nearest' });
+        globalSidebarScrollTop = container.scrollTop;
+        try {
+          sessionStorage.setItem('lumentor_sidebar_scroll_top', String(container.scrollTop));
+        } catch {}
+      }
+    }
+  }, [pathname]);
 
   // Build role-scoped navigation tree
   const getNavGroupsForRole = (role: SystemRole): NavGroup[] => {
@@ -478,7 +548,17 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
         </div>
 
         {/* Scrollable Navigation Groups */}
-        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-4 space-y-6 text-sm">
+        <div
+          ref={setScrollContainerRef}
+          onScroll={(e) => {
+            const top = e.currentTarget.scrollTop;
+            globalSidebarScrollTop = top;
+            try {
+              sessionStorage.setItem('lumentor_sidebar_scroll_top', String(top));
+            } catch {}
+          }}
+          className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-4 space-y-6 text-sm"
+        >
           {navGroups.map((group) => {
             const isCollapsed = collapsedGroups[group.groupName];
 
@@ -511,7 +591,15 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
                         <Link
                           key={item.href}
                           href={item.href}
+                          scroll={false}
+                          data-active={isActive ? 'true' : undefined}
                           onClick={() => {
+                            if (scrollContainerRef.current) {
+                              globalSidebarScrollTop = scrollContainerRef.current.scrollTop;
+                              try {
+                                sessionStorage.setItem('lumentor_sidebar_scroll_top', String(globalSidebarScrollTop));
+                              } catch {}
+                            }
                             if (window.innerWidth < 1024) onClose();
                           }}
                           className={cn(

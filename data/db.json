@@ -456,8 +456,8 @@
       "salt": "4bdf413f8a507f6e5046b89627425ad4",
       "status": "ACTIVE",
       "createdAt": "2026-01-01T00:00:00Z",
-      "sessionToken": "3a4c03e27b28777a08dd6ace5b5ad388221135096b9c752dbe7355fa6899ecc4",
-      "sessionExpiry": "2026-10-21T17:26:07.421Z"
+      "sessionToken": "93660bc503b1d683bed44f89de57094770f434be9fcc02b9790488b7ebb69559",
+      "sessionExpiry": "2026-10-22T04:50:30.819Z"
     }
   ],
   "branches": [],
@@ -994,15 +994,14 @@
     }
   ],
   "emailConfig": {
-    "host": "smtp.letsunbound.com",
-    "port": 587,
-    "security": "STARTTLS",
+    "host": "smtp.gmail.com",
+    "port": 465,
+    "security": "SSL_TLS",
     "authRequired": true,
-    "user": "notifications@letsunbound.com",
-    "pass": "",
-    "fromEmail": "notifications@letsunbound.com",
+    "user": "",
+    "fromEmail": "",
     "fromName": "LUmentor Faculty & Operations",
-    "replyTo": "support@letsunbound.com",
+    "pass": "",
     "allowSelfSignedCert": false,
     "isEnabled": false,
     "lastTestStatus": "UNTESTED",

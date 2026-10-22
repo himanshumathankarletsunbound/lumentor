@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../../lib/db/store';
 import { getServerEmailSecrets, googleOAuthConfig } from '../../../../lib/config/server';
 import { authorizationError } from '../../../../lib/auth/server';
+import { ensureServerPersistence } from '../../../../lib/db/server-initialization';
 
 function safeEmailConfig() {
   const config = db.getEmailConfig();
@@ -22,6 +23,11 @@ function safeEmailConfig() {
 }
 
 export async function GET(req: NextRequest) {
+  try {
+    await ensureServerPersistence();
+  } catch (err) {
+    return NextResponse.json({ success: false, error: err instanceof Error ? err.message : 'Database initialization failed.' }, { status: 503 });
+  }
   const denied = authorizationError(req, 'settings', 'manage_settings');
   if (denied) return denied;
   try {
@@ -41,6 +47,11 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  try {
+    await ensureServerPersistence();
+  } catch (err) {
+    return NextResponse.json({ success: false, error: err instanceof Error ? err.message : 'Database initialization failed.' }, { status: 503 });
+  }
   const denied = authorizationError(req, 'settings', 'manage_settings');
   if (denied) return denied;
   try {

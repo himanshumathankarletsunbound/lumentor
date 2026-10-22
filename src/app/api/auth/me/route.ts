@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../../lib/db/store';
+import { ensureServerPersistence } from '../../../../lib/db/server-initialization';
 
 export async function GET(req: NextRequest) {
   try {
-    await db.ready();
+    await ensureServerPersistence();
     db.reloadIfModified();
 
     // Check cookie first, then auth header

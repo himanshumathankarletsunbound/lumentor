@@ -2,15 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../../lib/db/store';
 import { verifyPassword, generateSessionToken } from '../../../../lib/auth/crypto';
 import { enforceRateLimit } from '../../../../lib/rate-limit/limiter';
+import { ensureServerPersistence } from '../../../../lib/db/server-initialization';
 
 export async function POST(req: NextRequest) {
   const rateLimitError = enforceRateLimit(req, { limit: 10, windowSeconds: 60, identifierPrefix: 'auth-login' });
   if (rateLimitError) return rateLimitError;
 
   try {
-    // Production state must be hydrated from PostgreSQL before credentials are read
-    // or the updated session is persisted.
-    await db.ready();
+    await ensureServerPersistence();
     const body = await req.json().catch(() => ({}));
     const usernameOrEmail = String(body.email || body.username || '').trim().toLowerCase();
     const password = String(body.password || '');

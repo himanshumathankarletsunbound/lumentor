@@ -2,7 +2,7 @@ import { createHmac, randomBytes } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizationError } from '../../../../../../lib/auth/server';
 import { googleOAuthConfig } from '../../../../../../lib/config/server';
-import { db } from '../../../../../../lib/db/store';
+import { ensureServerPersistence } from '../../../../../../lib/db/server-initialization';
 
 function signState(value: string): string {
   const key = process.env.APP_ENCRYPTION_KEY?.trim();
@@ -12,11 +12,7 @@ function signState(value: string): string {
 
 export async function GET(req: NextRequest) {
   try {
-    if (process.env.DEMO_MODE !== 'true') {
-      const repository = await import('../../../../../../lib/db/state-repository');
-      globalThis.lumentorPostgresRepository = repository;
-      await db.ready();
-    }
+    await ensureServerPersistence();
 
     const denied = authorizationError(req, 'settings', 'manage_settings');
     if (denied) return denied;

@@ -220,6 +220,10 @@ Production deployments use PostgreSQL through Prisma. Set `DATABASE_URL` to the 
 
 Set `CLASSCARD_API_KEY` only on the server. Live synchronization sends this key only in the server-side `api-key` header; it is never persisted in the application store or returned to browser code.
 
+### Importing a Classcard staff CSV
+
+The **Operations → Mentors & Instructional Staff** page supports **Import staff CSV**. Upload a CSV with `Name`, `Role`, `Phone`, and `Email` columns, such as the Classcard staff export. The import runs through the authenticated server API, creates or updates mentors by unique email, and commits the records to PostgreSQL before reporting success. Duplicate rows with the same email are collapsed because mentor email addresses are unique. A campus branch and payroll plan must exist before importing.
+
 The documented Classcard endpoints currently integrated are:
 
 - `POST /api/classcard/leads` for `POST /api/v2/public/leads/add`

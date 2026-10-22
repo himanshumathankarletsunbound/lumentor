@@ -22,6 +22,8 @@ export default function MentorsPage() {
   const [activeTab, setActiveTab] = useState('overview');
   const [isSyncing, setIsSyncing] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
 
   const plans = db.getPayrollPlans();
   const canViewPayroll = hasPermission('payroll_dashboard', 'view_sensitive_payroll');
@@ -40,6 +42,56 @@ export default function MentorsPage() {
       }
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  const handleStaffImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setIsImporting(true);
+    setImportMessage(null);
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).filter((line) => line.trim());
+      const parse = (line: string) => {
+        const cells: string[] = [];
+        let value = '';
+        let quoted = false;
+        for (const character of line) {
+          if (character === '"') quoted = !quoted;
+          else if (character === ',' && !quoted) {
+            cells.push(value.trim());
+            value = '';
+          } else value += character;
+        }
+        cells.push(value.trim());
+        return cells;
+      };
+      const headers = parse(lines.shift() || '').map((header) => header.toLowerCase());
+      const index = (name: string) => headers.indexOf(name);
+      const rows = lines.map((line) => {
+        const cells = parse(line);
+        return {
+          name: cells[index('name')] || '',
+          role: cells[index('role')] || '',
+          phone: cells[index('phone')] || '',
+          email: cells[index('email')] || '',
+        };
+      });
+      const response = await fetch('/api/mentors/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.error || 'Staff import failed.');
+      setMentors(db.getMentors());
+      setImportMessage(`Imported ${result.uniqueRows} staff records (${result.created} created, ${result.updated} updated, ${result.duplicatesCollapsed} duplicate rows collapsed).`);
+    } catch (error) {
+      setImportMessage(error instanceof Error ? error.message : 'Staff import failed.');
+    } finally {
+      setIsImporting(false);
     }
   };
 
@@ -88,7 +140,12 @@ export default function MentorsPage() {
           <Button variant="primary" size="sm" leftIcon={<Plus className="w-3.5 h-3.5" />} onClick={() => setShowModal(true)}>
             Add record
           </Button>
+          <label className="inline-flex cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
+            {isImporting ? 'Importing...' : 'Import staff CSV'}
+            <input type="file" accept=".csv,text/csv" className="hidden" disabled={isImporting} onChange={handleStaffImport} />
+          </label>
         </div>
+        {importMessage && <p className="rounded-lg border border-indigo-100 bg-indigo-50 p-3 text-xs text-indigo-800">{importMessage}</p>}
 
         {/* Mentors Table or Empty State */}
         {mentors.length === 0 ? (

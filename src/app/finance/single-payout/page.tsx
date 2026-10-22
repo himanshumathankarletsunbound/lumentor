@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader } from '../../../components/ui/Card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../components/ui/Table';
 import { formatCurrency, formatDateTime } from '../../../lib/utils/formatters';
 import { ClassEvent, Mentor, Branch, Subject } from '../../../lib/types/models';
-import { PayrollBatch } from '../../../lib/types/payroll';
+import { PayrollBatch, PayrollPlan } from '../../../lib/types/payroll';
 import { PenaltyModal } from '../../../components/payroll/PenaltyModal';
 import { Plus, RefreshCw } from 'lucide-react';
 
@@ -29,6 +29,8 @@ export default function SinglePayoutPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [classes, setClasses] = useState<ClassEvent[]>([]);
   const [batch, setBatch] = useState<PayrollBatch | null>(null);
+  const [plans, setPlans] = useState<PayrollPlan[]>([]);
+  const [planId, setPlanId] = useState('');
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [addingClass, setAddingClass] = useState(false);
   const [classForm, setClassForm] = useState({ title: '', subjectId: '', branchId: '', startTime: `${month}-01T10:00`, durationMinutes: '60' });
@@ -55,7 +57,19 @@ export default function SinglePayoutPage() {
     const subjectsResponse = await fetch('/api/records?type=subject');
     const subjectsResult = await subjectsResponse.json();
     if (subjectsResponse.ok && subjectsResult.success) setSubjects(subjectsResult.records);
+    const plansResponse = await fetch('/api/payroll/plans');
+    const plansResult = await plansResponse.json();
+    if (!plansResponse.ok || !plansResult.success) throw new Error(plansResult.error || 'Unable to load payroll plans.');
+    setPlans(plansResult.plans);
   }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const selectedMentor = mentors.find((mentor) => mentor.id === mentorId);
+      if (selectedMentor) setPlanId(selectedMentor.payrollPlanId);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [mentorId, mentors]);
 
   const loadClasses = useCallback(async () => {
     if (!mentorId) return;
@@ -101,10 +115,11 @@ export default function SinglePayoutPage() {
   };
 
   const calculate = async () => {
+    if (!mentorId || !planId) throw new Error('Select a mentor with an active payout plan before calculating.');
     const response = await fetch('/api/payroll/calculate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ periodId: `single-${month}`, ...bounds, mentorIds: [mentorId] }),
+      body: JSON.stringify({ periodId: `single-${month}`, ...bounds, mentorIds: [mentorId], payrollPlanId: planId }),
     });
     const result = await response.json();
     if (!response.ok || result.error) throw new Error(result.error || 'Unable to calculate payout. Configure an active payroll plan first.');
@@ -161,13 +176,18 @@ export default function SinglePayoutPage() {
         </div>
         {notice && <Alert type={notice.type} title={notice.type === 'success' ? 'Success' : 'Error'} message={notice.message} />}
         <Card>
-          <CardHeader title="1. Select mentor and month" />
+          <CardHeader title="1. Select mentor, payroll plan, and month" />
           <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
             <label className="font-semibold text-slate-700">Mentor<select value={mentorId} onChange={(e) => { setMentorId(e.target.value); setBatch(null); }} className="mt-1 w-full p-2 border rounded-lg font-normal">{mentors.map((mentor) => <option key={mentor.id} value={mentor.id}>{mentor.firstName} {mentor.lastName}</option>)}</select></label>
             <label className="font-semibold text-slate-700">Month<input type="month" value={month} onChange={(e) => { setMonth(e.target.value); setBatch(null); }} className="mt-1 w-full p-2 border rounded-lg font-normal" /></label>
+            <label className="font-semibold text-slate-700">Payout plan<select value={planId} onChange={(e) => { setPlanId(e.target.value); setBatch(null); }} className="mt-1 w-full p-2 border rounded-lg font-normal">{plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} (v{plan.version})</option>)}</select></label>
             <div className="flex items-end"><Button variant="outline" size="sm" leftIcon={<RefreshCw className="w-4 h-4" />} onClick={() => void loadClasses()}>Refresh classes</Button></div>
           </CardContent>
         </Card>
+        {plans.find((plan) => plan.id === planId) && (() => {
+          const plan = plans.find((item) => item.id === planId)!;
+          return <Card><CardHeader title="Selected payout plan details" subtitle="Confirm these rules before calculating the payout." /><CardContent className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs text-slate-700"><div><strong>Compensation</strong><br />{plan.compensationModel.replace(/_/g, ' ')}</div><div><strong>Classes in period</strong><br />{classes.length}</div><div><strong>Class rate</strong><br />₹{plan.defaultClassRate.toFixed(2)}</div><div><strong>Hourly rate</strong><br />₹{plan.hourlyRate.toFixed(2)}</div><div><strong>Student rate</strong><br />₹{plan.perStudentRate.toFixed(2)}</div><div><strong>Minimum duration</strong><br />{plan.minEligibleDurationMinutes} minutes</div><div><strong>Late cancellation</strong><br />{plan.lateCancellationPayPercent}% pay</div><div><strong>Base salary</strong><br />₹{plan.baseSalary.toFixed(2)}</div></CardContent></Card>;
+        })()}
         <Card>
           <CardHeader title="2. Classes in this payout period" subtitle={classes.length ? `${classes.length} class(es) found` : 'No classes found; administrators can add one below.'} />
           <CardContent>
@@ -176,7 +196,7 @@ export default function SinglePayoutPage() {
           </CardContent>
         </Card>
         {addingClass && <Card><CardHeader title="Add class to payout" /><CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs"><input placeholder="Class title" value={classForm.title} onChange={(e) => setClassForm({ ...classForm, title: e.target.value })} className="p-2 border rounded-lg" /><select value={classForm.subjectId} onChange={(e) => setClassForm({ ...classForm, subjectId: e.target.value })} className="p-2 border rounded-lg"><option value="">Select subject</option>{subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}</select><select value={classForm.branchId} onChange={(e) => setClassForm({ ...classForm, branchId: e.target.value })} className="p-2 border rounded-lg"><option value="">Select branch</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select><input type="datetime-local" value={classForm.startTime} onChange={(e) => setClassForm({ ...classForm, startTime: e.target.value })} className="p-2 border rounded-lg" /><input type="number" min="1" value={classForm.durationMinutes} onChange={(e) => setClassForm({ ...classForm, durationMinutes: e.target.value })} className="p-2 border rounded-lg" /><div className="flex gap-2"><Button size="sm" variant="primary" onClick={() => void addClass().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to add class.' }))}>Save class</Button><Button size="sm" variant="ghost" onClick={() => setAddingClass(false)}>Cancel</Button></div></CardContent></Card>}
-        <Card><CardHeader title="3. Incentives, penalties, and approval" /><CardContent className="space-y-3 text-xs"><p className="text-slate-600">Add adjustments for the selected mentor before calculating. Approved penalties and incentives are included in the payout.</p><div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" disabled={!mentorId} onClick={() => setIncentiveOpen(true)}>Add incentive</Button><Button variant="outline" size="sm" disabled={!mentorId} onClick={() => setPenaltyOpen(true)}>Add penalty</Button><Button variant="primary" size="sm" disabled={!mentorId} onClick={() => void calculate().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to calculate payout.' }))}>Calculate payout</Button>{batch && <><span className="px-3 py-2 rounded-lg bg-slate-100">Status: <strong>{batch.status}</strong> · Net: <strong>{formatCurrency(batch.totalNet)}</strong></span>{batch.status === 'DRAFT' && <Button size="sm" variant="outline" onClick={() => void (async () => { const response = await fetch('/api/payroll/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ batchId: batch.id, approverId: 'current-admin', approverName: 'Payroll preparer', action: 'SUBMIT' }) }); const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Unable to submit payout.'); setBatch(result); setNotice({ type: 'success', message: 'Payout submitted for administrator approval.' }); })().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to submit payout.' }))}>Submit for approval</Button>}{batch.status === 'SUBMITTED' && <Button size="sm" variant="success" onClick={() => void approve().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to approve payout.' }))}>Approve payout</Button>}{batch.status === 'APPROVED' && <Button size="sm" variant="success" onClick={() => void lock().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to finalize payout.' }))}>Finalize & generate payslip</Button>}</>}</div>{incentiveOpen && <div className="grid grid-cols-1 sm:grid-cols-3 gap-2"><input value={incentiveReason} onChange={(e) => setIncentiveReason(e.target.value)} placeholder="Incentive reason" className="p-2 border rounded-lg" /><input value={incentiveAmount} onChange={(e) => setIncentiveAmount(e.target.value)} type="number" min="0" step="0.01" placeholder="Amount" className="p-2 border rounded-lg" /><Button size="sm" variant="success" onClick={() => void addIncentive().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to add incentive.' }))}>Save incentive</Button></div>}</CardContent></Card>
+        <Card><CardHeader title="3. Incentives, penalties, and approval" /><CardContent className="space-y-3 text-xs"><p className="text-slate-600">Add adjustments for the selected mentor before calculating. Approved penalties and incentives are included in the payout.</p><div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" disabled={!mentorId} onClick={() => setIncentiveOpen(true)}>Add incentive</Button><Button variant="outline" size="sm" disabled={!mentorId} onClick={() => setPenaltyOpen(true)}>Add penalty</Button><Button variant="primary" size="sm" disabled={!mentorId || !planId} onClick={() => void calculate().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to calculate payout.' }))}>Calculate payout</Button>{batch && <><span className="px-3 py-2 rounded-lg bg-slate-100">Status: <strong>{batch.status}</strong> · Net: <strong>{formatCurrency(batch.totalNet)}</strong></span>{batch.status === 'DRAFT' && <Button size="sm" variant="outline" onClick={() => void (async () => { const response = await fetch('/api/payroll/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ batchId: batch.id, approverId: 'current-admin', approverName: 'Payroll preparer', action: 'SUBMIT' }) }); const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Unable to submit payout.'); setBatch(result); setNotice({ type: 'success', message: 'Payout submitted for administrator approval.' }); })().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to submit payout.' }))}>Submit for approval</Button>}{batch.status === 'SUBMITTED' && <Button size="sm" variant="success" onClick={() => void approve().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to approve payout.' }))}>Approve payout</Button>}{batch.status === 'APPROVED' && <Button size="sm" variant="success" onClick={() => void lock().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to finalize payout.' }))}>Finalize & generate payslip</Button>}</>}</div>{incentiveOpen && <div className="grid grid-cols-1 sm:grid-cols-3 gap-2"><input value={incentiveReason} onChange={(e) => setIncentiveReason(e.target.value)} placeholder="Incentive reason" className="p-2 border rounded-lg" /><input value={incentiveAmount} onChange={(e) => setIncentiveAmount(e.target.value)} type="number" min="0" step="0.01" placeholder="Amount" className="p-2 border rounded-lg" /><Button size="sm" variant="success" onClick={() => void addIncentive().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to add incentive.' }))}>Save incentive</Button></div>}</CardContent></Card>
         <PenaltyModal initialMentorId={mentorId} isOpen={penaltyOpen} onClose={() => setPenaltyOpen(false)} onSaved={() => setNotice({ type: 'success', message: 'Penalty added. Recalculate the payout to include it.' })} />
       </div>
     </AppShell>

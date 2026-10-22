@@ -215,6 +215,21 @@ async function runAcceptanceTests() {
 
   // --- 9. MULTI-MODEL PAYROLL CALCULATIONS ---
   test('Scenario 9: Multiple mentors can have different payroll models and rates', () => {
+    // Setup test payroll plans across compensation models for test execution
+    const testPlans = [
+      { id: 'plan-hybrid-senior', name: 'Senior Mentor Hybrid Plan', code: 'PLAN-HYB-SR', description: 'Test hybrid plan', compensationModel: 'HYBRID' as const, currency: 'USD', baseSalary: 2500, defaultClassRate: 45, hourlyRate: 50, perStudentRate: 10, revenuePercentage: 0, minEligibleDurationMinutes: 30, payableClassStatuses: ['COMPLETED' as const, 'LATE_CANCELLED' as const], lateCancellationPayPercent: 50, groupMultiplier: 1.25, effectiveFrom: '2026-01-01T00:00:00Z', isActive: true },
+      { id: 'plan-per-class-std', name: 'Standard Per-Class Plan', code: 'PLAN-PERCLASS-STD', description: 'Test per class plan', compensationModel: 'PER_CLASS' as const, currency: 'USD', baseSalary: 0, defaultClassRate: 65, hourlyRate: 0, perStudentRate: 0, revenuePercentage: 0, minEligibleDurationMinutes: 45, payableClassStatuses: ['COMPLETED' as const, 'LATE_CANCELLED' as const], lateCancellationPayPercent: 50, groupMultiplier: 1.3, effectiveFrom: '2026-01-01T00:00:00Z', isActive: true },
+      { id: 'plan-duration-hourly', name: 'Duration-Based Hourly Plan', code: 'PLAN-HOURLY-PRO', description: 'Test duration plan', compensationModel: 'DURATION_BASED' as const, currency: 'USD', baseSalary: 0, defaultClassRate: 0, hourlyRate: 50, perStudentRate: 0, revenuePercentage: 0, minEligibleDurationMinutes: 30, payableClassStatuses: ['COMPLETED' as const], lateCancellationPayPercent: 0, groupMultiplier: 1.0, effectiveFrom: '2026-01-01T00:00:00Z', isActive: true },
+      { id: 'plan-per-student-group', name: 'Group Workshop Per-Student Model', code: 'PLAN-STUDENT-GRP', description: 'Test student plan', compensationModel: 'PER_STUDENT' as const, currency: 'USD', baseSalary: 0, defaultClassRate: 0, hourlyRate: 0, perStudentRate: 22, revenuePercentage: 0, minEligibleDurationMinutes: 45, payableClassStatuses: ['COMPLETED' as const], lateCancellationPayPercent: 0, groupMultiplier: 1.0, effectiveFrom: '2026-01-01T00:00:00Z', isActive: true },
+      { id: 'plan-fixed-salary', name: 'Full-Time Instructor Salary', code: 'PLAN-SALARY-FT', description: 'Test salary plan', compensationModel: 'FIXED_SALARY' as const, currency: 'USD', baseSalary: 4200, defaultClassRate: 0, hourlyRate: 0, perStudentRate: 0, revenuePercentage: 0, minEligibleDurationMinutes: 0, payableClassStatuses: ['COMPLETED' as const, 'SCHEDULED' as const], lateCancellationPayPercent: 100, groupMultiplier: 1.0, effectiveFrom: '2026-01-01T00:00:00Z', isActive: true },
+      { id: 'plan-revenue-share', name: 'Executive Revenue Share Plan', code: 'PLAN-REVSHARE-35', description: 'Test revshare plan', compensationModel: 'PERCENTAGE_BASED' as const, currency: 'USD', baseSalary: 0, defaultClassRate: 0, hourlyRate: 0, perStudentRate: 0, revenuePercentage: 35, minEligibleDurationMinutes: 45, payableClassStatuses: ['COMPLETED' as const], lateCancellationPayPercent: 25, groupMultiplier: 1.0, effectiveFrom: '2026-01-01T00:00:00Z', isActive: true },
+    ];
+    for (const p of testPlans) {
+      if (!db.getPayrollPlanById(p.id)) {
+        db.createPayrollPlan(p);
+      }
+    }
+
     const plans = db.getPayrollPlans();
     const models = plans.map((p) => p.compensationModel);
 
@@ -719,6 +734,7 @@ async function runAcceptanceTests() {
     assert(db.getPenalties().length === 0, 'Database must have 0 demo penalties');
     assert(db.getPayslips().length === 0, 'Database must have 0 demo payslips');
     assert(db.getPayrollBatches().length === 0, 'Database must have 0 demo payroll batches');
+    assert(db.getPayrollPlans().length === 0, 'Database must have 0 demo payroll plans');
     assert(db.getInvoices().length === 0, 'Database must have 0 demo invoices');
     assert(db.getPayments().length === 0, 'Database must have 0 demo payments');
     assert(db.getAuditLogs().length === 0, 'Database must have 0 demo audit logs');

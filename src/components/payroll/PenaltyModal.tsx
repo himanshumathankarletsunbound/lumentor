@@ -52,6 +52,15 @@ export function PenaltyModal({
   const isViewing = Boolean(penaltyToView);
 
   useEffect(() => {
+    if (!isOpen || isViewing || !initialMentorId) return;
+    const selected = mentors.find((mentor) => mentor.id === initialMentorId);
+    if (selected) {
+      setMentorId(selected.id);
+      setBranchId(selected.branchId);
+    }
+  }, [initialMentorId, isOpen, isViewing, mentors]);
+
+  useEffect(() => {
     if (!isOpen || isViewing) return;
     void fetch('/api/penalty-policies')
       .then(async (response) => {
@@ -419,6 +428,7 @@ export function PenaltyModal({
                 <select
                   value={mentorId}
                   onChange={(e) => setMentorId(e.target.value)}
+                  disabled={Boolean(initialMentorId)}
                   className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-800"
                 >
                   {mentors.map((m) => (

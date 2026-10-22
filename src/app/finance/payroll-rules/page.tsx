@@ -413,108 +413,133 @@ export default function PayrollRulesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {plans.map((p) => {
-                const planFormula =
-                  p.formula ||
-                  computeStandardFormula({
-                    compensationModel: p.compensationModel,
-                    baseSalary: p.baseSalary,
-                    classRate: p.defaultClassRate,
-                    hourlyRate: p.hourlyRate,
-                    perStudentRate: p.perStudentRate,
-                    revenuePercentage: p.revenuePercentage,
-                    groupMultiplier: p.groupMultiplier,
-                    lateCancelPercent: p.lateCancellationPayPercent,
-                  });
+              {plans.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="py-12 text-center">
+                    <div className="flex flex-col items-center justify-center space-y-2">
+                      <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+                        <Sliders className="w-5 h-5" />
+                      </div>
+                      <p className="font-semibold text-slate-700 text-sm">No payroll plans configured</p>
+                      <p className="text-xs text-slate-400 max-w-sm">
+                        Create your first mentor payroll plan with customizable compensation models and mathematical calculation formulas.
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        leftIcon={<Plus className="w-4 h-4" />}
+                        onClick={openCreateModal}
+                        className="mt-2"
+                      >
+                        Configure New Plan
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                plans.map((p) => {
+                  const planFormula =
+                    p.formula ||
+                    computeStandardFormula({
+                      compensationModel: p.compensationModel,
+                      baseSalary: p.baseSalary,
+                      classRate: p.defaultClassRate,
+                      hourlyRate: p.hourlyRate,
+                      perStudentRate: p.perStudentRate,
+                      revenuePercentage: p.revenuePercentage,
+                      groupMultiplier: p.groupMultiplier,
+                      lateCancelPercent: p.lateCancellationPayPercent,
+                    });
 
-                return (
-                  <TableRow key={p.id}>
-                    <TableCell className="font-semibold text-slate-900">
-                      <div className="flex items-center gap-2">
-                        <span>{p.name}</span>
-                        <Badge variant="purple" size="sm">
-                          v{p.version}
-                        </Badge>
-                      </div>
-                      <p className="text-[11px] text-slate-400 font-mono mt-0.5">{p.code}</p>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="default" size="sm">
-                        {p.compensationModel.replace(/_/g, ' ')}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs font-mono font-semibold text-slate-800">
-                      {p.baseSalary > 0 ? formatCurrency(p.baseSalary) : '-'}
-                    </TableCell>
-                    <TableCell className="text-xs text-slate-700">
-                      {p.defaultClassRate > 0 && <span className="font-medium">{formatCurrency(p.defaultClassRate)}/class </span>}
-                      {p.hourlyRate > 0 && <span className="font-medium">{formatCurrency(p.hourlyRate)}/hr </span>}
-                      {p.perStudentRate > 0 && <span>+{formatCurrency(p.perStudentRate)}/student </span>}
-                      {p.revenuePercentage > 0 && <span>{p.revenuePercentage}% rev-share</span>}
-                      {p.groupMultiplier && p.groupMultiplier !== 1 && (
-                        <span className="block text-[10px] text-indigo-600 font-medium mt-0.5">
-                          {p.groupMultiplier}x group multiplier
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1.5 group">
-                        <div
-                          className="font-mono text-[11px] bg-slate-900 text-emerald-300 px-2.5 py-1.5 rounded-md border border-slate-800 max-w-[280px] truncate"
-                          title={planFormula}
-                        >
-                          {planFormula}
+                  return (
+                    <TableRow key={p.id}>
+                      <TableCell className="font-semibold text-slate-900">
+                        <div className="flex items-center gap-2">
+                          <span>{p.name}</span>
+                          <Badge variant="purple" size="sm">
+                            v{p.version}
+                          </Badge>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => handleCopyFormula(planFormula, p.id)}
-                          className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
-                          title="Copy formula"
-                        >
-                          {copiedId === p.id ? (
-                            <Check className="w-3.5 h-3.5 text-emerald-600" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-xs text-slate-600">
-                      Min {p.minEligibleDurationMinutes}m
-                    </TableCell>
-                    <TableCell className="text-xs text-slate-700 font-semibold">
-                      {p.lateCancellationPayPercent}%
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setSelectedPlan(p)}
-                          className="text-xs"
-                        >
-                          Inspect
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEditModal(p)}
-                          className="text-xs text-indigo-600 hover:text-indigo-800"
-                        >
-                          Edit
-                        </Button>
-                        <button
-                          onClick={() => handleDeletePlan(p.id, p.code)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-md transition-colors"
-                          title="Delete plan"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+                        <p className="text-[11px] text-slate-400 font-mono mt-0.5">{p.code}</p>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="default" size="sm">
+                          {p.compensationModel.replace(/_/g, ' ')}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs font-mono font-semibold text-slate-800">
+                        {p.baseSalary > 0 ? formatCurrency(p.baseSalary) : '-'}
+                      </TableCell>
+                      <TableCell className="text-xs text-slate-700">
+                        {p.defaultClassRate > 0 && <span className="font-medium">{formatCurrency(p.defaultClassRate)}/class </span>}
+                        {p.hourlyRate > 0 && <span className="font-medium">{formatCurrency(p.hourlyRate)}/hr </span>}
+                        {p.perStudentRate > 0 && <span>+{formatCurrency(p.perStudentRate)}/student </span>}
+                        {p.revenuePercentage > 0 && <span>{p.revenuePercentage}% rev-share</span>}
+                        {p.groupMultiplier && p.groupMultiplier !== 1 && (
+                          <span className="block text-[10px] text-indigo-600 font-medium mt-0.5">
+                            {p.groupMultiplier}x group multiplier
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1.5 group">
+                          <div
+                            className="font-mono text-[11px] bg-slate-900 text-emerald-300 px-2.5 py-1.5 rounded-md border border-slate-800 max-w-[280px] truncate"
+                            title={planFormula}
+                          >
+                            {planFormula}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyFormula(planFormula, p.id)}
+                            className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
+                            title="Copy formula"
+                          >
+                            {copiedId === p.id ? (
+                              <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs text-slate-600">
+                        Min {p.minEligibleDurationMinutes}m
+                      </TableCell>
+                      <TableCell className="text-xs text-slate-700 font-semibold">
+                        {p.lateCancellationPayPercent}%
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setSelectedPlan(p)}
+                            className="text-xs"
+                          >
+                            Inspect
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openEditModal(p)}
+                            className="text-xs text-indigo-600 hover:text-indigo-800"
+                          >
+                            Edit
+                          </Button>
+                          <button
+                            onClick={() => handleDeletePlan(p.id, p.code)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 rounded-md transition-colors"
+                            title="Delete plan"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
             </TableBody>
           </Table>
         </div>

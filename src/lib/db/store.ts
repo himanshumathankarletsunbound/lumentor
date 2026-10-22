@@ -203,8 +203,8 @@ class DataStore {
           const raw = node.fs.readFileSync(dbFile, 'utf-8');
           const parsed = JSON.parse(raw);
           this.data = { ...this.getDefaultState(), ...parsed };
-          if (!this.data.payrollPlans || this.data.payrollPlans.length === 0) {
-            this.data.payrollPlans = [...SEED_PAYROLL_PLANS];
+          if (!this.data.payrollPlans) {
+            this.data.payrollPlans = [];
           }
           if (!this.data.penaltyPolicies || this.data.penaltyPolicies.length === 0) {
             this.data.penaltyPolicies = [...SEED_PENALTY_POLICIES];
@@ -242,8 +242,8 @@ class DataStore {
           if (!this.data.classes || this.data.classes.length === 0) {
             this.data.classes = [...SEED_CLASSES];
           }
-          if (!this.data.payrollPlans || this.data.payrollPlans.length === 0) {
-            this.data.payrollPlans = [...SEED_PAYROLL_PLANS];
+          if (!this.data.payrollPlans) {
+            this.data.payrollPlans = [];
           }
           if (!this.data.penaltyPolicies || this.data.penaltyPolicies.length === 0) {
             this.data.penaltyPolicies = [...SEED_PENALTY_POLICIES];

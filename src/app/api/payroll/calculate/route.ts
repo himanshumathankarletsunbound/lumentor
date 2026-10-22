@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { periodId, startDate, endDate, branchId, mentorIds } = body;
+    const { periodId, startDate, endDate, branchId, mentorIds, payrollPlanId } = body;
 
     if (!periodId || !startDate || !endDate) {
       return NextResponse.json(
@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
       endDate,
       branchId,
       mentorIds,
+      payrollPlanId,
     });
 
     await db.persistNow();

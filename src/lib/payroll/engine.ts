@@ -16,6 +16,7 @@ export interface CalculatePayrollOptions {
   endDate: string;
   branchId?: string; // undefined or 'ALL'
   mentorIds?: string[];
+  payrollPlanId?: string;
 }
 
 export class PayrollEngine {
@@ -210,7 +211,8 @@ export class PayrollEngine {
     const lineItems: PayrollLineItem[] = [];
 
     for (const mentor of selectedMentors) {
-      const plan = plans.find((p) => p.id === mentor.payrollPlanId) || plans[0];
+      const plan = plans.find((p) => p.id === (options.payrollPlanId || mentor.payrollPlanId)) || plans[0];
+      if (!plan) throw new Error(`No payroll plan is configured for ${mentor.firstName} ${mentor.lastName}.`);
       const item = this.calculateMentorPayroll(
         mentor,
         plan,

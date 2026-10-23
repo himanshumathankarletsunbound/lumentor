@@ -25,6 +25,8 @@ export default function SinglePayoutPage() {
   const [month, setMonth] = useState('2000-01');
   const [mentorId, setMentorId] = useState('');
   const [mentors, setMentors] = useState<Mentor[]>([]);
+  const [mentorSearch, setMentorSearch] = useState('');
+  const [mentorMenuOpen, setMentorMenuOpen] = useState(false);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [classes, setClasses] = useState<ClassEvent[]>([]);
@@ -40,13 +42,26 @@ export default function SinglePayoutPage() {
   const [incentiveAmount, setIncentiveAmount] = useState('');
 
   const bounds = useMemo(() => monthBounds(month), [month]);
+  const selectedMentor = useMemo(() => mentors.find((mentor) => mentor.id === mentorId), [mentors, mentorId]);
+  const filteredMentors = useMemo(() => {
+    const query = mentorSearch.trim().toLowerCase();
+    if (!query) return mentors;
+    return mentors.filter((mentor) =>
+      `${mentor.firstName} ${mentor.lastName}`.toLowerCase().includes(query) ||
+      mentor.email.toLowerCase().includes(query) ||
+      mentor.phone.toLowerCase().includes(query)
+    );
+  }, [mentorSearch, mentors]);
 
   const loadMentors = useCallback(async () => {
     const response = await fetch('/api/mentors');
     const result = await response.json();
     if (!response.ok || !result.success) throw new Error(result.error || 'Unable to load mentors.');
     setMentors(result.mentors);
-    if (!mentorId && result.mentors[0]) setMentorId(result.mentors[0].id);
+    if (!mentorId && result.mentors[0]) {
+      setMentorId(result.mentors[0].id);
+      setMentorSearch(`${result.mentors[0].firstName} ${result.mentors[0].lastName}`);
+    }
   }, [mentorId]);
 
   const loadReferenceData = useCallback(async () => {
@@ -178,7 +193,51 @@ export default function SinglePayoutPage() {
         <Card>
           <CardHeader title="1. Select mentor, payroll plan, and month" />
           <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-            <label className="font-semibold text-slate-700">Mentor<select value={mentorId} onChange={(e) => { setMentorId(e.target.value); setBatch(null); }} className="mt-1 w-full p-2 border rounded-lg font-normal">{mentors.map((mentor) => <option key={mentor.id} value={mentor.id}>{mentor.firstName} {mentor.lastName}</option>)}</select></label>
+            <div className="relative">
+              <label htmlFor="mentor-search" className="font-semibold text-slate-700">Mentor</label>
+              <input
+                id="mentor-search"
+                type="search"
+                value={mentorMenuOpen ? mentorSearch : selectedMentor ? `${selectedMentor.firstName} ${selectedMentor.lastName}` : mentorSearch}
+                onChange={(event) => {
+                  setMentorSearch(event.target.value);
+                  setMentorMenuOpen(true);
+                  setMentorId('');
+                  setBatch(null);
+                }}
+                onFocus={() => {
+                  setMentorSearch('');
+                  setMentorMenuOpen(true);
+                }}
+                onBlur={() => window.setTimeout(() => setMentorMenuOpen(false), 150)}
+                placeholder="Search mentor by name, email, or phone"
+                autoComplete="off"
+                className="mt-1 w-full p-2 border rounded-lg font-normal"
+              />
+              {mentorMenuOpen && (
+                <div className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                  {filteredMentors.length > 0 ? filteredMentors.map((mentor) => (
+                    <button
+                      key={mentor.id}
+                      type="button"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => {
+                        setMentorId(mentor.id);
+                        setMentorSearch(`${mentor.firstName} ${mentor.lastName}`);
+                        setMentorMenuOpen(false);
+                        setBatch(null);
+                      }}
+                      className="block w-full px-3 py-2 text-left text-xs hover:bg-indigo-50"
+                    >
+                      <span className="font-semibold text-slate-800">{mentor.firstName} {mentor.lastName}</span>
+                      <span className="block text-[11px] text-slate-500">{mentor.email || mentor.phone || 'No contact details'}</span>
+                    </button>
+                  )) : (
+                    <p className="px-3 py-2 text-xs text-slate-500">No mentors found.</p>
+                  )}
+                </div>
+              )}
+            </div>
             <label className="font-semibold text-slate-700">Month<input type="month" value={month} onChange={(e) => { setMonth(e.target.value); setBatch(null); }} className="mt-1 w-full p-2 border rounded-lg font-normal" /></label>
             <label className="font-semibold text-slate-700">Payout plan<select value={planId} onChange={(e) => { setPlanId(e.target.value); setBatch(null); }} className="mt-1 w-full p-2 border rounded-lg font-normal">{plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} (v{plan.version})</option>)}</select></label>
             <div className="flex items-end"><Button variant="outline" size="sm" leftIcon={<RefreshCw className="w-4 h-4" />} onClick={() => void loadClasses()}>Refresh classes</Button></div>

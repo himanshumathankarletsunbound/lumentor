@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppShell } from '../../../components/layout/AppShell';
 import { Button } from '../../../components/ui/Button';
 import { Alert } from '../../../components/ui/Alert';
@@ -27,6 +27,7 @@ export default function SinglePayoutPage() {
   const [mentors, setMentors] = useState<Mentor[]>([]);
   const [mentorSearch, setMentorSearch] = useState('');
   const [mentorMenuOpen, setMentorMenuOpen] = useState(false);
+  const mentorsInitialized = useRef(false);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [classes, setClasses] = useState<ClassEvent[]>([]);
@@ -42,7 +43,6 @@ export default function SinglePayoutPage() {
   const [incentiveAmount, setIncentiveAmount] = useState('');
 
   const bounds = useMemo(() => monthBounds(month), [month]);
-  const selectedMentor = useMemo(() => mentors.find((mentor) => mentor.id === mentorId), [mentors, mentorId]);
   const filteredMentors = useMemo(() => {
     const query = mentorSearch.trim().toLowerCase();
     if (!query) return mentors;
@@ -58,11 +58,12 @@ export default function SinglePayoutPage() {
     const result = await response.json();
     if (!response.ok || !result.success) throw new Error(result.error || 'Unable to load mentors.');
     setMentors(result.mentors);
-    if (!mentorId && result.mentors[0]) {
+    if (!mentorsInitialized.current && result.mentors[0]) {
+      mentorsInitialized.current = true;
       setMentorId(result.mentors[0].id);
       setMentorSearch(`${result.mentors[0].firstName} ${result.mentors[0].lastName}`);
     }
-  }, [mentorId]);
+  }, []);
 
   const loadReferenceData = useCallback(async () => {
     const dashboardResponse = await fetch('/api/dashboard');
@@ -198,7 +199,7 @@ export default function SinglePayoutPage() {
               <input
                 id="mentor-search"
                 type="search"
-                value={mentorMenuOpen ? mentorSearch : selectedMentor ? `${selectedMentor.firstName} ${selectedMentor.lastName}` : mentorSearch}
+                value={mentorSearch}
                 onChange={(event) => {
                   setMentorSearch(event.target.value);
                   setMentorMenuOpen(true);

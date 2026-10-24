@@ -113,6 +113,9 @@ export async function POST(req: NextRequest) {
     const isMissingTable = errorMsg.includes('does not exist in the current database');
     const isDatabaseUnavailable = errorMsg.includes('Can\'t reach database server')
       || errorMsg.includes('SUPABASE_POOLER_URL must be configured');
+    const isDatabaseAuthenticationFailure = errorMsg.includes('Authentication failed against the database server')
+      || errorMsg.includes('password authentication failed')
+      || errorMsg.includes('database credentials');
     return NextResponse.json(
       {
         success: false,
@@ -120,6 +123,8 @@ export async function POST(req: NextRequest) {
           ? 'The production database schema is not initialized. Deploy the pending Prisma migrations, then try again.'
           : isDatabaseUnavailable
           ? 'The production database is unavailable from Vercel. Configure SUPABASE_POOLER_URL with the Supabase Session Pooler connection string, then redeploy.'
+          : isDatabaseAuthenticationFailure
+          ? 'The Supabase database credentials are invalid. Copy a fresh Session Pooler connection string from Supabase, update SUPABASE_POOLER_URL in Vercel, and redeploy.'
           : errorMsg,
       },
       { status: 500 }

@@ -16,8 +16,8 @@ export default defineConfig({
     path: 'prisma/migrations',
   },
   datasource: {
-    // Migrations must use a direct PostgreSQL connection. Neon poolers can
-    // hold Prisma's advisory lock connection long enough to trigger P1002.
-    url: process.env.SUPABASE_URL || process.env.superbase_url || process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || '',
+    // Use a direct/session connection for migrations. Runtime serverless
+    // queries should use the Supabase pooler via SUPABASE_URL.
+    url: process.env.SUPABASE_DIRECT_URL || process.env.SUPABASE_URL || process.env.superbase_url || process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || '',
   },
 });

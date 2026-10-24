@@ -218,7 +218,7 @@ Internal proprietary license for education and tutoring business operations. All
 
 ## Production deployment requirements
 
-Production deployments use PostgreSQL through Prisma. Set `SUPABASE_URL` to the Supabase PostgreSQL connection string in Vercel **Production** and **Preview**. The legacy Neon variables (`DATABASE_URL` and `DIRECT_DATABASE_URL`) remain supported as fallbacks for local transition tooling, but Supabase takes precedence at runtime and for migrations. The production build automatically runs `prisma migrate deploy` before `next build`, retrying once after a transient lock timeout. Do not expose any database URL through a `NEXT_PUBLIC_*` variable. For a manual migration, run `pnpm db:migrate` locally with the server-only Supabase URL.
+Production deployments use PostgreSQL through Prisma. Set `SUPABASE_URL` to Supabase's pooled connection string in Vercel **Production** and **Preview**; set `SUPABASE_DIRECT_URL` to a direct or session-pooler connection string only in a trusted migration environment. The Vercel build only generates Prisma Client and builds Next.js; run `pnpm db:migrate` separately after schema changes. Do not expose any database URL through a `NEXT_PUBLIC_*` variable.
 
 
 Set `CLASSCARD_API_KEY` only on the server. Live synchronization sends this key only in the server-side `api-key` header; it is never persisted in the application store or returned to browser code.

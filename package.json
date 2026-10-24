@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3005",
-    "build": "prisma generate && if [ -n \"$DIRECT_DATABASE_URL\" ] || [ -n \"$DATABASE_URL\" ]; then prisma migrate deploy || (sleep 15 && prisma migrate deploy); fi && next build",
+    "build": "prisma generate && if [ -n \"$SUPABASE_URL\" ] || [ -n \"$superbase_url\" ] || [ -n \"$DIRECT_DATABASE_URL\" ] || [ -n \"$DATABASE_URL\" ]; then prisma migrate deploy || (sleep 15 && prisma migrate deploy); fi && next build",
     "start": "next start -p 3005",
     "lint": "eslint",
     "test": "DEMO_MODE=true tsx tests/acceptance.test.ts",

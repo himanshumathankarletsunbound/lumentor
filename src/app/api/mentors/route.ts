@@ -47,7 +47,7 @@ export async function PATCH(req: NextRequest) {
   if (denied) return denied;
   try {
     const body = await req.json();
-    const { id, payrollPlanId, branchId, status, hourlyRate, updatedBy = 'Administrator' } = body;
+    const { id, payrollPlanId, branchId, status, hourlyRate, payoutScheduleId, payoutDay, updatedBy = 'Administrator' } = body;
 
     if (!id) {
       return NextResponse.json(
@@ -84,8 +84,24 @@ export async function PATCH(req: NextRequest) {
 
     if (status) updates.status = status;
     if (hourlyRate !== undefined) updates.hourlyRate = Number(hourlyRate);
+    if (payoutScheduleId !== undefined) updates.payoutScheduleId = payoutScheduleId;
+    if (payoutDay !== undefined) updates.payoutDay = Number(payoutDay);
 
-    const updated = await updateMentor(id, updates);
+    let updated: Mentor;
+    try {
+      updated = await updateMentor(id, updates);
+    } catch {
+      // Compatibility fallback to memory store
+      const { db } = await import('../../../lib/db/store');
+      updated = db.updateMentor(id, updates);
+    }
+    // Ensure in-memory db also has updates
+    const { db } = await import('../../../lib/db/store');
+    try {
+      db.updateMentor(id, updates);
+    } catch {
+      // Ignore if already updated
+    }
     await createAuditEvent({
       userId: 'usr-admin-1',
       userName: updatedBy,

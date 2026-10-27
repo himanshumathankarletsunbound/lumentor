@@ -127,6 +127,28 @@ export interface PayrollPeriod {
   createdAt: string;
 }
 
+export type PayoutFrequency = 'MONTHLY' | 'SEMI_MONTHLY' | 'CUSTOM';
+
+export interface PayoutSchedule {
+  id: string;
+  name: string;
+  code: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  freezingDate: string; // YYYY-MM-DD (freeze/cutoff date)
+  payoutDate: string; // YYYY-MM-DD (disbursement date)
+  payoutDay: number; // 3, 5, 15, or custom
+  frequency?: PayoutFrequency;
+  status: 'ACTIVE' | 'UPCOMING' | 'CLOSED';
+  isFrozen?: boolean;
+  frozenAt?: string;
+  frozenBy?: string;
+  description?: string;
+  assignedMentorIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface PayrollLineItem {
   id: string;
   batchId: string;

@@ -8,6 +8,7 @@ import { PermissionModule, SystemRole } from '../../lib/types/auth';
 import {
   LayoutDashboard,
   Calendar,
+  CalendarClock,
   Clock,
   CheckSquare,
   AlertTriangle,
@@ -355,6 +356,12 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
             href: '/finance/payroll-rules',
             icon: <Sliders className="w-4 h-4" />,
             module: 'payroll_rules',
+          },
+          {
+            name: 'Payout Schedules',
+            href: '/finance/payout-schedules',
+            icon: <CalendarClock className="w-4 h-4" />,
+            module: 'payroll_processing',
           },
           {
             name: 'Process Payroll Batch',

@@ -17,6 +17,7 @@ import {
   Penalty,
   Adjustment,
   PayrollPeriod,
+  PayoutSchedule,
   PayrollBatch,
   Payslip,
 } from '../types/payroll';
@@ -53,6 +54,7 @@ export interface AppDatabase {
   penaltyPolicies: PenaltyPolicy[];
   adjustments: Adjustment[];
   payrollPeriods: PayrollPeriod[];
+  payoutSchedules: PayoutSchedule[];
   payrollBatches: PayrollBatch[];
   payslips: Payslip[];
   invoices: Invoice[];
@@ -144,6 +146,7 @@ class DataStore {
       penaltyPolicies: [],
       adjustments: [],
       payrollPeriods: [],
+      payoutSchedules: [],
       payrollBatches: [],
       payslips: [],
       invoices: [],
@@ -174,6 +177,9 @@ class DataStore {
           if (!this.data.payrollPlans) {
             this.data.payrollPlans = [];
           }
+          if (!this.data.payoutSchedules) {
+            this.data.payoutSchedules = [];
+          }
           this.data.classcardConfig.apiKey = '';
           this.data.emailConfig.oauthClientSecret = '';
           this.data.emailConfig.oauthRefreshToken = '';
@@ -202,6 +208,9 @@ class DataStore {
 
           if (!this.data.payrollPlans) {
             this.data.payrollPlans = [];
+          }
+          if (!this.data.payoutSchedules) {
+            this.data.payoutSchedules = [];
           }
 
           const stat = node.fs.statSync(dbFile);
@@ -922,6 +931,62 @@ class DataStore {
   // --- Payroll Periods & Batches ---
   public getPayrollPeriods(): PayrollPeriod[] {
     return this.data.payrollPeriods;
+  }
+
+  // --- Payout Schedules (3rd, 5th, 15th, etc.) ---
+  public getPayoutSchedules(): PayoutSchedule[] {
+    this.reloadIfModified();
+    return this.data.payoutSchedules || [];
+  }
+
+  public getPayoutScheduleById(id: string): PayoutSchedule | undefined {
+    this.reloadIfModified();
+    return (this.data.payoutSchedules || []).find((s) => s.id === id);
+  }
+
+  public savePayoutSchedule(schedule: PayoutSchedule): PayoutSchedule {
+    if (!this.data.payoutSchedules) this.data.payoutSchedules = [];
+    const idx = this.data.payoutSchedules.findIndex((s) => s.id === schedule.id);
+    if (idx === -1) {
+      this.data.payoutSchedules.unshift(schedule);
+    } else {
+      this.data.payoutSchedules[idx] = schedule;
+    }
+    this.saveToDisk();
+    return schedule;
+  }
+
+  public deletePayoutSchedule(id: string): boolean {
+    if (!this.data.payoutSchedules) return false;
+    const initialLen = this.data.payoutSchedules.length;
+    this.data.payoutSchedules = this.data.payoutSchedules.filter((s) => s.id !== id);
+    if (this.data.payoutSchedules.length !== initialLen) {
+      this.saveToDisk();
+      return true;
+    }
+    return false;
+  }
+
+  public freezePayoutSchedule(id: string, frozenBy: string): PayoutSchedule {
+    const schedule = this.getPayoutScheduleById(id);
+    if (!schedule) throw new Error(`Payout schedule ${id} not found`);
+    schedule.isFrozen = true;
+    schedule.frozenAt = new Date().toISOString();
+    schedule.frozenBy = frozenBy;
+    schedule.updatedAt = new Date().toISOString();
+    this.savePayoutSchedule(schedule);
+    return schedule;
+  }
+
+  public unfreezePayoutSchedule(id: string): PayoutSchedule {
+    const schedule = this.getPayoutScheduleById(id);
+    if (!schedule) throw new Error(`Payout schedule ${id} not found`);
+    schedule.isFrozen = false;
+    schedule.frozenAt = undefined;
+    schedule.frozenBy = undefined;
+    schedule.updatedAt = new Date().toISOString();
+    this.savePayoutSchedule(schedule);
+    return schedule;
   }
 
   public getPayrollBatches(): PayrollBatch[] {

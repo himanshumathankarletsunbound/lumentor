@@ -217,3 +217,79 @@ export async function sendTestEmail(
     };
   }
 }
+
+export async function sendAttendanceReminderEmail(
+  to: string,
+  mentorName: string,
+  unmarkedSessions: Array<{ id: string; title: string; startTime: string; durationMinutes: number; branchName?: string }>,
+  freezingDate: string,
+  payoutDate: string
+): Promise<{ success: boolean; error?: string; mocked?: boolean }> {
+  const subject = `Action Required: Please mark your pending class attendance before the month-end freeze on ${freezingDate}`;
+
+  const sessionListText = unmarkedSessions
+    .map((s, idx) => `${idx + 1}. ${s.title} (${new Date(s.startTime).toLocaleDateString()}, ${s.durationMinutes} mins)`)
+    .join('\n');
+
+  const text = `Hello ${mentorName},\n\nYou have ${unmarkedSessions.length} session(s) with pending or unmarked attendance.\n\nPlease note: All class attendance must be completed before the cycle freeze date on ${freezingDate} so that your upcoming payout on ${payoutDate} can be calculated accurately.\n\nPending Sessions:\n${sessionListText}\n\nPlease log in to the LUmentor Portal and mark all student rosters as complete.\n\nBest regards,\nLUmentor Academic & Operations Team`;
+
+  const sessionListHtml = unmarkedSessions
+    .map(
+      (s) => `
+      <tr style="border-bottom: 1px solid #e2e8f0;">
+        <td style="padding: 10px; font-weight: 600; color: #1e293b;">${s.title}</td>
+        <td style="padding: 10px; color: #64748b;">${new Date(s.startTime).toLocaleString()}</td>
+        <td style="padding: 10px; color: #64748b;">${s.durationMinutes} mins</td>
+        <td style="padding: 10px; color: #64748b;">${s.branchName || 'Main'}</td>
+      </tr>
+    `
+    )
+    .join('');
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 640px; margin: 0 auto; padding: 24px; color: #1e293b; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
+      <div style="margin-bottom: 20px; border-bottom: 2px solid #f59e0b; padding-bottom: 12px;">
+        <h2 style="color: #0f172a; margin: 0; font-size: 20px; font-weight: 800;">LU<span style="color: #6366f1;">mentor</span> Operations Dispatch</h2>
+        <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #d97706; font-weight: 700;">Action Required: Attendance Finalization</span>
+      </div>
+      
+      <p style="font-size: 14px; margin-top: 16px;">Hello <strong>${mentorName}</strong>,</p>
+      
+      <p style="font-size: 14px; line-height: 1.6; color: #334155;">
+        You currently have <strong style="color: #d97706;">${unmarkedSessions.length} session(s)</strong> with pending or unmarked attendance.
+      </p>
+
+      <div style="background-color: #fef3c7; border: 1px solid #fde68a; border-radius: 8px; padding: 14px; margin: 16px 0; font-size: 13px; color: #92400e; line-height: 1.5;">
+        <strong>Important Cutoff Deadlines:</strong><br/>
+        • <strong>Month-End Freeze Date:</strong> ${freezingDate}<br/>
+        • <strong>Scheduled Payout Date:</strong> ${payoutDate}<br/>
+        <em>Unmarked classes cannot be evaluated by the payroll engine and will not be credited toward your payout unless resolved prior to the freeze.</em>
+      </div>
+
+      <h3 style="font-size: 14px; font-weight: 700; color: #0f172a; margin-top: 20px; margin-bottom: 8px;">Pending Sessions Requiring Attendance:</h3>
+      <table style="width: 100%; border-collapse: collapse; font-size: 12px; background-color: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0;">
+        <thead>
+          <tr style="background-color: #f1f5f9; text-align: left; color: #475569;">
+            <th style="padding: 8px 10px;">Session Title</th>
+            <th style="padding: 8px 10px;">Scheduled Date</th>
+            <th style="padding: 8px 10px;">Duration</th>
+            <th style="padding: 8px 10px;">Campus</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${sessionListHtml}
+        </tbody>
+      </table>
+
+      <p style="font-size: 13px; color: #475569; margin-top: 20px; line-height: 1.5;">
+        Please access your faculty calendar or attendance dashboard to submit roster check-ins immediately.
+      </p>
+
+      <div style="margin-top: 28px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8;">
+        This automated notification was dispatched by the LUmentor Operations Dispatch Center. If you have questions regarding compensation, please reach out to your Academic Program Manager.
+      </div>
+    </div>
+  `;
+
+  return sendEmail({ to, subject, text, html });
+}

@@ -11,7 +11,7 @@ import { formatCurrency, formatDateTime } from '../../../lib/utils/formatters';
 import { ClassEvent, Mentor, Branch, Subject } from '../../../lib/types/models';
 import { PayrollBatch, PayrollPlan } from '../../../lib/types/payroll';
 import { PenaltyModal } from '../../../components/payroll/PenaltyModal';
-import { Plus, RefreshCw } from 'lucide-react';
+import { Plus, RefreshCw, AlertTriangle, Sparkles } from 'lucide-react';
 
 function monthBounds(month: string) {
   const [year, monthNumber] = month.split('-').map(Number);
@@ -128,6 +128,19 @@ export default function SinglePayoutPage() {
     setAddingClass(false);
     await loadClasses();
     setNotice({ type: 'success', message: 'Class added to this payout period.' });
+  };
+
+  const markAllClassesCompleted = async () => {
+    const unmarked = classes.filter((c) => c.status !== 'COMPLETED' && c.status !== 'LATE_CANCELLED');
+    for (const c of unmarked) {
+      await fetch('/api/classes', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: c.id, status: 'COMPLETED' }),
+      });
+    }
+    await loadClasses();
+    setNotice({ type: 'success', message: `Marked ${unmarked.length} class(es) as COMPLETED.` });
   };
 
   const calculate = async () => {
@@ -251,6 +264,25 @@ export default function SinglePayoutPage() {
         <Card>
           <CardHeader title="2. Classes in this payout period" subtitle={classes.length ? `${classes.length} class(es) found` : 'No classes found; administrators can add one below.'} />
           <CardContent>
+            {classes.some((c) => c.status !== 'COMPLETED' && c.status !== 'LATE_CANCELLED') && (
+              <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span className="text-amber-900 font-medium">
+                    Unmarked or scheduled classes detected. These are excluded from compensation until marked COMPLETED.
+                  </span>
+                </div>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs shrink-0"
+                  leftIcon={<Sparkles className="w-3.5 h-3.5" />}
+                  onClick={() => void markAllClassesCompleted().catch((e: unknown) => setNotice({ type: 'error', message: e instanceof Error ? e.message : 'Failed to update classes' }))}
+                >
+                  Mark All as Completed
+                </Button>
+              </div>
+            )}
             <Table><TableHeader><TableRow><TableHead>Class</TableHead><TableHead>Subject</TableHead><TableHead>Date</TableHead><TableHead>Duration</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{classes.map((item) => <TableRow key={item.id}><TableCell className="font-semibold">{item.title}</TableCell><TableCell>{item.subjectName}</TableCell><TableCell>{formatDateTime(item.startTime)}</TableCell><TableCell>{item.durationMinutes} min</TableCell><TableCell><Badge variant="neutral" size="sm">{item.status}</Badge></TableCell></TableRow>)}</TableBody></Table>
             <Button variant="outline" size="sm" className="mt-3" leftIcon={<Plus className="w-4 h-4" />} onClick={() => setAddingClass(true)}>Add class</Button>
           </CardContent>

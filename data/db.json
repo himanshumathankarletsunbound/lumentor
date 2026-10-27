@@ -575,6 +575,7 @@
   "penaltyPolicies": [],
   "adjustments": [],
   "payrollPeriods": [],
+  "payoutSchedules": [],
   "payrollBatches": [],
   "payslips": [],
   "invoices": [],

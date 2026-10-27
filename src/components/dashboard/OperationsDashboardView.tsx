@@ -24,6 +24,7 @@ import {
   Search,
   Check,
   RefreshCw,
+  Send,
 } from 'lucide-react';
 import { formatTime, formatDate, formatCurrency } from '../../lib/utils/formatters';
 import Link from 'next/link';
@@ -72,6 +73,9 @@ export function OperationsDashboardView() {
   const unmarkedClasses = classes.filter((c) => c.attendanceStatusSummary === 'UNMARKED');
   const cancellations = classes.filter((c) => c.status === 'CANCELLED' || c.status === 'LATE_CANCELLED');
 
+  const [isSendingReminders, setIsSendingReminders] = useState(false);
+  const [reminderNotice, setReminderNotice] = useState<string | null>(null);
+
   // Quick 1-click attendance verification
   const handleQuickMarkAllPresent = (cls: ClassEvent) => {
     const updatedStudents = cls.students.map((s) => ({
@@ -85,6 +89,27 @@ export function OperationsDashboardView() {
       attendanceStatusSummary: 'ALL_PRESENT',
       status: 'COMPLETED',
     });
+  };
+
+  const handleSendAttendanceReminders = async () => {
+    setIsSendingReminders(true);
+    setReminderNotice(null);
+    try {
+      const res = await fetch('/api/payroll/reminders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dispatchedBy: 'Operations Dispatch Center',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to dispatch reminders');
+      setReminderNotice(data.message || 'Reminders dispatched successfully.');
+    } catch (err: unknown) {
+      setReminderNotice(err instanceof Error ? err.message : 'Error sending reminders');
+    } finally {
+      setIsSendingReminders(false);
+    }
   };
 
   return (
@@ -221,6 +246,31 @@ export function OperationsDashboardView() {
         <CardContent className="p-0">
           {activeTab === 'discrepancies' && (
             <div className="divide-y divide-slate-100 text-xs">
+              {reminderNotice && (
+                <div className="p-3 bg-emerald-50 border-b border-emerald-200 text-emerald-800 flex items-center justify-between text-xs">
+                  <span>{reminderNotice}</span>
+                  <button onClick={() => setReminderNotice(null)} className="font-semibold underline ml-2">Dismiss</button>
+                </div>
+              )}
+
+              {unmarkedClasses.length > 0 && (
+                <div className="p-3 bg-amber-50/60 border-b border-amber-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <span className="text-amber-900 font-medium">
+                    {unmarkedClasses.length} session(s) pending attendance verification across faculty members.
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="bg-white border-amber-300 text-amber-900 hover:bg-amber-100 text-xs shrink-0"
+                    leftIcon={<Send className="w-3.5 h-3.5 text-indigo-600" />}
+                    isLoading={isSendingReminders}
+                    onClick={handleSendAttendanceReminders}
+                  >
+                    Send Attendance Reminders to Mentors
+                  </Button>
+                </div>
+              )}
+
               {unmarkedClasses.length === 0 ? (
                 <div className="p-12 text-center">
                   <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-3">

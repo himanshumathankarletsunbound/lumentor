@@ -31,8 +31,21 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ success: true, records });
   } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : '';
+    const isDatabaseAuthFailure = errorMsg.includes('Authentication failed against the database server')
+      || errorMsg.includes('password authentication failed')
+      || errorMsg.includes('database credentials');
+    const isDatabaseUnavailable = errorMsg.includes('Can\'t reach database server')
+      || errorMsg.includes('must be configured for production database access');
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Failed to load records.' },
+      {
+        success: false,
+        error: isDatabaseAuthFailure
+          ? 'The database credentials configured for production are invalid.'
+          : isDatabaseUnavailable
+          ? 'The production database is unavailable. Configure a reachable Supabase pooler connection.'
+          : 'Failed to load records.',
+      },
       { status: 500 }
     );
   }

@@ -60,6 +60,18 @@ export async function GET(req: NextRequest) {
     });
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ success: false, error: errorMsg }, { status: 500 });
+    const isDatabaseAuthFailure = errorMsg.includes('Authentication failed against the database server')
+      || errorMsg.includes('password authentication failed')
+      || errorMsg.includes('database credentials');
+    const isDatabaseUnavailable = errorMsg.includes('Can\'t reach database server')
+      || errorMsg.includes('must be configured for production database access');
+    return NextResponse.json({
+      success: false,
+      error: isDatabaseAuthFailure
+        ? 'The database credentials configured for production are invalid.'
+        : isDatabaseUnavailable
+        ? 'The production database is unavailable. Configure a reachable Supabase pooler connection.'
+        : 'Failed to load dashboard data.',
+    }, { status: 500 });
   }
 }

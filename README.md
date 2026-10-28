@@ -153,6 +153,10 @@ Start the production server:
 pnpm start
 ```
 
+
+
+to develop the new automation system we have develop a new payroll system where the system is get to start capture all the events and will frezze the calander and then the automatics system wil
+
 ---
 
 ## 🧪 Automated Testing & Verification

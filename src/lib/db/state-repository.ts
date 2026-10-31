@@ -44,7 +44,9 @@ function toCurrentUser(user: {
     role: user.role,
     roleName: user.roleName || user.role,
     permissions: Array.isArray(user.permissions) ? user.permissions as CurrentUser['permissions'] : [],
-    status: user.status as CurrentUser['status'],
+    status: user.status === 'SENT_PASSWORD_VERIFICATION' && user.passwordHash && !user.resetToken
+      ? 'ACTIVE'
+      : user.status as CurrentUser['status'],
     passwordHash: user.passwordHash,
     salt: user.salt,
     sessionToken: user.sessionToken || undefined,

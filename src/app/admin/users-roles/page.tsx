@@ -26,19 +26,19 @@ import {
   CheckCircle2,
   Ban,
   Clock,
-  Sparkles,
-  Lock,
   Building2,
   RefreshCw,
   Eye,
   EyeOff,
+  MoreVertical,
+  Pencil,
 } from 'lucide-react';
 import { formatDate } from '../../../lib/utils/formatters';
 
 export default function UsersRolesPage() {
   const [roles, setRoles] = useState<UserRole[]>(() => db.getRoles());
   const [users, setUsers] = useState<CurrentUser[]>(() => db.getUsers());
-  const [branches] = useState(() => db.getBranches());
+  const [branches] = useState(() => db.getBranches().filter((branch) => !/^demo\b/i.test(branch.name) && !/^demo\b/i.test(branch.code)));
 
   // Role creation modal state
   const [showRoleModal, setShowRoleModal] = useState(false);
@@ -47,12 +47,12 @@ export default function UsersRolesPage() {
 
   // Add User modal state
   const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<CurrentUser | null>(null);
   const [userName, setUserName] = useState('');
   const [userEmail, setUserEmail] = useState('');
   const [userRole, setUserRole] = useState<SystemRole>('OPERATIONS');
   const [userRoleName, setUserRoleName] = useState('Operations Specialist');
   const [userBranchScope, setUserBranchScope] = useState<string>('ALL');
-  const [userStatus, setUserStatus] = useState<UserStatus>('SENT_PASSWORD_VERIFICATION');
   const [sendPasswordLink, setSendPasswordLink] = useState(true);
   const [initialPassword, setInitialPassword] = useState('');
   const [showInitialPassword, setShowInitialPassword] = useState(false);
@@ -157,14 +157,13 @@ export default function UsersRolesPage() {
         roleName: userRoleName,
         assignedBranchIds,
         sendPasswordSetupEmail: sendPasswordLink,
-        status: userStatus,
         initialPassword: initialPassword ? initialPassword.trim() : undefined,
       };
 
       const res = await fetch('/api/users', {
-        method: 'POST',
+        method: editingUser ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(editingUser ? { id: editingUser.id, ...payload } : payload),
       });
 
       const data = await res.json();
@@ -185,7 +184,7 @@ export default function UsersRolesPage() {
       setUserRole('OPERATIONS');
       setUserRoleName('Operations Specialist');
       setUserBranchScope('ALL');
-      setUserStatus('SENT_PASSWORD_VERIFICATION');
+      setEditingUser(null);
       setSendPasswordLink(true);
       setInitialPassword('');
       setShowManualPasswordToggle(false);
@@ -237,6 +236,23 @@ export default function UsersRolesPage() {
     }
   };
 
+  const handleCopySetupLink = async (user: CurrentUser) => {
+    try {
+      const res = await fetch('/api/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: user.id, action: 'resend_password_link' }),
+      });
+      const data = await res.json();
+      if (!data.success || !data.resetUrl) throw new Error(data.error || 'Failed to generate setup link.');
+      await navigator.clipboard.writeText(data.resetUrl);
+      await refreshUsers();
+      setActionNotice({ type: 'success', message: `Setup link copied for ${user.email}.` });
+    } catch (err) {
+      setActionNotice({ type: 'error', message: err instanceof Error ? err.message : 'Failed to copy setup link.' });
+    }
+  };
+
   // Update Status
   const handleUpdateStatus = async (user: CurrentUser, nextStatus: UserStatus) => {
     try {
@@ -258,6 +274,17 @@ export default function UsersRolesPage() {
     } catch (err: any) {
       setActionNotice({ type: 'error', message: err.message || 'Error updating status' });
     }
+  };
+
+  const openEditUser = (user: CurrentUser) => {
+    setEditingUser(user);
+    setUserName(user.name);
+    setUserEmail(user.email);
+    setUserRole(user.role);
+    setUserRoleName(user.roleName);
+    setUserBranchScope(user.assignedBranchIds[0] || 'ALL');
+    setFormError(null);
+    setShowAddUserModal(true);
   };
 
   // Delete User
@@ -391,6 +418,13 @@ export default function UsersRolesPage() {
               leftIcon={<UserPlus className="w-4 h-4" />}
               onClick={() => {
                 setFormError(null);
+                setEditingUser(null);
+                setUserName('');
+                setUserEmail('');
+                setUserRole('OPERATIONS');
+                setUserRoleName('Operations Specialist');
+                setUserBranchScope('ALL');
+                setInitialPassword('');
                 setShowAddUserModal(true);
               }}
             >
@@ -629,41 +663,41 @@ export default function UsersRolesPage() {
 
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            {/* Resend Password Link Button */}
                             <button
                               type="button"
-                              onClick={() => handleResendPasswordLink(u)}
-                              title="Send / Resend Password Setup Link"
-                              className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium text-indigo-700 hover:bg-indigo-50 border border-transparent hover:border-indigo-200 transition-colors"
-                            >
-                              <KeyRound className="w-3.5 h-3.5 text-indigo-600" />
-                              <span className="hidden lg:inline">Setup Link</span>
-                            </button>
-
-                            {/* Status Change Selector */}
-                            <select
-                              value={status}
+                              onClick={() => openEditUser(u)}
+                              title="Edit user"
                               disabled={isSuperAdmin}
-                              onChange={(e) => handleUpdateStatus(u, e.target.value as UserStatus)}
-                              className="text-xs bg-slate-50 border border-slate-300 rounded px-2 py-1 text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 cursor-pointer"
+                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors disabled:opacity-40"
                             >
-                              <option value="ACTIVE">Active</option>
-                              <option value="SENT_PASSWORD_VERIFICATION">Sent Verification</option>
-                              <option value="SUSPENDED">Suspended</option>
-                              <option value="DISABLED">Disabled</option>
-                            </select>
-
-                            {/* Delete Button (disabled for super admin) */}
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
                             {!isSuperAdmin && (
                               <button
                                 type="button"
                                 onClick={() => handleDeleteUser(u)}
-                                title="Remove User"
+                                title="Delete user"
                                 className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             )}
+                            <details className="relative">
+                              <summary title="More user actions" className="list-none cursor-pointer p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded">
+                                <MoreVertical className="w-4 h-4" />
+                              </summary>
+                              <div className="absolute right-0 z-10 mt-1 w-48 rounded-lg border border-slate-200 bg-white p-1 text-left shadow-lg">
+                                <button type="button" onClick={() => handleCopySetupLink(u)} className="flex w-full items-center gap-2 rounded px-3 py-2 text-xs text-slate-700 hover:bg-slate-50">
+                                  <KeyRound className="w-3.5 h-3.5" /> Reset password
+                                </button>
+                                <button type="button" onClick={() => handleResendPasswordLink(u)} className="flex w-full items-center gap-2 rounded px-3 py-2 text-xs text-slate-700 hover:bg-slate-50">
+                                  <Copy className="w-3.5 h-3.5" /> Copy setup link
+                                </button>
+                                <button type="button" disabled={isSuperAdmin} onClick={() => handleUpdateStatus(u, status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED')} className="flex w-full items-center gap-2 rounded px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-40">
+                                  <Ban className="w-3.5 h-3.5" /> {status === 'SUSPENDED' ? 'Reactivate account' : 'Suspend account'}
+                                </button>
+                              </div>
+                            </details>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -717,8 +751,11 @@ export default function UsersRolesPage() {
         {showAddUserModal && (
           <Modal
             isOpen={showAddUserModal}
-            onClose={() => setShowAddUserModal(false)}
-            title="Add New User Account"
+            onClose={() => {
+              setShowAddUserModal(false);
+              setEditingUser(null);
+            }}
+            title={editingUser ? 'Edit User Account' : 'Add New User Account'}
             subtitle="Create an institutional faculty or operations account and issue password credentials"
             maxWidth="lg"
             footer={
@@ -733,7 +770,7 @@ export default function UsersRolesPage() {
                   isLoading={isSubmitting}
                   leftIcon={<Check className="w-4 h-4" />}
                 >
-                  Create & Dispatch Setup
+                  {editingUser ? 'Save Changes' : 'Create & Dispatch Setup'}
                 </Button>
               </div>
             }
@@ -830,86 +867,6 @@ export default function UsersRolesPage() {
                 </select>
               </div>
 
-              {/* Initial Status Selection */}
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">
-                  Initial Account Status
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <label
-                    className={`flex items-center gap-1.5 p-2 rounded-lg border cursor-pointer text-[11px] font-medium ${
-                      userStatus === 'ACTIVE'
-                        ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
-                        : 'bg-white border-slate-200 text-slate-600'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="status"
-                      value="ACTIVE"
-                      checked={userStatus === 'ACTIVE'}
-                      onChange={() => setUserStatus('ACTIVE')}
-                      className="text-emerald-600"
-                    />
-                    Active
-                  </label>
-
-                  <label
-                    className={`flex items-center gap-1.5 p-2 rounded-lg border cursor-pointer text-[11px] font-medium ${
-                      userStatus === 'SENT_PASSWORD_VERIFICATION'
-                        ? 'bg-sky-50 border-sky-300 text-sky-800'
-                        : 'bg-white border-slate-200 text-slate-600'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="status"
-                      value="SENT_PASSWORD_VERIFICATION"
-                      checked={userStatus === 'SENT_PASSWORD_VERIFICATION'}
-                      onChange={() => setUserStatus('SENT_PASSWORD_VERIFICATION')}
-                      className="text-sky-600"
-                    />
-                    Sent Verification
-                  </label>
-
-                  <label
-                    className={`flex items-center gap-1.5 p-2 rounded-lg border cursor-pointer text-[11px] font-medium ${
-                      userStatus === 'SUSPENDED'
-                        ? 'bg-amber-50 border-amber-300 text-amber-800'
-                        : 'bg-white border-slate-200 text-slate-600'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="status"
-                      value="SUSPENDED"
-                      checked={userStatus === 'SUSPENDED'}
-                      onChange={() => setUserStatus('SUSPENDED')}
-                      className="text-amber-600"
-                    />
-                    Suspended
-                  </label>
-
-                  <label
-                    className={`flex items-center gap-1.5 p-2 rounded-lg border cursor-pointer text-[11px] font-medium ${
-                      userStatus === 'DISABLED'
-                        ? 'bg-rose-50 border-rose-300 text-rose-800'
-                        : 'bg-white border-slate-200 text-slate-600'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="status"
-                      value="DISABLED"
-                      checked={userStatus === 'DISABLED'}
-                      onChange={() => setUserStatus('DISABLED')}
-                      className="text-rose-600"
-                    />
-                    Disabled
-                  </label>
-                </div>
-              </div>
-
               {/* Password Invitation Checkbox */}
               <div className="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-100 space-y-2">
                 <div className="flex items-start gap-2.5">
@@ -919,9 +876,6 @@ export default function UsersRolesPage() {
                     checked={sendPasswordLink}
                     onChange={(e) => {
                       setSendPasswordLink(e.target.checked);
-                      if (e.target.checked && userStatus === 'ACTIVE') {
-                        setUserStatus('SENT_PASSWORD_VERIFICATION');
-                      }
                     }}
                     className="mt-0.5 h-4 w-4 text-indigo-600 rounded border-slate-300"
                   />

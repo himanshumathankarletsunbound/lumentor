@@ -27,6 +27,16 @@ export function hasPermission(
     return true;
   }
 
+  if (user.role === 'AUDIT') {
+    if (module !== 'mentor_reviews' && module !== 'overview') return false;
+    if (module === 'overview') return action === 'view' || action === 'export';
+    return action === 'view' || action === 'edit' || action === 'export';
+  }
+
+  if (user.role === 'OPERATIONS' && module === 'mentor_reviews') {
+    return action === 'view' || action === 'edit' || action === 'export';
+  }
+
   // Branch restriction check
   if (branchId && user.assignedBranchIds && user.assignedBranchIds.length > 0) {
     if (!user.assignedBranchIds.includes(branchId)) {

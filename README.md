@@ -166,6 +166,8 @@ The project includes an acceptance test suite (`tests/acceptance.test.ts`) that 
 pnpm test
 ```
 
+
+
 ### Verified Scenarios:
 1. **Scenario 1**: Classcard credentials are kept secure and masked for client visibility (`sk_live_••••••••xyz9`).
 2. **Scenario 2**: Connection test verifies status against live gateway or sandbox fallback.
@@ -223,6 +225,10 @@ Internal proprietary license for education and tutoring business operations. All
 ## Production deployment requirements
 
 Production deployments use PostgreSQL through Prisma. Set `SUPABASE_POOLER_URL` to Supabase's pooled connection string in Vercel **Production** and **Preview** for serverless runtime requests; set `SUPABASE_DIRECT_URL` to a direct connection string only in a trusted migration environment. `SUPABASE_URL` remains a local fallback, but must not contain the direct `db.<project>.supabase.co:5432` host when deployed to Vercel. The Vercel build only generates Prisma Client and builds Next.js; run `pnpm db:migrate` separately after schema changes. Do not expose any database URL through a `NEXT_PUBLIC_*` variable.
+
+### Mentor audit reviews
+
+The `AUDIT` system role has access to the Audit Dashboard at `/audit/dashboard`. Audit reviewers assign a decimal score from 0 to 3, while Operations reviewers assign a decimal score from 0 to 2. Reviews are stored in the `MentorReview` PostgreSQL table by mentor and review period; the total is calculated only after both scores are present and is ranked out of 5. Reviewer identity, comments, and update timestamps are retained with each review.
 
 
 Set `CLASSCARD_API_KEY` only on the server. Live synchronization sends this key only in the server-side `api-key` header; it is never persisted in the application store or returned to browser code.

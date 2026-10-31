@@ -260,6 +260,28 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
               icon: <FileSpreadsheet className="w-4 h-4" />,
               badge: 'New',
             },
+            {
+              name: 'Mentor Reviews',
+              href: '/audit/dashboard',
+              icon: <UserCheck className="w-4 h-4" />,
+              module: 'mentor_reviews',
+            },
+          ],
+        },
+      ];
+    }
+
+    if (role === 'AUDIT') {
+      return [
+        {
+          groupName: 'Audit Workspace',
+          items: [
+            {
+              name: 'Audit Dashboard',
+              href: '/audit/dashboard',
+              icon: <Shield className="w-4 h-4" />,
+              module: 'mentor_reviews',
+            },
           ],
         },
       ];
@@ -501,6 +523,12 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
         return (
           <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-full border border-sky-500/20">
             <Briefcase className="w-3 h-3" /> Operations
+          </span>
+        );
+      case 'AUDIT':
+        return (
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+            <Shield className="w-3 h-3" /> Audit
           </span>
         );
       case 'MENTOR':

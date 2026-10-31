@@ -695,7 +695,7 @@ export default function UsersRolesPage() {
                     <TableCell className="font-bold text-slate-900">{r.name}</TableCell>
                     <TableCell>
                       <Badge
-                        variant={r.systemRole === 'ADMINISTRATOR' ? 'default' : r.systemRole === 'OPERATIONS' ? 'warning' : 'success'}
+                        variant={r.systemRole === 'ADMINISTRATOR' ? 'default' : r.systemRole === 'OPERATIONS' ? 'warning' : r.systemRole === 'AUDIT' ? 'warning' : 'success'}
                         size="sm"
                       >
                         {r.systemRole}
@@ -791,6 +791,7 @@ export default function UsersRolesPage() {
                   >
                     <option value="ADMINISTRATOR">Administrator (Full Access)</option>
                     <option value="OPERATIONS">Operations Specialist</option>
+                    <option value="AUDIT">Audit Team</option>
                     <option value="MENTOR">Mentor (Faculty Portal)</option>
                     <option value="CUSTOM">Custom Role</option>
                   </select>

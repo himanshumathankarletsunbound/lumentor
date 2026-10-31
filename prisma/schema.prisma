@@ -12,6 +12,7 @@ datasource db {
 enum SystemRole {
   ADMINISTRATOR
   OPERATIONS
+  AUDIT
   MENTOR
   CUSTOM
 }
@@ -152,6 +153,8 @@ model User {
   updatedAt    DateTime   @updatedAt
 
   auditEvents  AuditEvent[]
+  auditReviews     MentorReview[] @relation("AuditReviews")
+  operationReviews MentorReview[] @relation("OperationReviews")
 }
 
 model Role {
@@ -252,6 +255,29 @@ model Mentor {
   adjustments  Adjustment[]
   lineItems    PayrollLineItem[]
   payslips     Payslip[]
+  reviews      MentorReview[]
+}
+
+model MentorReview {
+  id                 String   @id @default(uuid())
+  mentorId           String
+  mentor             Mentor   @relation(fields: [mentorId], references: [id], onDelete: Cascade)
+  reviewPeriod       String
+  auditScore         Decimal? @db.Decimal(4, 2)
+  operationScore     Decimal? @db.Decimal(4, 2)
+  totalScore         Decimal? @db.Decimal(4, 2)
+  auditComments      String?
+  operationComments  String?
+  auditReviewerId    String?
+  auditReviewer      User?    @relation("AuditReviews", fields: [auditReviewerId], references: [id])
+  operationReviewerId String?
+  operationReviewer  User?    @relation("OperationReviews", fields: [operationReviewerId], references: [id])
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([mentorId, reviewPeriod])
+  @@index([reviewPeriod])
+  @@index([totalScore])
 }
 
 model ClassEvent {

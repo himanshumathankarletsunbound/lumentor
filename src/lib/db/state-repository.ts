@@ -133,7 +133,7 @@ export async function listUsers(): Promise<CurrentUser[]> {
 export async function listRoles(): Promise<UserRole[]> {
   const roles = await prisma.role.findMany({ orderBy: { createdAt: 'asc' } });
   if (roles.length > 0) {
-    return roles.map((role) => ({
+    const mappedRoles = roles.map((role) => ({
       id: role.id,
       name: role.name,
       systemRole: role.systemRole,
@@ -142,6 +142,8 @@ export async function listRoles(): Promise<UserRole[]> {
       createdAt: role.createdAt.toISOString(),
       updatedAt: role.updatedAt.toISOString(),
     }));
+    const seededRoles = SEED_ROLES.filter((seededRole) => !mappedRoles.some((role) => role.systemRole === seededRole.systemRole));
+    return [...mappedRoles, ...seededRoles];
   }
   return process.env.DEMO_MODE === 'true' ? SEED_ROLES : [];
 }
@@ -193,6 +195,113 @@ export async function listMentors(branchId?: string): Promise<Mentor[]> {
     createdAt: mentor.createdAt.toISOString(),
     updatedAt: mentor.updatedAt.toISOString(),
   }));
+}
+
+export interface MentorReviewRecord {
+  id: string;
+  mentorId: string;
+  mentorName: string;
+  branchName: string;
+  reviewPeriod: string;
+  auditScore: number | null;
+  operationScore: number | null;
+  totalScore: number | null;
+  auditComments: string | null;
+  operationComments: string | null;
+  auditReviewerName: string | null;
+  operationReviewerName: string | null;
+  updatedAt: string;
+}
+
+export async function listMentorReviews(reviewPeriod?: string): Promise<MentorReviewRecord[]> {
+  const reviews = await prisma.mentorReview.findMany({
+    where: reviewPeriod ? { reviewPeriod } : undefined,
+    include: {
+      mentor: { include: { branch: true } },
+      auditReviewer: { select: { name: true } },
+      operationReviewer: { select: { name: true } },
+    },
+    orderBy: [{ totalScore: 'desc' }, { updatedAt: 'desc' }],
+  });
+  return reviews.map((review) => ({
+    id: review.id,
+    mentorId: review.mentorId,
+    mentorName: `${review.mentor.firstName} ${review.mentor.lastName}`.trim(),
+    branchName: review.mentor.branch.name,
+    reviewPeriod: review.reviewPeriod,
+    auditScore: review.auditScore === null ? null : Number(review.auditScore),
+    operationScore: review.operationScore === null ? null : Number(review.operationScore),
+    totalScore: review.totalScore === null ? null : Number(review.totalScore),
+    auditComments: review.auditComments,
+    operationComments: review.operationComments,
+    auditReviewerName: review.auditReviewer?.name || null,
+    operationReviewerName: review.operationReviewer?.name || null,
+    updatedAt: review.updatedAt.toISOString(),
+  }));
+}
+
+export async function upsertMentorReview(input: {
+  mentorId: string;
+  reviewPeriod: string;
+  auditScore?: number | null;
+  operationScore?: number | null;
+  auditComments?: string | null;
+  operationComments?: string | null;
+  reviewerId: string;
+  reviewerRole: 'AUDIT' | 'OPERATIONS';
+}): Promise<MentorReviewRecord> {
+  const existing = await prisma.mentorReview.findUnique({
+    where: { mentorId_reviewPeriod: { mentorId: input.mentorId, reviewPeriod: input.reviewPeriod } },
+  });
+  const score = (value: number | null | undefined, max: number, label: string) => {
+    if (value === null || value === undefined) return undefined;
+    if (!Number.isFinite(value) || value < 0 || value > max) throw new Error(`${label} must be between 0 and ${max}.`);
+    return Math.round(value * 100) / 100;
+  };
+  const auditScore = input.reviewerRole === 'AUDIT' ? score(input.auditScore, 3, 'Audit score') : undefined;
+  const operationScore = input.reviewerRole === 'OPERATIONS' ? score(input.operationScore, 2, 'Operations score') : undefined;
+  const nextAudit = auditScore !== undefined ? auditScore : existing?.auditScore === null || existing?.auditScore === undefined ? null : Number(existing.auditScore);
+  const nextOperations = operationScore !== undefined ? operationScore : existing?.operationScore === null || existing?.operationScore === undefined ? null : Number(existing.operationScore);
+  const totalScore = nextAudit === null || nextOperations === null ? null : Math.round((nextAudit + nextOperations) * 100) / 100;
+  const review = await prisma.mentorReview.upsert({
+    where: { mentorId_reviewPeriod: { mentorId: input.mentorId, reviewPeriod: input.reviewPeriod } },
+    create: {
+      mentorId: input.mentorId,
+      reviewPeriod: input.reviewPeriod,
+      auditScore: input.reviewerRole === 'AUDIT' ? auditScore : null,
+      operationScore: input.reviewerRole === 'OPERATIONS' ? operationScore : null,
+      totalScore,
+      auditComments: input.reviewerRole === 'AUDIT' ? input.auditComments || null : null,
+      operationComments: input.reviewerRole === 'OPERATIONS' ? input.operationComments || null : null,
+      auditReviewerId: input.reviewerRole === 'AUDIT' ? input.reviewerId : null,
+      operationReviewerId: input.reviewerRole === 'OPERATIONS' ? input.reviewerId : null,
+    },
+    update: {
+      ...(input.reviewerRole === 'AUDIT' ? { auditScore, auditComments: input.auditComments || null, auditReviewerId: input.reviewerId } : {}),
+      ...(input.reviewerRole === 'OPERATIONS' ? { operationScore, operationComments: input.operationComments || null, operationReviewerId: input.reviewerId } : {}),
+      totalScore,
+    },
+    include: {
+      mentor: { include: { branch: true } },
+      auditReviewer: { select: { name: true } },
+      operationReviewer: { select: { name: true } },
+    },
+  });
+  return {
+    id: review.id,
+    mentorId: review.mentorId,
+    mentorName: `${review.mentor.firstName} ${review.mentor.lastName}`.trim(),
+    branchName: review.mentor.branch.name,
+    reviewPeriod: review.reviewPeriod,
+    auditScore: review.auditScore === null ? null : Number(review.auditScore),
+    operationScore: review.operationScore === null ? null : Number(review.operationScore),
+    totalScore: review.totalScore === null ? null : Number(review.totalScore),
+    auditComments: review.auditComments,
+    operationComments: review.operationComments,
+    auditReviewerName: review.auditReviewer?.name || null,
+    operationReviewerName: review.operationReviewer?.name || null,
+    updatedAt: review.updatedAt.toISOString(),
+  };
 }
 
 export async function listBranches(): Promise<Branch[]> {

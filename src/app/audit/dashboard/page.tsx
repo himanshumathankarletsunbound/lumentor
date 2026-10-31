@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader } from '../../../components/ui/Card';
 import { Alert } from '../../../components/ui/Alert';
 import { Button } from '../../../components/ui/Button';
 import { useAuth } from '../../../lib/auth/AuthContext';
+import { WelcomeHeader } from '../../../components/dashboard/WelcomeHeader';
 
 type Mentor = { id: string; firstName: string; lastName: string; branchName?: string; status: string };
 type Review = {
@@ -58,6 +59,10 @@ export default function AuditDashboardPage() {
   }, [load]);
 
   const reviewByMentor = useMemo(() => new Map(reviews.map((review) => [review.mentorId, review])), [reviews]);
+  const completedReviews = reviews.filter((review) => review.totalScore !== null).length;
+  const auditCompleted = reviews.filter((review) => review.auditScore !== null).length;
+  const operationsCompleted = reviews.filter((review) => review.operationScore !== null).length;
+  const pendingReviews = Math.max(mentors.length - completedReviews, 0);
   const rankedMentors = useMemo(() => [...mentors].sort((a, b) => {
     const scoreA = reviewByMentor.get(a.id)?.totalScore ?? -1;
     const scoreB = reviewByMentor.get(b.id)?.totalScore ?? -1;
@@ -96,18 +101,21 @@ export default function AuditDashboardPage() {
   return (
     <AppShell>
       <div className="space-y-6">
+        <WelcomeHeader subtitle="Audit workspace · Audit scores out of 3 and Operations scores out of 2." />
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium text-amber-600">Performance assurance</p>
-            <h1 className="text-2xl font-bold text-slate-900">Mentor Audit Dashboard</h1>
-            <p className="mt-1 text-sm text-slate-500">Audit contributes 3 points and Operations contributes 2 points. Decimal scores are supported.</p>
-          </div>
-          <label className="text-sm font-medium text-slate-700">
-            Review period
-            <input type="month" value={period} onChange={(event) => setPeriod(event.target.value)} className="mt-1 block rounded-lg border border-slate-300 px-3 py-2" />
-          </label>
+          <div><p className="text-sm font-medium text-amber-600">Audit workspace</p><h2 className="text-xl font-bold text-slate-900">Mentor review progress</h2></div>
+          <label className="text-sm font-medium text-slate-700">Review period<input type="month" value={period} onChange={(event) => setPeriod(event.target.value)} className="mt-1 block rounded-lg border border-slate-300 px-3 py-2" /></label>
         </div>
         {error && <Alert variant="error">{error}</Alert>}
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {[
+            ['Mentors to review', mentors.length, 'All active mentors in this period'],
+            ['Reviews completed', completedReviews, 'Both scores submitted'],
+            ['Audit completed', auditCompleted, 'Audit score submitted'],
+            ['Operations completed', operationsCompleted, 'Operations score submitted'],
+            ['Still pending', pendingReviews, 'Needs final review'],
+          ].map(([label, value, detail]) => <Card key={String(label)}><CardContent><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-2 text-3xl font-bold text-slate-900">{value}</p><p className="mt-1 text-xs text-slate-400">{detail}</p></CardContent></Card>)}
+        </div>
         <Card>
           <CardHeader>
             <h2 className="font-semibold">Mentor ranking</h2>

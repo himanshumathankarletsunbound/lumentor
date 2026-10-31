@@ -15,21 +15,14 @@ import {
   Users,
   GraduationCap,
   Calendar,
-  CheckCircle2,
   Clock,
   Percent,
   AlertTriangle,
   DollarSign,
   ShieldAlert,
-  ArrowRight,
   RefreshCw,
-  Building2,
   FileText,
-  Activity,
-  Layers,
   ChevronRight,
-  Sliders,
-  Sparkles,
   CreditCard,
   Database,
 } from 'lucide-react';
@@ -38,9 +31,10 @@ import Link from 'next/link';
 import { ClassEvent, Student, Mentor, Branch, Invoice, Payment, AuditEvent } from '../../lib/types/models';
 import { Payslip, PayrollBatch, Penalty } from '../../lib/types/payroll';
 import { SyncJob } from '../../lib/types/classcard';
+import { WelcomeHeader } from './WelcomeHeader';
 
 export function ExecutiveDashboardView() {
-  const { selectedBranch, currentUser } = useAuth();
+  const { selectedBranch } = useAuth();
   const [selectedEvent, setSelectedEvent] = useState<ClassEvent | null>(null);
   const [selectedPayslip, setSelectedPayslip] = useState<Payslip | null>(null);
 
@@ -95,7 +89,9 @@ export function ExecutiveDashboardView() {
   }, [selectedBranch]);
 
   useEffect(() => {
-    refreshData();
+    // Refresh external dashboard telemetry when the selected branch changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refreshData();
   }, [refreshData]);
 
   const handleLiveSync = async () => {
@@ -206,30 +202,8 @@ export function ExecutiveDashboardView() {
 
   return (
     <div className="space-y-7">
-      {/* Executive Command Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-slate-800 p-6 sm:p-7 text-white shadow-xl">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-[11px] font-semibold border border-indigo-500/30">
-                <Sparkles className="w-3.5 h-3.5" />
-                Executive Command Center
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 text-[11px] font-semibold border border-emerald-500/25">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Classcard v2 Live
-              </span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-              Operational Performance & Payroll Intelligence
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-300 mt-1.5 max-w-2xl leading-relaxed">
-              Consolidated real-time telemetry across academic delivery, student attendance compliance, and multi-model faculty compensation.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+      <WelcomeHeader subtitle="Executive workspace · Live operational, academic, and payroll overview." />
+      <div className="flex flex-wrap justify-end gap-2.5">
             <Button
               variant="outline"
               size="sm"
@@ -260,8 +234,6 @@ export function ExecutiveDashboardView() {
                 Run Payroll Batch
               </Button>
             </Link>
-          </div>
-        </div>
       </div>
 
       {/* Production Live Sync Alert Banner */}

@@ -858,7 +858,7 @@ export default function UsersRolesPage() {
                   onChange={(e) => setUserBranchScope(e.target.value)}
                   className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  <option value="ALL">All Branches (Global Enterprise Scope)</option>
+                  <option value="ALL">All Branches</option>
                   {branches.map((b) => (
                     <option key={b.id} value={b.id}>
                       {b.name} ({b.code})

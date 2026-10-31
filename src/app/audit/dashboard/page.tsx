@@ -29,12 +29,11 @@ export default function AuditDashboardPage() {
   const [period, setPeriod] = useState(currentPeriod);
   const [mentors, setMentors] = useState<Mentor[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
-  const [scores, setScores] = useState<Record<string, { score: string; comments: string }>>({});
+  const [scores, setScores] = useState<Record<string, { auditScore: string; operationScore: string; comments: string }>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const isAudit = currentUser.role === 'AUDIT';
-  const isOperations = currentUser.role === 'OPERATIONS';
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -70,9 +69,9 @@ export default function AuditDashboardPage() {
   }), [mentors, reviewByMentor]);
 
   const saveScore = async (mentorId: string) => {
-    const value = scores[mentorId] || { score: '', comments: '' };
-    if (!value.score.trim()) {
-      setError('Enter a score before saving.');
+    const value = scores[mentorId] || { auditScore: '', operationScore: '', comments: '' };
+    if (!value.auditScore.trim() || !value.operationScore.trim()) {
+      setError('Enter both the Audit and Operations scores before submitting.');
       return;
     }
     setSaving(mentorId);
@@ -84,12 +83,15 @@ export default function AuditDashboardPage() {
         body: JSON.stringify({
           mentorId,
           reviewPeriod: period,
-          ...(isAudit ? { auditScore: value.score, auditComments: value.comments } : { operationScore: value.score, operationComments: value.comments }),
+          auditScore: value.auditScore,
+          operationScore: value.operationScore,
+          auditComments: value.comments,
+          operationComments: value.comments,
         }),
       });
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || 'Failed to save score.');
-      setScores((previous) => ({ ...previous, [mentorId]: { score: '', comments: '' } }));
+      setScores((previous) => ({ ...previous, [mentorId]: { auditScore: '', operationScore: '', comments: '' } }));
       await load();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Failed to save score.');
@@ -128,7 +130,7 @@ export default function AuditDashboardPage() {
                   <tbody>
                     {rankedMentors.map((mentor, index) => {
                       const review = reviewByMentor.get(mentor.id);
-                      const input = scores[mentor.id] || { score: '', comments: '' };
+                      const input = scores[mentor.id] || { auditScore: '', operationScore: '', comments: '' };
                       return <tr key={mentor.id} className="border-b border-slate-100 align-top">
                         <td className="px-3 py-4 font-semibold">{review?.totalScore === null || review?.totalScore === undefined ? '—' : index + 1}</td>
                         <td className="px-3 py-4 font-medium">{mentor.firstName} {mentor.lastName}</td>
@@ -137,9 +139,10 @@ export default function AuditDashboardPage() {
                         <td className="px-3 py-4">{review?.operationScore ?? '—'}</td>
                         <td className="px-3 py-4 font-bold text-indigo-700">{review?.totalScore ?? 'Pending'}</td>
                         <td className="min-w-[260px] px-3 py-3">
-                          {(isAudit || isOperations || currentUser.role === 'ADMINISTRATOR') ? <div className="flex gap-2">
+                          {(isAudit || currentUser.role === 'ADMINISTRATOR') ? <div className="flex gap-2">
                             <div className="flex-1 space-y-2">
-                              <input type="number" min="0" max={isAudit ? 3 : 2} step="0.01" value={input.score} onChange={(event) => setScores((previous) => ({ ...previous, [mentor.id]: { ...input, score: event.target.value } }))} placeholder={isAudit ? '0–3' : '0–2'} className="w-full rounded border border-slate-300 px-2 py-1.5" />
+                              <input type="number" min="0" max={3} step="0.01" value={input.auditScore} onChange={(event) => setScores((previous) => ({ ...previous, [mentor.id]: { ...input, auditScore: event.target.value } }))} placeholder="Audit 0–3" className="w-full rounded border border-slate-300 px-2 py-1.5" />
+                              <input type="number" min="0" max={2} step="0.01" value={input.operationScore} onChange={(event) => setScores((previous) => ({ ...previous, [mentor.id]: { ...input, operationScore: event.target.value } }))} placeholder="Operations 0–2" className="w-full rounded border border-slate-300 px-2 py-1.5" />
                               <input value={input.comments} onChange={(event) => setScores((previous) => ({ ...previous, [mentor.id]: { ...input, comments: event.target.value } }))} placeholder="Comments (optional)" className="w-full rounded border border-slate-300 px-2 py-1.5" />
                             </div>
                             <Button size="sm" onClick={() => saveScore(mentor.id)} disabled={saving === mentor.id}>{saving === mentor.id ? 'Saving' : 'Save'}</Button>

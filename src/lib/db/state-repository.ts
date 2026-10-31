@@ -242,6 +242,11 @@ export async function listMentorReviews(reviewPeriod?: string): Promise<MentorRe
   }));
 }
 
+export async function getMentorReview(mentorId: string, reviewPeriod?: string): Promise<MentorReviewRecord | undefined> {
+  const reviews = await listMentorReviews(reviewPeriod);
+  return reviews.find((review) => review.mentorId === mentorId);
+}
+
 export async function upsertMentorReview(input: {
   mentorId: string;
   reviewPeriod: string;
@@ -250,7 +255,7 @@ export async function upsertMentorReview(input: {
   auditComments?: string | null;
   operationComments?: string | null;
   reviewerId: string;
-  reviewerRole: 'AUDIT' | 'OPERATIONS';
+  reviewerRole: 'AUDIT';
 }): Promise<MentorReviewRecord> {
   const existing = await prisma.mentorReview.findUnique({
     where: { mentorId_reviewPeriod: { mentorId: input.mentorId, reviewPeriod: input.reviewPeriod } },
@@ -261,7 +266,7 @@ export async function upsertMentorReview(input: {
     return Math.round(value * 100) / 100;
   };
   const auditScore = input.reviewerRole === 'AUDIT' ? score(input.auditScore, 3, 'Audit score') : undefined;
-  const operationScore = input.reviewerRole === 'OPERATIONS' ? score(input.operationScore, 2, 'Operations score') : undefined;
+  const operationScore = score(input.operationScore, 2, 'Operations score');
   const nextAudit = auditScore !== undefined ? auditScore : existing?.auditScore === null || existing?.auditScore === undefined ? null : Number(existing.auditScore);
   const nextOperations = operationScore !== undefined ? operationScore : existing?.operationScore === null || existing?.operationScore === undefined ? null : Number(existing.operationScore);
   const totalScore = nextAudit === null || nextOperations === null ? null : Math.round((nextAudit + nextOperations) * 100) / 100;
@@ -271,16 +276,20 @@ export async function upsertMentorReview(input: {
       mentorId: input.mentorId,
       reviewPeriod: input.reviewPeriod,
       auditScore: input.reviewerRole === 'AUDIT' ? auditScore : null,
-      operationScore: input.reviewerRole === 'OPERATIONS' ? operationScore : null,
+      operationScore,
       totalScore,
-      auditComments: input.reviewerRole === 'AUDIT' ? input.auditComments || null : null,
-      operationComments: input.reviewerRole === 'OPERATIONS' ? input.operationComments || null : null,
-      auditReviewerId: input.reviewerRole === 'AUDIT' ? input.reviewerId : null,
-      operationReviewerId: input.reviewerRole === 'OPERATIONS' ? input.reviewerId : null,
+      auditComments: input.auditComments || null,
+      operationComments: input.operationComments || null,
+      auditReviewerId: input.reviewerId,
+      operationReviewerId: null,
     },
     update: {
-      ...(input.reviewerRole === 'AUDIT' ? { auditScore, auditComments: input.auditComments || null, auditReviewerId: input.reviewerId } : {}),
-      ...(input.reviewerRole === 'OPERATIONS' ? { operationScore, operationComments: input.operationComments || null, operationReviewerId: input.reviewerId } : {}),
+      auditScore,
+      operationScore,
+      auditComments: input.auditComments || null,
+      operationComments: input.operationComments || null,
+      auditReviewerId: input.reviewerId,
+      operationReviewerId: null,
       totalScore,
     },
     include: {

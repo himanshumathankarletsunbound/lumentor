@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizationErrorAsync, getSessionUserAsync } from '../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../lib/db/server-initialization';
-import { listMentorReviews, listMentors, upsertMentorReview } from '../../../lib/db/state-repository';
+import { getMentorReview, listMentorReviews, listMentors, upsertMentorReview } from '../../../lib/db/state-repository';
 
 export async function GET(req: NextRequest) {
   await ensureServerPersistence();
@@ -9,6 +9,20 @@ export async function GET(req: NextRequest) {
   if (denied) return denied;
   try {
     const period = new URL(req.url).searchParams.get('period') || undefined;
+    const user = await getSessionUserAsync(req);
+    if (user?.role === 'MENTOR') {
+      if (!user.mentorId) return NextResponse.json({ success: true, review: null });
+      const review = await getMentorReview(user.mentorId, period);
+      return NextResponse.json({
+        success: true,
+        review: review ? {
+          reviewPeriod: review.reviewPeriod,
+          auditScore: review.auditScore,
+          operationScore: review.operationScore,
+          totalScore: review.totalScore,
+        } : null,
+      });
+    }
     const [reviews, mentors] = await Promise.all([listMentorReviews(period), listMentors()]);
     return NextResponse.json({ success: true, reviews, mentors });
   } catch {
@@ -22,8 +36,8 @@ export async function POST(req: NextRequest) {
   if (denied) return denied;
   try {
     const user = await getSessionUserAsync(req);
-    if (!user || !['AUDIT', 'OPERATIONS', 'ADMINISTRATOR'].includes(user.role)) {
-      return NextResponse.json({ success: false, error: 'Only audit or operations reviewers can submit scores.' }, { status: 403 });
+    if (!user || !['AUDIT', 'ADMINISTRATOR'].includes(user.role)) {
+      return NextResponse.json({ success: false, error: 'Only the Audit Team can submit mentor reviews.' }, { status: 403 });
     }
     const body = await req.json();
     const mentorId = String(body.mentorId || '').trim();
@@ -31,9 +45,10 @@ export async function POST(req: NextRequest) {
     if (!mentorId || !reviewPeriod) {
       return NextResponse.json({ success: false, error: 'Mentor and review period are required.' }, { status: 400 });
     }
-    const reviewerRole: 'AUDIT' | 'OPERATIONS' = user.role === 'ADMINISTRATOR'
-      ? (body.reviewerRole === 'AUDIT' ? 'AUDIT' : 'OPERATIONS')
-      : user.role === 'AUDIT' ? 'AUDIT' : 'OPERATIONS';
+    if (body.auditScore === undefined || body.auditScore === '' || body.operationScore === undefined || body.operationScore === '') {
+      return NextResponse.json({ success: false, error: 'Both Audit and Operations scores are required.' }, { status: 400 });
+    }
+    const reviewerRole = 'AUDIT' as const;
     const review = await upsertMentorReview({
       mentorId,
       reviewPeriod,

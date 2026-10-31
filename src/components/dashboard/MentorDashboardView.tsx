@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../../lib/auth/AuthContext';
 import { db } from '../../lib/db/store';
 import { payrollEngine } from '../../lib/payroll/engine';
@@ -12,19 +12,10 @@ import { Alert } from '../ui/Alert';
 import { CalendarEventModal } from '../calendar/CalendarEventModal';
 import { PayslipViewer } from '../payroll/PayslipViewer';
 import {
-  Calendar,
   Clock,
   DollarSign,
-  ShieldAlert,
   FileText,
-  CreditCard,
-  AlertCircle,
   CheckCircle2,
-  HelpCircle,
-  GraduationCap,
-  Sparkles,
-  ChevronRight,
-  UserCheck,
 } from 'lucide-react';
 import { formatCurrency, formatDuration, formatDate, formatTime } from '../../lib/utils/formatters';
 import { ClassEvent } from '../../lib/types/models';
@@ -41,6 +32,16 @@ export function MentorDashboardView() {
   const [disputeModalOpen, setDisputeModalOpen] = useState(false);
   const [disputeTargetId, setDisputeTargetId] = useState('');
   const [disputeNote, setDisputeNote] = useState('');
+  const [mentorReview, setMentorReview] = useState<{ auditScore: number | null; operationScore: number | null; totalScore: number | null } | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/mentor-reviews?period=${new Date().toISOString().slice(0, 7)}`)
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => {
+        if (data?.success) setMentorReview(data.review || null);
+      })
+      .catch(() => setMentorReview(null));
+  }, []);
 
   // Mentor's classes
   const classes = mentor ? db.getClasses({ mentorId: mentor.id }) : [];
@@ -148,6 +149,19 @@ export function MentorDashboardView() {
         title="Current Cycle Status: October 2026 - Cycle 2 (Oct 16 - Oct 31)"
         message="Figures shown below reflect completed classes and active bookings to date. Final compensation will be officially calculated and finalized upon payroll cutoff on October 31."
       />
+
+      <Card>
+        <CardHeader title="Monthly mentor review score" subtitle="Your points are shown after the Audit Team submits the review." />
+        <CardContent>
+          {mentorReview ? (
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div><p className="text-xs text-slate-500">Audit points</p><p className="mt-1 text-xl font-bold text-slate-900">{mentorReview.auditScore ?? 'Pending'} / 3</p></div>
+              <div><p className="text-xs text-slate-500">Operations points</p><p className="mt-1 text-xl font-bold text-slate-900">{mentorReview.operationScore ?? 'Pending'} / 2</p></div>
+              <div><p className="text-xs text-slate-500">Total points</p><p className="mt-1 text-xl font-bold text-indigo-700">{mentorReview.totalScore ?? 'Pending'} / 5</p></div>
+            </div>
+          ) : <p className="text-sm text-slate-500">No review has been submitted for this month yet.</p>}
+        </CardContent>
+      </Card>
 
       {/* Cycle KPIs Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

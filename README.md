@@ -228,7 +228,7 @@ Production deployments use PostgreSQL through Prisma. Set `SUPABASE_POOLER_URL` 
 
 ### Mentor audit reviews
 
-The `AUDIT` system role has access to the Audit Dashboard at `/audit/dashboard`. Audit reviewers assign a decimal score from 0 to 3, while Operations reviewers assign a decimal score from 0 to 2. Reviews are stored in the `MentorReview` PostgreSQL table by mentor and review period; the total is calculated only after both scores are present and is ranked out of 5. Reviewer identity, comments, and update timestamps are retained with each review.
+The `AUDIT` system role has access to the Audit Dashboard at `/audit/dashboard`. Audit reviewers submit both decimal scores—Audit from 0 to 3 and Operations from 0 to 2—plus a review comment. Operations do not submit mentor-review scores. Reviews are stored in the `MentorReview` PostgreSQL table by mentor and review period; the total is calculated only after both scores are present and is ranked out of 5. Mentors can see their point values only; reviewer identities and evaluator details are not exposed in the mentor view.
 
 
 Set `CLASSCARD_API_KEY` only on the server. Live synchronization sends this key only in the server-side `api-key` header; it is never persisted in the application store or returned to browser code.

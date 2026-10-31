@@ -260,12 +260,6 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
               icon: <FileSpreadsheet className="w-4 h-4" />,
               badge: 'New',
             },
-            {
-              name: 'Mentor Reviews',
-              href: '/audit/dashboard',
-              icon: <UserCheck className="w-4 h-4" />,
-              module: 'mentor_reviews',
-            },
           ],
         },
       ];

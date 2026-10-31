@@ -20,6 +20,7 @@ export function hasPermission(
       'attendance',
       'penalties',
       'payslips',
+        'mentor_reviews',
     ];
     if (!mentorPermittedModules.includes(module)) return false;
     // Mentors can view and export their own items, but cannot edit payroll or approve
@@ -30,10 +31,6 @@ export function hasPermission(
   if (user.role === 'AUDIT') {
     if (module !== 'mentor_reviews' && module !== 'overview') return false;
     if (module === 'overview') return action === 'view' || action === 'export';
-    return action === 'view' || action === 'edit' || action === 'export';
-  }
-
-  if (user.role === 'OPERATIONS' && module === 'mentor_reviews') {
     return action === 'view' || action === 'edit' || action === 'export';
   }
 

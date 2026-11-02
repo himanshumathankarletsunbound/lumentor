@@ -22,13 +22,14 @@ export default function InitiativesPage() {
   const [plans, setPlans] = useState<InitiativePlan[]>([]);
   const [mentors, setMentors] = useState<Mentor[]>([]);
   const [entries, setEntries] = useState<InitiativeEntry[]>([]);
-  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [month, setMonth] = useState('');
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [planForm, setPlanForm] = useState({ name: '', code: '', planType: 'INITIATIVE', amount: '', payoutFactor: '1' });
   const [entryForm, setEntryForm] = useState({ mentorId: '', planId: '', name: '', amount: '', count: '1', payoutFactor: '1' });
-  const bounds = useMemo(() => monthBounds(month), [month]);
+  const bounds = useMemo(() => (month ? monthBounds(month) : null), [month]);
 
   const load = useCallback(async () => {
+    if (!bounds) return;
     const [plansResponse, mentorsResponse, entriesResponse] = await Promise.all([
       fetch('/api/payroll/initiatives/plans'),
       fetch('/api/mentors'),
@@ -41,7 +42,12 @@ export default function InitiativesPage() {
     setPlans(plansResult.plans);
     setMentors(mentorsResult.mentors);
     setEntries(entriesResult.entries);
-  }, [bounds.endDate, bounds.startDate]);
+  }, [bounds]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setMonth(new Date().toISOString().slice(0, 7)), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -63,6 +69,7 @@ export default function InitiativesPage() {
   };
 
   const saveEntry = async () => {
+    if (!bounds) throw new Error('Select a payroll month before adding an initiative.');
     const selectedPlan = plans.find((plan) => plan.id === entryForm.planId);
     const response = await fetch('/api/payroll/initiatives', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },

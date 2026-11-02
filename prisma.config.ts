@@ -16,12 +16,12 @@ export default defineConfig({
     path: 'prisma/migrations',
   },
   datasource: {
-    // Prefer an explicitly configured direct URL for migrations. If it is not
-    // available, use the pooler so Prisma commands follow production runtime
-    // connectivity instead of silently selecting the direct Supabase host.
-    url: process.env.SUPABASE_DIRECT_URL
+    // Supabase is the authoritative production database. Prefer its pooler
+    // for both serverless runtime and migration commands; legacy direct/Neon
+    // variables remain fallbacks only for local compatibility.
+    url: process.env.SUPABASE_POOLER_URL
+      || process.env.SUPABASE_DIRECT_URL
       || process.env.DIRECT_DATABASE_URL
-      || process.env.SUPABASE_POOLER_URL
       || process.env.SUPABASE_URL
       || process.env.superbase_url
       || process.env.DATABASE_URL

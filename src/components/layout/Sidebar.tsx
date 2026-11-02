@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useAuth } from '../../lib/auth/AuthContext';
 import { PermissionModule, SystemRole } from '../../lib/types/auth';
 import {
@@ -55,6 +55,7 @@ let globalSidebarScrollTop = 0;
 
 export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { currentUser } = useAuth();
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -128,7 +129,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
         } catch {}
       }
     }
-  }, [pathname]);
+  }, [pathname, searchParams]);
 
   // Build role-scoped navigation tree
   const getNavGroupsForRole = (role: SystemRole): NavGroup[] => {
@@ -269,9 +270,15 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
           groupName: 'Audit Workspace',
           items: [
             {
-              name: 'Audit Dashboard',
-              href: '/audit/dashboard',
+              name: 'Post rating',
+              href: '/audit/dashboard?mode=post',
               icon: <Shield className="w-4 h-4" />,
+              module: 'mentor_reviews',
+            },
+            {
+              name: 'Analyze mentors',
+              href: '/audit/dashboard?mode=analyze',
+              icon: <BarChart3 className="w-4 h-4" />,
               module: 'mentor_reviews',
             },
           ],
@@ -615,13 +622,16 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
                 {!isCollapsed && (
                   <div className="space-y-0.5 pt-1">
                     {group.items.map((item) => {
+                      const itemUrl = new URL(item.href, 'http://localhost');
                       const isActive =
-                        pathname === item.href ||
-                        (item.href !== '/' &&
-                          item.href !== '/overview/executive' &&
-                          item.href !== '/overview/operations' &&
-                          item.href !== '/overview/mentor' &&
-                          pathname.startsWith(`${item.href}/`));
+                        pathname === itemUrl.pathname &&
+                        (itemUrl.searchParams.get('mode') === null || itemUrl.searchParams.get('mode') === searchParams.get('mode')) ||
+                        (itemUrl.search === '' &&
+                          itemUrl.pathname !== '/' &&
+                          itemUrl.pathname !== '/overview/executive' &&
+                          itemUrl.pathname !== '/overview/operations' &&
+                          itemUrl.pathname !== '/overview/mentor' &&
+                          pathname.startsWith(`${itemUrl.pathname}/`));
 
                       return (
                         <Link

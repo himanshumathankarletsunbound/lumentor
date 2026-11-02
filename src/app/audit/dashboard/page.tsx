@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ChangeEvent } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { AppShell } from '../../../components/layout/AppShell';
 import { Card, CardContent, CardHeader } from '../../../components/ui/Card';
 import { Alert } from '../../../components/ui/Alert';
@@ -27,6 +28,8 @@ const currentPeriod = new Date().toISOString().slice(0, 7);
 
 export default function AuditDashboardPage() {
   const { currentUser } = useAuth();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [period, setPeriod] = useState(currentPeriod);
   const [mentors, setMentors] = useState<Mentor[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -34,9 +37,10 @@ export default function AuditDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<'post' | 'analyze'>('post');
   const [uploading, setUploading] = useState(false);
   const isAudit = currentUser.role === 'AUDIT';
+  const requestedMode = searchParams.get('mode');
+  const mode: 'post' | 'analyze' = requestedMode === 'analyze' ? 'analyze' : 'post';
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -134,7 +138,7 @@ export default function AuditDashboardPage() {
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || 'Unable to submit ratings.');
       await load();
-      setMode('analyze');
+      router.push('/audit/dashboard?mode=analyze');
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : 'Unable to submit ratings.');
     } finally {
@@ -149,10 +153,6 @@ export default function AuditDashboardPage() {
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div><p className="text-sm font-medium text-amber-600">Audit workspace</p><h2 className="text-xl font-bold text-slate-900">Mentor review progress</h2></div>
           <label className="text-sm font-medium text-slate-700">Review period<input type="month" value={period} onChange={(event) => setPeriod(event.target.value)} className="mt-1 block rounded-lg border border-slate-300 px-3 py-2" /></label>
-        </div>
-        <div className="flex gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
-          <Button variant={mode === 'post' ? 'primary' : 'ghost'} onClick={() => setMode('post')}>Post rating</Button>
-          <Button variant={mode === 'analyze' ? 'primary' : 'ghost'} onClick={() => setMode('analyze')}>Analyze mentors</Button>
         </div>
         {error && <Alert variant="error">{error}</Alert>}
         {mode === 'post' && <Card>

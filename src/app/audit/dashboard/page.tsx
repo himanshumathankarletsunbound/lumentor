@@ -2,7 +2,8 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
+import { Pencil } from 'lucide-react';
 import { AppShell } from '../../../components/layout/AppShell';
 import { Card, CardContent, CardHeader } from '../../../components/ui/Card';
 import { Alert } from '../../../components/ui/Alert';
@@ -27,7 +28,6 @@ const currentPeriod = new Date().toISOString().slice(0, 7);
 
 function AuditDashboardContent() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const [period, setPeriod] = useState(currentPeriod);
   const [mentors, setMentors] = useState<Mentor[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -37,6 +37,7 @@ function AuditDashboardContent() {
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [editing, setEditing] = useState<Record<string, boolean>>({});
   const requestedMode = searchParams.get('mode');
   const mode: 'dashboard' | 'post' | 'analyze' = requestedMode === 'analyze' ? 'analyze' : requestedMode === 'post' ? 'post' : 'dashboard';
 
@@ -137,6 +138,7 @@ function AuditDashboardContent() {
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || 'Failed to save score.');
       setScores((previous) => ({ ...previous, [mentorId]: { auditScore: '', operationScore: '2', comments: '' } }));
+      setEditing((previous) => ({ ...previous, [mentorId]: false }));
       await load();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Failed to save score.');
@@ -169,10 +171,34 @@ function AuditDashboardContent() {
       const response = await fetch('/api/mentor-reviews', { method: 'POST', body: form });
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || 'Unable to submit ratings.');
-      await load();
-      router.push('/audit/dashboard?mode=analyze');
+      setScores((previous) => {
+        const next = { ...previous };
+        for (const rating of data.ratings || []) next[rating.mentorId] = { auditScore: String(rating.auditScore), operationScore: String(rating.operationScore), comments: rating.comments || '' };
+        return next;
+      });
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : 'Unable to submit ratings.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const submitAll = async () => {
+    const ratings = mentors.map((mentor) => {
+      const existing = reviewByMentor.get(mentor.id);
+      const input = scores[mentor.id];
+      return { mentorId: mentor.id, auditScore: input?.auditScore || existing?.auditScore, operationScore: input?.operationScore || existing?.operationScore || 2, comments: input?.comments || existing?.auditComments || '' };
+    }).filter((rating) => rating.auditScore !== undefined && rating.auditScore !== '');
+    if (!ratings.length) { setError('Enter at least one rating before submitting.'); return; }
+    setUploading(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/mentor-reviews', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reviewPeriod: period, ratings }) });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Unable to submit ratings.');
+      await load();
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : 'Unable to submit ratings.');
     } finally {
       setUploading(false);
     }
@@ -212,6 +238,7 @@ function AuditDashboardContent() {
                 {uploading ? 'Submitting ratings...' : 'Upload Excel or CSV'}
                 <input type="file" accept=".xlsx,.xls,.csv" className="hidden" disabled={uploading} onChange={(event) => void uploadRatings(event)} />
               </label>
+              <Button variant="primary" onClick={() => void submitAll()} disabled={uploading}>Submit all</Button>
             </div>
             <p className="mt-4 text-xs text-slate-500">The template includes every active mentor ID and name. Enter the Audit Rating (0–3) and an optional Remark, then upload it. Ratings are validated and submitted for the selected period.</p>
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
@@ -227,10 +254,7 @@ function AuditDashboardContent() {
                   const input = scores[mentor.id] || { auditScore: review?.auditScore?.toString() || '', operationScore: '2', comments: '' };
                   return <tr key={mentor.id} className="border-b border-slate-100">
                     <td className="px-3 py-3 font-medium">{mentor.firstName} {mentor.lastName}<span className="ml-2 text-xs text-slate-400">{mentor.id}</span></td>
-                    <td className="px-3 py-3"><input type="number" min="0" max="3" step="0.01" value={input.auditScore} onChange={(event) => setScores((previous) => ({ ...previous, [mentor.id]: { ...input, auditScore: event.target.value } }))} className="w-24 rounded border border-slate-300 px-2 py-1.5" /></td>
-                    <td className="px-3 py-3"><input type="number" min="0" max="2" step="0.01" value={input.operationScore} onChange={(event) => setScores((previous) => ({ ...previous, [mentor.id]: { ...input, operationScore: event.target.value } }))} className="w-24 rounded border border-slate-300 px-2 py-1.5" /></td>
-                    <td className="px-3 py-3"><input value={input.comments} onChange={(event) => setScores((previous) => ({ ...previous, [mentor.id]: { ...input, comments: event.target.value } }))} placeholder="Write review" className="w-full min-w-48 rounded border border-slate-300 px-2 py-1.5" /></td>
-                    <td className="px-3 py-3"><Button size="sm" onClick={() => void saveScore(mentor.id)} disabled={saving === mentor.id}>{saving === mentor.id ? 'Saving' : 'Submit'}</Button></td>
+                    {review && !editing[mentor.id] ? <><td className="px-3 py-3 font-semibold">{review.auditScore}</td><td className="px-3 py-3 font-semibold">{review.operationScore}</td><td className="px-3 py-3 text-slate-600">{review.auditComments || '—'}</td><td className="px-3 py-3"><Button variant="ghost" size="sm" onClick={() => setEditing((previous) => ({ ...previous, [mentor.id]: true }))} leftIcon={<Pencil className="h-4 w-4" />}>Edit</Button></td></> : <><td className="px-3 py-3"><input type="number" min="0" max="3" step="0.01" value={input.auditScore} onChange={(event) => setScores((previous) => ({ ...previous, [mentor.id]: { ...input, auditScore: event.target.value } }))} className="w-24 rounded border border-slate-300 px-2 py-1.5" /></td><td className="px-3 py-3"><input type="number" min="0" max="2" step="0.01" value={input.operationScore} onChange={(event) => setScores((previous) => ({ ...previous, [mentor.id]: { ...input, operationScore: event.target.value } }))} className="w-24 rounded border border-slate-300 px-2 py-1.5" /></td><td className="px-3 py-3"><input value={input.comments} onChange={(event) => setScores((previous) => ({ ...previous, [mentor.id]: { ...input, comments: event.target.value } }))} placeholder="Write review" className="w-full min-w-48 rounded border border-slate-300 px-2 py-1.5" /></td><td className="px-3 py-3"><Button size="sm" onClick={() => void saveScore(mentor.id)} disabled={saving === mentor.id}>{saving === mentor.id ? 'Saving' : 'Save'}</Button></td></>}
                   </tr>;
                 })}</tbody>
               </table>

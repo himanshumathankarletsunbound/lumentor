@@ -56,22 +56,40 @@ export async function POST(req: NextRequest) {
       const mentors = await listMentors();
       const mentorById = new Map(mentors.filter((mentor) => mentor.status === 'ACTIVE').map((mentor) => [mentor.id, mentor]));
       if (!rows.length) throw new Error('The rating sheet must contain at least one mentor row.');
-      const saved = [];
+      const ratings = [];
+      const seenMentorIds = new Set<string>();
       for (const [index, row] of rows.entries()) {
         const normalized = new Map(Object.entries(row).map(([key, value]) => [key.toLowerCase().replace(/[^a-z0-9]/g, ''), String(value).trim()]));
         const mentorId = normalized.get('mentorid') || '';
         const mentor = mentorById.get(mentorId);
         if (!mentor) throw new Error(`Row ${index + 2}: active mentor ID "${mentorId}" was not found.`);
+        if (seenMentorIds.has(mentorId)) throw new Error(`Row ${index + 2}: mentor ID "${mentorId}" appears more than once.`);
+        seenMentorIds.add(mentorId);
         const auditScore = Number(normalized.get('auditrating') || normalized.get('auditscore') || '');
         if (!Number.isFinite(auditScore) || auditScore < 0 || auditScore > 3) throw new Error(`Row ${index + 2}: Audit rating must be between 0 and 3.`);
         const operationScore = Number(normalized.get('operationsrating') || normalized.get('operationsscore') || '2');
         if (!Number.isFinite(operationScore) || operationScore < 0 || operationScore > 2) throw new Error(`Row ${index + 2}: Operations rating must be between 0 and 2.`);
-        const review = await upsertMentorReview({ mentorId, reviewPeriod, auditScore, operationScore, auditComments: normalized.get('remark') || null, operationComments: normalized.get('remark') || null, reviewerId: user.id, reviewerRole: 'AUDIT' });
-        saved.push(review);
+        ratings.push({ mentorId, auditScore, operationScore, comments: normalized.get('remark') || null });
+      }
+      return NextResponse.json({ success: true, staged: ratings.length, ratings });
+    }
+    const body = await req.json();
+    if (Array.isArray(body.ratings)) {
+      const reviewPeriod = String(body.reviewPeriod || '').trim();
+      if (!reviewPeriod) throw new Error('Review period is required.');
+      const saved = [];
+      const seenMentorIds = new Set<string>();
+      for (const rating of body.ratings) {
+        const mentorId = String(rating.mentorId || '').trim();
+        const auditScore = Number(rating.auditScore);
+        const operationScore = Number(rating.operationScore);
+        if (!mentorId || !Number.isFinite(auditScore) || auditScore < 0 || auditScore > 3 || !Number.isFinite(operationScore) || operationScore < 0 || operationScore > 2) throw new Error('Every rating must include valid Audit (0-3) and Operations (0-2) scores.');
+        if (seenMentorIds.has(mentorId)) throw new Error(`Mentor ID "${mentorId}" appears more than once.`);
+        seenMentorIds.add(mentorId);
+        saved.push(await upsertMentorReview({ mentorId, reviewPeriod, auditScore, operationScore, auditComments: rating.comments || null, operationComments: rating.comments || null, reviewerId: user.id, reviewerRole: 'AUDIT' }));
       }
       return NextResponse.json({ success: true, submitted: saved.length, reviews: saved });
     }
-    const body = await req.json();
     const mentorId = String(body.mentorId || '').trim();
     const reviewPeriod = String(body.reviewPeriod || '').trim();
     if (!mentorId || !reviewPeriod) {

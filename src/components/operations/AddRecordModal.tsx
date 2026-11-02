@@ -7,10 +7,12 @@ import { Button } from '../ui/Button';
 export interface AddRecordField {
   name: string;
   label: string;
+  section?: string;
   placeholder?: string;
   type?: 'text' | 'email' | 'password' | 'number' | 'select' | 'textarea';
   options?: { label: string; value: string }[];
   required?: boolean;
+  visibleWhen?: (values: Record<string, string>) => boolean;
 }
 
 interface AddRecordModalProps {
@@ -20,6 +22,7 @@ interface AddRecordModalProps {
   onClose: () => void;
   initialValues?: Record<string, string>;
   submitLabel?: string;
+  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
   onSave: (values: Record<string, string>) => void | Promise<void>;
 }
 
@@ -30,6 +33,7 @@ export function AddRecordModal({
   onClose,
   initialValues,
   submitLabel,
+  maxWidth = 'md',
   onSave,
 }: AddRecordModalProps) {
   const [values, setValues] = useState<Record<string, string>>({});
@@ -59,6 +63,7 @@ export function AddRecordModal({
       isOpen={isOpen}
       onClose={close}
       title={title}
+      maxWidth={maxWidth}
       footer={
         <div className="flex justify-end gap-2">
           <Button variant="ghost" size="sm" onClick={close} disabled={saving}>
@@ -89,9 +94,19 @@ export function AddRecordModal({
     >
       {error && <p className="mb-3 rounded-lg bg-red-50 p-2 text-xs text-red-700">{error}</p>}
       <div className="grid gap-3 sm:grid-cols-2">
-        {fields.map((field) => (
-          <label key={field.name} className={`text-xs font-semibold text-slate-700 ${field.type === 'textarea' ? 'sm:col-span-2' : ''}`}>
-            {field.label}{field.required !== false ? ' *' : ''}
+        {fields.map((field, index) => {
+          if (field.visibleWhen && !field.visibleWhen(values)) return null;
+          const previousVisibleField = fields.slice(0, index).reverse().find((item) => !item.visibleWhen || item.visibleWhen(values));
+          const showSection = field.section && field.section !== previousVisibleField?.section;
+          return (
+            <div key={field.name} className={field.type === 'textarea' ? 'sm:col-span-2' : ''}>
+              {showSection && (
+                <div className="mb-1 mt-2 border-b border-slate-200 pb-2 sm:col-span-2 first:mt-0">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-indigo-600">{field.section}</p>
+                </div>
+              )}
+              <label className="block text-xs font-semibold text-slate-700">
+                {field.label}{field.required !== false ? ' *' : ''}
             {field.type === 'select' ? (
               <select
                 required={field.required !== false}
@@ -125,8 +140,10 @@ export function AddRecordModal({
                 className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-50 p-2 text-xs font-normal text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             )}
-          </label>
-        ))}
+              </label>
+            </div>
+          );
+        })}
       </div>
     </Modal>
   );

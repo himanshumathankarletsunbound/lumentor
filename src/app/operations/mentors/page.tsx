@@ -25,6 +25,7 @@ export default function MentorsPage() {
   const [userDetails, setUserDetails] = useState<{ user: { id: string; name: string; email: string; status: string; lastLoginAt?: string | null } | null; activity: Array<{ id: string; action: string; details: string; timestamp: string }> } | null>(null);
 
   const plans = db.getPayrollPlans();
+  const branches = db.getBranches();
   const canViewPayroll = hasPermission('payroll_dashboard', 'view_sensitive_payroll');
 
   const refreshMentors = async () => {
@@ -245,18 +246,28 @@ export default function MentorsPage() {
 
         <AddRecordModal
           title="Add mentor or faculty member"
+          maxWidth="2xl"
           isOpen={showModal}
           onClose={() => setShowModal(false)}
           fields={[
-            { name: 'firstName', label: 'First name', placeholder: 'Priya' },
-            { name: 'lastName', label: 'Last name', placeholder: 'Patel' },
-            { name: 'email', label: 'Email', type: 'email', placeholder: 'mentor@example.com' },
-            { name: 'phone', label: 'Phone', required: false },
-            { name: 'panNumber', label: 'PAN number', placeholder: 'ABCDE1234F', required: false },
+            { name: 'firstName', label: 'First name', placeholder: 'Priya', section: 'Personal details' },
+            { name: 'lastName', label: 'Last name', placeholder: 'Patel', section: 'Personal details' },
+            { name: 'email', label: 'Email', type: 'email', placeholder: 'mentor@example.com', section: 'Personal details' },
+            { name: 'phone', label: 'Phone', required: false, section: 'Personal details' },
+            { name: 'panNumber', label: 'PAN number', placeholder: 'ABCDE1234F', required: false, section: 'Personal details' },
+            {
+              name: 'branchId',
+              label: 'Campus branch',
+              type: 'select',
+              section: 'Assignment',
+              options: branches.map((branch) => ({ label: `${branch.name} (${branch.code})`, value: branch.id })),
+              placeholder: 'Select a campus branch',
+            },
             {
               name: 'userMode',
               label: 'Platform login',
               type: 'select',
+              section: 'Platform access',
               required: false,
               options: [
                 { label: 'Do not create a user', value: 'none' },
@@ -264,11 +275,12 @@ export default function MentorsPage() {
                 { label: 'Create user and set password', value: 'password' },
               ],
             },
-            { name: 'password', label: 'Login password (8+ characters for password mode)', type: 'password', required: false },
-            { name: 'confirmPassword', label: 'Confirm login password', type: 'password', required: false },
+            { name: 'password', label: 'Login password', type: 'password', required: false, visibleWhen: (values) => values.userMode === 'password', placeholder: 'At least 8 characters' },
+            { name: 'confirmPassword', label: 'Confirm login password', type: 'password', required: false, visibleWhen: (values) => values.userMode === 'password' },
           ]}
           onSave={async (values) => {
-            const branch = db.getBranches()[0];
+            const branch = branches.find((item) => item.id === values.branchId);
+            if (!branch) throw new Error('Select a campus branch before creating the mentor.');
             const userMode = values.userMode || 'none';
             const password = values.password?.trim() || '';
             const confirmPassword = values.confirmPassword?.trim() || '';
@@ -277,8 +289,8 @@ export default function MentorsPage() {
             }
             const response = await fetch('/api/records', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'mentor', record: {
               firstName: values.firstName.trim(), lastName: values.lastName.trim(),
-              email: values.email.trim(), phone: values.phone?.trim() || '', panNumber: values.panNumber?.trim().toUpperCase() || '', branchId: branch?.id || '',
-              branchName: branch?.name, subjectIds: [],
+              email: values.email.trim(), phone: values.phone?.trim() || '', panNumber: values.panNumber?.trim().toUpperCase() || '', branchId: branch.id,
+              branchName: branch.name, subjectIds: [],
               status: 'ACTIVE', provenance: 'LOCALLY_CREATED', teachingHoursThisMonth: 0,
               completedClassesCount: 0, attendanceRate: 0,
             }})});

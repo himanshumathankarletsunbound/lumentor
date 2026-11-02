@@ -69,7 +69,12 @@ export default function AuditDashboardPage() {
   }), [mentors, reviewByMentor]);
 
   const saveScore = async (mentorId: string) => {
-    const value = scores[mentorId] || { auditScore: '', operationScore: '', comments: '' };
+    const existingReview = reviewByMentor.get(mentorId);
+    const value = scores[mentorId] || {
+      auditScore: existingReview?.auditScore?.toString() || '',
+      operationScore: existingReview?.operationScore?.toString() || '2',
+      comments: '',
+    };
     if (!value.auditScore.trim() || !value.operationScore.trim()) {
       setError('Enter both the Audit and Operations scores before submitting.');
       return;
@@ -91,7 +96,7 @@ export default function AuditDashboardPage() {
       });
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || 'Failed to save score.');
-      setScores((previous) => ({ ...previous, [mentorId]: { auditScore: '', operationScore: '', comments: '' } }));
+      setScores((previous) => ({ ...previous, [mentorId]: { auditScore: '', operationScore: '2', comments: '' } }));
       await load();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Failed to save score.');
@@ -130,7 +135,11 @@ export default function AuditDashboardPage() {
                   <tbody>
                     {rankedMentors.map((mentor, index) => {
                       const review = reviewByMentor.get(mentor.id);
-                      const input = scores[mentor.id] || { auditScore: '', operationScore: '', comments: '' };
+                      const input = scores[mentor.id] || {
+                        auditScore: review?.auditScore?.toString() || '',
+                        operationScore: review?.operationScore?.toString() || '2',
+                        comments: '',
+                      };
                       return <tr key={mentor.id} className="border-b border-slate-100 align-top">
                         <td className="px-3 py-4 font-semibold">{review?.totalScore === null || review?.totalScore === undefined ? '—' : index + 1}</td>
                         <td className="px-3 py-4 font-medium">{mentor.firstName} {mentor.lastName}</td>

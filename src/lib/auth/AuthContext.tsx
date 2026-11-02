@@ -19,7 +19,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   switchUser: (userId: string) => void;
-  login: (usernameOrEmail: string, password?: string) => Promise<{ success: boolean; user?: CurrentUser; error?: string }>;
+  login: (usernameOrEmail: string, password?: string, rememberMe?: boolean) => Promise<{ success: boolean; user?: CurrentUser; error?: string }>;
   logout: () => Promise<void>;
   requestPasswordReset: (email: string) => Promise<{ success: boolean; message?: string; error?: string; resetUrl?: string }>;
   resetPassword: (token: string, newPassword: string) => Promise<{ success: boolean; message?: string; error?: string }>;
@@ -98,13 +98,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (
     usernameOrEmail: string,
-    password?: string
+    password?: string,
+    rememberMe = true
   ): Promise<{ success: boolean; user?: CurrentUser; error?: string }> => {
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: usernameOrEmail, password }),
+        body: JSON.stringify({ email: usernameOrEmail, password, rememberMe }),
       });
       const data = await readApiResponse<{ success?: boolean; user?: CurrentUser; error?: string }>(res);
 

@@ -7,19 +7,21 @@ import { useAuth } from '../../lib/auth/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { Alert } from '../../components/ui/Alert';
 import {
-  ShieldCheck,
-  Lock,
-  Mail,
   ArrowRight,
+  CheckCircle2,
   Eye,
   EyeOff,
+  LockKeyhole,
+  Mail,
+  ShieldCheck,
   Sparkles,
 } from 'lucide-react';
+
+const thoughtOfTheDay = 'Small, consistent improvements create exceptional learning experiences.';
 
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
-
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -27,8 +29,8 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     if (!email.trim()) {
       setError('Please provide an email or username.');
       return;
@@ -40,179 +42,125 @@ export default function LoginPage() {
 
     setIsLoading(true);
     setError(null);
-
-    const res = await login(email, password);
-    if (res.success && res.user) {
-      if (res.user.role === 'ADMINISTRATOR') {
-        router.push('/overview/executive');
-      } else if (res.user.role === 'OPERATIONS') {
-        router.push('/overview/operations');
-      } else if (res.user.role === 'MENTOR') {
-        router.push('/overview/mentor');
-      } else {
-        router.push('/');
-      }
+    const response = await login(email, password, rememberMe);
+    if (response.success && response.user) {
+      if (response.user.role === 'ADMINISTRATOR') router.push('/overview/executive');
+      else if (response.user.role === 'OPERATIONS') router.push('/overview/operations');
+      else if (response.user.role === 'MENTOR') router.push('/overview/mentor');
+      else router.push('/');
     } else {
-      setError(res.error || 'Invalid email or password. Please try again.');
+      setError(response.error || 'Invalid email or password. Please try again.');
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden font-sans">
-      {/* Dynamic Ambient Background */}
-      <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-indigo-600/10 rounded-full blur-[140px] pointer-events-none" />
-      <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-sky-600/10 rounded-full blur-[120px] pointer-events-none" />
+    <main className="min-h-screen bg-[#f7f9fc] p-3 font-sans text-slate-900 sm:p-6 lg:p-8">
+      <div className="mx-auto grid min-h-[calc(100vh-1.5rem)] max-w-7xl overflow-hidden rounded-[2rem] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.12)] sm:min-h-[calc(100vh-3rem)] lg:grid-cols-[0.95fr_1.05fr]">
+        <section className="relative hidden overflow-hidden bg-[#172554] p-10 text-white lg:flex lg:flex-col lg:justify-between xl:p-14">
+          <div className="absolute -right-28 -top-28 h-80 w-80 rounded-full bg-cyan-400/20 blur-3xl" />
+          <div className="absolute -bottom-36 -left-20 h-96 w-96 rounded-full bg-indigo-400/20 blur-3xl" />
+          <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(rgba(255,255,255,.15)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.15)_1px,transparent_1px)] [background-size:42px_42px]" />
 
-      {/* Grid Pattern */}
-      <div
-        className="absolute inset-0 opacity-[0.03] pointer-events-none"
-        style={{
-          backgroundImage:
-            'radial-gradient(circle at 1px 1px, white 1px, transparent 0)',
-          backgroundSize: '32px 32px',
-        }}
-      />
-
-      <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
-        <div className="flex items-center justify-center gap-3 mb-3">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-500 flex items-center justify-center text-white shadow-xl shadow-indigo-600/25 ring-1 ring-white/20">
-            <ShieldCheck className="w-6 h-6" />
-          </div>
-          <div>
-            <span className="text-2xl font-black tracking-tight text-white">
-              LU<span className="text-indigo-400">mentor</span>
-            </span>
-            <span className="block text-[10px] uppercase font-bold tracking-widest text-slate-400">
-              Faculty & Operations Portal
-            </span>
-          </div>
-        </div>
-
-        <h2 className="mt-4 text-center text-xl font-bold tracking-tight text-white">
-          Sign In to Your Workspace
-        </h2>
-        <p className="mt-1 text-center text-xs text-slate-400">
-          Enter your institutional credentials to access scheduling and payroll.
-        </p>
-      </div>
-
-      <div className="mt-7 sm:mx-auto sm:w-full sm:max-w-md relative z-10 px-4 sm:px-0">
-        <div className="bg-slate-900/90 backdrop-blur-xl py-8 px-6 shadow-2xl rounded-2xl border border-slate-800 sm:px-9">
-          {error && (
-            <div className="mb-5">
-              <Alert variant="danger" title="Authentication Error">
-                {error}
-              </Alert>
+          <div className="relative z-10">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/25 backdrop-blur">
+                <ShieldCheck className="h-6 w-6 text-cyan-200" />
+              </div>
+              <div>
+                <p className="text-xl font-black tracking-tight">LU<span className="text-cyan-200">mentor</span></p>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-blue-200">Lets Unbound</p>
+              </div>
             </div>
-          )}
+            <div className="mt-24 max-w-md">
+              <p className="mb-4 text-sm font-semibold uppercase tracking-[0.25em] text-cyan-200">One workspace. Better outcomes.</p>
+              <h1 className="text-4xl font-bold leading-tight xl:text-5xl">Everything your learning team needs to move forward.</h1>
+              <p className="mt-6 max-w-sm text-base leading-7 text-blue-100">
+                Coordinate mentors, classes, attendance, performance, and payroll from one secure operational workspace.
+              </p>
+            </div>
+          </div>
 
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            <div>
-              <label
-                htmlFor="email"
-                className="block text-xs font-semibold text-slate-300 mb-1.5"
-              >
-                Institutional Email or Username
+          <div className="relative z-10 grid gap-3 text-sm text-blue-100 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+            {['Clear operational visibility', 'Secure role-based access', 'Built for growing teams'].map((item) => (
+              <div key={item} className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-cyan-200" />
+                <span>{item}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="flex items-center justify-center px-5 py-10 sm:px-12 lg:px-16 xl:px-24">
+          <div className="w-full max-w-md">
+            <div className="mb-9 lg:hidden">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/25">
+                  <ShieldCheck className="h-6 w-6" />
+                </div>
+                <div>
+                  <p className="text-xl font-black tracking-tight">LU<span className="text-indigo-600">mentor</span></p>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Lets Unbound</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mb-8">
+              <p className="mb-2 text-sm font-semibold text-indigo-600">Welcome to Lets Unbound</p>
+              <h2 className="text-3xl font-bold tracking-tight text-slate-950">Sign in to your workspace</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-500">Use your Lets Unbound username or email to continue.</p>
+            </div>
+
+            {error && <div className="mb-5"><Alert variant="danger" title="Authentication Error">{error}</Alert></div>}
+
+            <form className="space-y-5" onSubmit={handleSubmit}>
+              <div>
+                <label htmlFor="email" className="mb-2 block text-sm font-semibold text-slate-700">Username or email</label>
+                <div className="relative">
+                  <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input id="email" type="text" required autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@letsunbound.com" className="block w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10" />
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <label htmlFor="password" className="block text-sm font-semibold text-slate-700">Password</label>
+                  <Link href="/forgot-password" className="text-xs font-semibold text-indigo-600 hover:text-indigo-500">Forgot password?</Link>
+                </div>
+                <div className="relative">
+                  <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input id="password" type={showPassword ? 'text' : 'password'} required autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password" className="block w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-11 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10" />
+                  <button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword((visible) => !visible)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+                <input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                Remember me for 30 days
               </label>
-              <div className="relative rounded-lg shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
-                  <Mail className="h-4 w-4" />
+
+              <Button type="submit" variant="primary" className="w-full justify-center rounded-xl bg-indigo-600 py-3 font-semibold shadow-lg shadow-indigo-600/20 hover:bg-indigo-500" isLoading={isLoading} rightIcon={<ArrowRight className="h-4 w-4" />}>
+                Sign in
+              </Button>
+            </form>
+
+            <div className="mt-7 border-t border-slate-100 pt-6 text-center">
+              <p className="text-sm text-slate-500">New to Lets Unbound? <a href="mailto:admin@letsunbound.com?subject=Lets%20Unbound%20access%20request" className="font-semibold text-indigo-600 hover:text-indigo-500">Register</a></p>
+              <div className="mt-7 rounded-2xl bg-amber-50 px-4 py-4 text-left ring-1 ring-amber-100">
+                <div className="flex gap-3">
+                  <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-amber-800">Thought of the day</p>
+                    <p className="mt-1 text-sm leading-5 text-amber-900/80">“{thoughtOfTheDay}”</p>
+                  </div>
                 </div>
-                <input
-                  id="email"
-                  type="text"
-                  required
-                  autoComplete="username"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@yourinstitution.com"
-                  className="block w-full pl-9 pr-3 py-2.5 bg-slate-800/80 border border-slate-700 rounded-lg text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-                />
               </div>
             </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label
-                  htmlFor="password"
-                  className="block text-xs font-semibold text-slate-300"
-                >
-                  Password
-                </label>
-                <Link
-                  href="/forgot-password"
-                  className="text-xs font-medium text-indigo-400 hover:text-indigo-300 transition-colors"
-                >
-                  Forgot password?
-                </Link>
-              </div>
-              <div className="relative rounded-lg shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
-                  <Lock className="h-4 w-4" />
-                </div>
-                <input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••••••"
-                  className="block w-full pl-9 pr-10 py-2.5 bg-slate-800/80 border border-slate-700 rounded-lg text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-200 transition-colors"
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between pt-1">
-              <div className="flex items-center">
-                <input
-                  id="remember-me"
-                  name="remember-me"
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-slate-700 rounded bg-slate-800 text-indigo-600"
-                />
-                <label
-                  htmlFor="remember-me"
-                  className="ml-2 block text-xs text-slate-300"
-                >
-                  Keep session active for 30 days
-                </label>
-              </div>
-            </div>
-
-            <Button
-              type="submit"
-              variant="primary"
-              className="w-full justify-center py-2.5 mt-2 bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 text-white font-medium"
-              isLoading={isLoading}
-              rightIcon={<ArrowRight className="w-4 h-4" />}
-            >
-              Sign In to Command Center
-            </Button>
-          </form>
-
-          <div className="mt-5 text-center">
-            <p className="text-[11px] text-slate-500 flex items-center justify-center gap-1">
-              <Sparkles className="w-3 h-3 text-indigo-400" />
-              Secure PBKDF2 Encrypted Authentication • LUmentor v2.4
-            </p>
           </div>
-        </div>
+        </section>
       </div>
-    </div>
+    </main>
   );
 }

@@ -13,6 +13,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const usernameOrEmail = String(body.email || body.username || '').trim().toLowerCase();
     const password = String(body.password || '');
+    const rememberMe = body.rememberMe !== false;
 
     if (!usernameOrEmail || !password) {
       return NextResponse.json(
@@ -77,7 +78,8 @@ export async function POST(req: NextRequest) {
 
     // Generate session token
     const sessionToken = generateSessionToken();
-    const sessionExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days
+    const sessionDuration = rememberMe ? 30 * 24 * 60 * 60 * 1000 : 8 * 60 * 60 * 1000;
+    const sessionExpiry = new Date(Date.now() + sessionDuration).toISOString();
 
     user.sessionToken = sessionToken;
     user.sessionExpiry = sessionExpiry;
@@ -104,7 +106,7 @@ export async function POST(req: NextRequest) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: 30 * 24 * 60 * 60, // 30 days
+      maxAge: Math.floor(sessionDuration / 1000),
     });
 
     return response;

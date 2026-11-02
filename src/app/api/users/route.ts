@@ -89,11 +89,13 @@ export async function POST(req: NextRequest) {
     let resetToken: string | undefined = undefined;
     let resetTokenExpiry: string | undefined = undefined;
     let resetUrl: string | undefined = undefined;
+    let mustChangePassword = false;
 
     if (initialPassword) {
       const hashed = hashPassword(initialPassword);
       passwordHash = hashed.hash;
       salt = hashed.salt;
+      mustChangePassword = Boolean(body.temporaryPassword);
       if (!requestedStatus) {
         requestedStatus = 'ACTIVE';
       }
@@ -125,6 +127,7 @@ export async function POST(req: NextRequest) {
       salt,
       resetToken,
       resetTokenExpiry,
+      mustChangePassword,
     });
 
     await auditUserAction(req, 'USER_CREATED', newUser.id, `Created user ${newUser.email} (${newUser.roleName}) with status ${newUser.status}. Invite setup: ${sendPasswordSetupEmailFlag ? 'YES' : 'NO'}`);
@@ -194,6 +197,29 @@ export async function PATCH(req: NextRequest) {
         resetUrl,
         message: `Password setup link generated and dispatched to ${user.email}.`,
       });
+    }
+
+    if (action === 'set_temporary_password') {
+      const temporaryPassword = String(body.temporaryPassword || '');
+      const confirmPassword = String(body.confirmPassword || '');
+      if (temporaryPassword.length < 8) {
+        return NextResponse.json({ success: false, error: 'Temporary password must be at least 8 characters long.' }, { status: 400 });
+      }
+      if (temporaryPassword !== confirmPassword) {
+        return NextResponse.json({ success: false, error: 'Temporary passwords do not match.' }, { status: 400 });
+      }
+      const { hash, salt } = hashPassword(temporaryPassword);
+      user.passwordHash = hash;
+      user.salt = salt;
+      user.mustChangePassword = true;
+      user.resetToken = undefined;
+      user.resetTokenExpiry = undefined;
+      user.status = 'ACTIVE';
+      user.sessionToken = undefined;
+      user.sessionExpiry = undefined;
+      await saveUser(user);
+      await auditUserAction(req, 'TEMPORARY_PASSWORD_SET', user.id, `Set a temporary password for ${user.email}; user must change it after login.`);
+      return NextResponse.json({ success: true, user: sanitizeUser(user), message: 'Temporary password saved. The user must set a new password after logging in.' });
     }
 
     // Action 2: Update status

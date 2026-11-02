@@ -29,6 +29,7 @@ function toCurrentUser(user: {
   status: string;
   passwordHash: string;
   salt: string;
+  mustChangePassword: boolean;
   sessionToken: string | null;
   sessionExpiry: Date | null;
   resetToken: string | null;
@@ -49,6 +50,7 @@ function toCurrentUser(user: {
       : user.status as CurrentUser['status'],
     passwordHash: user.passwordHash,
     salt: user.salt,
+    mustChangePassword: user.mustChangePassword,
     sessionToken: user.sessionToken || undefined,
     sessionExpiry: user.sessionExpiry?.toISOString(),
     resetToken: user.resetToken || undefined,
@@ -93,6 +95,7 @@ export async function saveUser(user: CurrentUser): Promise<CurrentUser> {
       name: user.name,
       passwordHash: user.passwordHash || '',
       salt: user.salt || '',
+      mustChangePassword: user.mustChangePassword || false,
       role: user.role,
       roleName: user.roleName,
       permissions: JSON.parse(JSON.stringify(user.permissions)) as Prisma.InputJsonValue,
@@ -108,6 +111,7 @@ export async function saveUser(user: CurrentUser): Promise<CurrentUser> {
       name: user.name,
       passwordHash: user.passwordHash || '',
       salt: user.salt || '',
+      mustChangePassword: user.mustChangePassword || false,
       role: user.role,
       roleName: user.roleName,
       permissions: JSON.parse(JSON.stringify(user.permissions)) as Prisma.InputJsonValue,

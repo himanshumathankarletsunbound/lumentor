@@ -2,12 +2,11 @@
 
 import React, { useState, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '../../lib/auth/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { Alert } from '../../components/ui/Alert';
 import {
-  ShieldCheck,
   Lock,
   ArrowRight,
   ArrowLeft,
@@ -18,9 +17,9 @@ import {
 } from 'lucide-react';
 
 function ResetPasswordForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const initialToken = searchParams.get('token') || '';
+  const isRequiredChange = searchParams.get('required') === '1';
 
   const { resetPassword } = useAuth();
 
@@ -34,7 +33,7 @@ function ResetPasswordForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token.trim()) {
+    if (!token.trim() && !isRequiredChange) {
       setError('Password reset token is required.');
       return;
     }
@@ -94,7 +93,7 @@ function ResetPasswordForm() {
         </div>
       ) : (
         <form className="space-y-4" onSubmit={handleSubmit}>
-          {!initialToken && (
+          {!initialToken && !isRequiredChange && (
             <div>
               <label
                 htmlFor="token"

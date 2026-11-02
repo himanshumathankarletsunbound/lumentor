@@ -27,7 +27,6 @@ import {
   Ban,
   Clock,
   Building2,
-  RefreshCw,
   Eye,
   EyeOff,
   MoreVertical,
@@ -67,6 +66,11 @@ export default function UsersRolesPage() {
     isResend?: boolean;
   } | null>(null);
   const [hasCopiedLink, setHasCopiedLink] = useState(false);
+  const [passwordActionUser, setPasswordActionUser] = useState<CurrentUser | null>(null);
+  const [passwordAction, setPasswordAction] = useState<'link' | 'temporary'>('link');
+  const [temporaryPassword, setTemporaryPassword] = useState('');
+  const [confirmTemporaryPassword, setConfirmTemporaryPassword] = useState('');
+  const [showTemporaryPassword, setShowTemporaryPassword] = useState(false);
 
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -210,29 +214,44 @@ export default function UsersRolesPage() {
     }
   };
 
-  // Resend Password Setup Link
-  const handleResendPasswordLink = async (user: CurrentUser) => {
+  const handlePasswordAction = async () => {
+    if (!passwordActionUser) return;
+    setIsSubmitting(true);
+    setFormError(null);
     try {
+      const action = passwordAction === 'link' ? 'resend_password_link' : 'set_temporary_password';
+      const body = passwordAction === 'link'
+        ? { id: passwordActionUser.id, action }
+        : {
+          id: passwordActionUser.id,
+          action,
+          temporaryPassword,
+          confirmPassword: confirmTemporaryPassword,
+        };
       const res = await fetch('/api/users', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: user.id, action: 'resend_password_link' }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
-      if (data.success && data.resetUrl) {
-        await refreshUsers();
-        setGeneratedLinkData({
-          name: user.name,
-          email: user.email,
-          resetUrl: data.resetUrl,
-          isResend: true,
-        });
+      if (!res.ok || !data.success) {
+        setFormError(data.error || 'Unable to update the password.');
+        return;
+      }
+      await refreshUsers();
+      setPasswordActionUser(null);
+      setTemporaryPassword('');
+      setConfirmTemporaryPassword('');
+      if (passwordAction === 'link' && data.resetUrl) {
+        setGeneratedLinkData({ name: passwordActionUser.name, email: passwordActionUser.email, resetUrl: data.resetUrl, isResend: true });
         setShowLinkSuccessModal(true);
       } else {
-        setActionNotice({ type: 'error', message: data.error || 'Failed to generate link' });
+        setActionNotice({ type: 'success', message: `Temporary password set for ${passwordActionUser.email}. The user must choose a new password after login.` });
       }
-    } catch (err: any) {
-      setActionNotice({ type: 'error', message: err.message || 'Error resending link' });
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Unable to update the password.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -687,10 +706,10 @@ export default function UsersRolesPage() {
                                 <MoreVertical className="w-4 h-4" />
                               </summary>
                               <div className="absolute right-0 z-10 mt-1 w-48 rounded-lg border border-slate-200 bg-white p-1 text-left shadow-lg">
-                                <button type="button" onClick={() => handleCopySetupLink(u)} className="flex w-full items-center gap-2 rounded px-3 py-2 text-xs text-slate-700 hover:bg-slate-50">
-                                  <KeyRound className="w-3.5 h-3.5" /> Reset password
+                                <button type="button" onClick={() => { setPasswordActionUser(u); setPasswordAction('link'); setFormError(null); }} className="flex w-full items-center gap-2 rounded px-3 py-2 text-xs text-slate-700 hover:bg-slate-50">
+                                  <KeyRound className="w-3.5 h-3.5" /> Change password
                                 </button>
-                                <button type="button" onClick={() => handleResendPasswordLink(u)} className="flex w-full items-center gap-2 rounded px-3 py-2 text-xs text-slate-700 hover:bg-slate-50">
+                                <button type="button" onClick={() => handleCopySetupLink(u)} className="flex w-full items-center gap-2 rounded px-3 py-2 text-xs text-slate-700 hover:bg-slate-50">
                                   <Copy className="w-3.5 h-3.5" /> Copy setup link
                                 </button>
                                 <button type="button" disabled={isSuperAdmin} onClick={() => handleUpdateStatus(u, status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED')} className="flex w-full items-center gap-2 rounded px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-40">
@@ -926,6 +945,52 @@ export default function UsersRolesPage() {
                 </div>
               </div>
             </form>
+          </Modal>
+        )}
+
+        {passwordActionUser && (
+          <Modal
+            isOpen={Boolean(passwordActionUser)}
+            onClose={() => setPasswordActionUser(null)}
+            title={`Change password for ${passwordActionUser.name}`}
+            subtitle="Choose how this user's password should be updated."
+            maxWidth="md"
+            footer={
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setPasswordActionUser(null)}>Cancel</Button>
+                <Button variant="primary" size="sm" onClick={handlePasswordAction} isLoading={isSubmitting}>
+                  {passwordAction === 'link' ? 'Send setup link' : 'Set temporary password'}
+                </Button>
+              </div>
+            }
+          >
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button type="button" onClick={() => setPasswordAction('link')} className={`rounded-xl border p-4 text-left ${passwordAction === 'link' ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-100' : 'border-slate-200'}`}>
+                  <p className="text-sm font-semibold text-slate-900">Send password link</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">Email a secure link that lets the user create their own password.</p>
+                </button>
+                <button type="button" onClick={() => setPasswordAction('temporary')} className={`rounded-xl border p-4 text-left ${passwordAction === 'temporary' ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-100' : 'border-slate-200'}`}>
+                  <p className="text-sm font-semibold text-slate-900">Set temporary password</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">Set a temporary password for the user to use once.</p>
+                </button>
+              </div>
+              {passwordAction === 'temporary' && (
+                <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <p className="text-xs leading-5 text-amber-900">Selecting this will ask the user to set a new password after login with this password.</p>
+                  <div className="relative">
+                    <label htmlFor="temporary-password" className="mb-1 block text-xs font-semibold text-slate-700">Temporary password</label>
+                    <input id="temporary-password" type={showTemporaryPassword ? 'text' : 'password'} value={temporaryPassword} onChange={(event) => setTemporaryPassword(event.target.value)} placeholder="At least 8 characters" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+                    <button type="button" onClick={() => setShowTemporaryPassword((visible) => !visible)} className="absolute right-2 top-7 p-1 text-slate-400">{showTemporaryPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
+                  </div>
+                  <div>
+                    <label htmlFor="confirm-temporary-password" className="mb-1 block text-xs font-semibold text-slate-700">Confirm temporary password</label>
+                    <input id="confirm-temporary-password" type={showTemporaryPassword ? 'text' : 'password'} value={confirmTemporaryPassword} onChange={(event) => setConfirmTemporaryPassword(event.target.value)} placeholder="Re-enter temporary password" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+                  </div>
+                </div>
+              )}
+              {formError && <Alert variant="danger" title="Password update failed">{formError}</Alert>}
+            </div>
           </Modal>
         )}
 

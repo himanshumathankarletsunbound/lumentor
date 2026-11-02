@@ -96,6 +96,7 @@ export async function POST(req: NextRequest) {
       success: true,
       user: safeUser,
       token: sessionToken,
+      mustChangePassword: Boolean(user.mustChangePassword),
     });
 
     // Set secure HTTP-only session cookie

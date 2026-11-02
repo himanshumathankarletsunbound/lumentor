@@ -64,6 +64,7 @@ export interface CurrentUser {
   permissions: RolePermission[];
   passwordHash?: string;
   salt?: string;
+  mustChangePassword?: boolean;
   resetToken?: string;
   resetTokenExpiry?: string;
   sessionToken?: string;

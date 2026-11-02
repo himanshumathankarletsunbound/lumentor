@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../lib/auth/AuthContext';
@@ -18,6 +18,26 @@ import {
 } from 'lucide-react';
 
 const thoughtOfTheDay = 'Small, consistent improvements create exceptional learning experiences.';
+const carouselSlides = [
+  {
+    eyebrow: 'One workspace. Better outcomes.',
+    title: 'Everything your learning team needs to move forward.',
+    description: 'Coordinate mentors, classes, attendance, performance, and payroll from one secure operational workspace.',
+    features: ['Clear operational visibility', 'Secure role-based access', 'Built for growing teams'],
+  },
+  {
+    eyebrow: 'Make an impact every day.',
+    title: 'Be the best mentor your learners can have.',
+    description: 'Use meaningful insights, consistent support, and timely feedback to help every learner make progress.',
+    features: ['Understand learner progress', 'Build stronger connections', 'Celebrate every milestone'],
+  },
+  {
+    eyebrow: 'Work smarter together.',
+    title: 'Turn daily coordination into lasting progress.',
+    description: 'Keep your teams aligned with the context they need to make confident decisions and deliver better learning.',
+    features: ['One source of truth', 'Focused team collaboration', 'Decisions backed by data'],
+  },
+];
 
 export default function LoginPage() {
   const router = useRouter();
@@ -28,6 +48,14 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeSlide, setActiveSlide] = useState(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setActiveSlide((current) => (current + 1) % carouselSlides.length);
+    }, 8000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -44,6 +72,10 @@ export default function LoginPage() {
     setError(null);
     const response = await login(email, password, rememberMe);
     if (response.success && response.user) {
+      if (response.user.mustChangePassword) {
+        router.push('/reset-password?required=1');
+        return;
+      }
       if (response.user.role === 'ADMINISTRATOR') router.push('/overview/executive');
       else if (response.user.role === 'OPERATIONS') router.push('/overview/operations');
       else if (response.user.role === 'MENTOR') router.push('/overview/mentor');
@@ -55,53 +87,60 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f7f9fc] p-3 font-sans text-slate-900 sm:p-6 lg:p-8">
-      <div className="mx-auto grid min-h-[calc(100vh-1.5rem)] max-w-7xl overflow-hidden rounded-[2rem] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.12)] sm:min-h-[calc(100vh-3rem)] lg:grid-cols-[0.95fr_1.05fr]">
-        <section className="relative hidden overflow-hidden bg-[#172554] p-10 text-white lg:flex lg:flex-col lg:justify-between xl:p-14">
+    <main className="min-h-screen bg-white font-sans text-slate-900">
+      <div className="grid min-h-screen lg:grid-cols-[0.95fr_1.05fr]">
+        <section className="relative hidden overflow-hidden bg-[#172554] px-10 py-14 text-white lg:flex lg:flex-col lg:justify-between xl:px-20 xl:py-16">
           <div className="absolute -right-28 -top-28 h-80 w-80 rounded-full bg-cyan-400/20 blur-3xl" />
           <div className="absolute -bottom-36 -left-20 h-96 w-96 rounded-full bg-indigo-400/20 blur-3xl" />
           <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(rgba(255,255,255,.15)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.15)_1px,transparent_1px)] [background-size:42px_42px]" />
 
-          <div className="relative z-10">
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/25 backdrop-blur">
-                <ShieldCheck className="h-6 w-6 text-cyan-200" />
+          <div className="relative z-10 mt-28 min-h-[27rem] max-w-xl xl:mt-36">
+            {carouselSlides.map((slide, index) => (
+              <div
+                key={slide.title}
+                aria-hidden={activeSlide !== index}
+                className={`absolute inset-0 transition-all duration-700 ${
+                  activeSlide === index ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-3 opacity-0'
+                }`}
+              >
+                <p className="mb-4 text-sm font-semibold uppercase tracking-[0.25em] text-cyan-200">{slide.eyebrow}</p>
+                <h1 className="max-w-lg text-4xl font-bold leading-tight xl:text-5xl">{slide.title}</h1>
+                <p className="mt-6 max-w-md text-base leading-7 text-blue-100">{slide.description}</p>
+                <div className="mt-10 grid gap-3 text-sm text-blue-100 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+                  {slide.features.map((feature) => (
+                    <div key={feature} className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-cyan-200" />
+                      <span>{feature}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div>
-                <p className="text-xl font-black tracking-tight">LU<span className="text-cyan-200">mentor</span></p>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-blue-200">Lets Unbound</p>
-              </div>
-            </div>
-            <div className="mt-24 max-w-md">
-              <p className="mb-4 text-sm font-semibold uppercase tracking-[0.25em] text-cyan-200">One workspace. Better outcomes.</p>
-              <h1 className="text-4xl font-bold leading-tight xl:text-5xl">Everything your learning team needs to move forward.</h1>
-              <p className="mt-6 max-w-sm text-base leading-7 text-blue-100">
-                Coordinate mentors, classes, attendance, performance, and payroll from one secure operational workspace.
-              </p>
-            </div>
+            ))}
           </div>
 
-          <div className="relative z-10 grid gap-3 text-sm text-blue-100 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-            {['Clear operational visibility', 'Secure role-based access', 'Built for growing teams'].map((item) => (
-              <div key={item} className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 shrink-0 text-cyan-200" />
-                <span>{item}</span>
-              </div>
+          <div className="relative z-10 flex items-center gap-2" aria-label="Login information slides">
+            {carouselSlides.map((slide, index) => (
+              <button
+                key={slide.eyebrow}
+                type="button"
+                aria-label={`Show slide ${index + 1}`}
+                aria-current={activeSlide === index}
+                onClick={() => setActiveSlide(index)}
+                className={`h-1.5 rounded-full transition-all ${activeSlide === index ? 'w-10 bg-cyan-200' : 'w-5 bg-white/30 hover:bg-white/60'}`}
+              />
             ))}
           </div>
         </section>
 
-        <section className="flex items-center justify-center px-5 py-10 sm:px-12 lg:px-16 xl:px-24">
+        <section className="flex min-h-screen items-center justify-center px-5 py-10 sm:px-12 lg:px-16 xl:px-24">
           <div className="w-full max-w-md">
-            <div className="mb-9 lg:hidden">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/25">
-                  <ShieldCheck className="h-6 w-6" />
-                </div>
-                <div>
-                  <p className="text-xl font-black tracking-tight">LU<span className="text-indigo-600">mentor</span></p>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Lets Unbound</p>
-                </div>
+            <div className="mb-10 flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/25">
+                <ShieldCheck className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-xl font-black tracking-tight">LU<span className="text-indigo-600">mentor</span></p>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Lets Unbound</p>
               </div>
             </div>
 

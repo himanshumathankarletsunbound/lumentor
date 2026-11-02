@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
+import * as XLSX from 'xlsx';
 import { prisma } from '../../../../lib/db/prisma';
 import { listInitiativePlans, listMentors, listPayrollPlans } from '../../../../lib/db/state-repository';
 import { authorizationErrorAsync, getSessionUserAsync } from '../../../../lib/auth/server';
@@ -31,6 +32,19 @@ function parseCsv(input: string): SheetRow[] {
   return rows.slice(1).filter((values) => values.some(Boolean)).map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] || ''])));
 }
 
+function parseSpreadsheet(buffer: ArrayBuffer): SheetRow[] {
+  const workbook = XLSX.read(buffer, { type: 'array' });
+  const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+  if (!firstSheet) throw new Error('The uploaded Excel workbook does not contain a worksheet.');
+  const values = XLSX.utils.sheet_to_json<unknown[]>(firstSheet, { header: 1, defval: '' });
+  if (values.length < 2) throw new Error('The uploaded Excel sheet must contain a header row and at least one mentor row.');
+  const headers = values[0].map((header) => String(header).trim());
+  if (headers.some((header) => !header)) throw new Error('The Excel sheet contains an empty column header.');
+  return values.slice(1)
+    .filter((values) => values.some((value) => String(value).trim()))
+    .map((values) => Object.fromEntries(headers.map((header, index) => [header, String(values[index] ?? '').trim()])));
+}
+
 function numberValue(value: string | undefined, label: string): number {
   const parsed = value?.trim() ? Number(value) : 0;
   if (!Number.isFinite(parsed) || parsed < 0) throw new Error(`${label} must be a non-negative number.`);
@@ -52,7 +66,8 @@ function monthDates(month: string) {
 
 async function createSheetBatch(file: File, month: string) {
   const { start, end } = monthDates(month);
-  const rows = parseCsv(await file.text());
+  const isExcel = /\.(xlsx|xls)$/i.test(file.name);
+  const rows = isExcel ? parseSpreadsheet(await file.arrayBuffer()) : parseCsv(await file.text());
   const [mentors, payrollPlans, initiativePlans] = await Promise.all([listMentors(), listPayrollPlans(), listInitiativePlans()]);
   const mentorById = new Map<string, (typeof mentors)[number]>();
   mentors.forEach((mentor) => {
@@ -145,7 +160,7 @@ export async function POST(req: NextRequest) {
       const form = await req.formData();
       const file = form.get('file');
       const month = String(form.get('month') || '');
-      if (!(file instanceof File) || !file.name.toLowerCase().endsWith('.csv')) throw new Error('Upload a CSV file.');
+      if (!(file instanceof File) || !/\.(csv|xlsx|xls)$/i.test(file.name)) throw new Error('Upload a CSV or Excel (.xlsx/.xls) file.');
       return NextResponse.json({ success: true, batch: await createSheetBatch(file, month) });
     }
     const body = await req.json() as { action?: string; batchId?: string; lineItemId?: string; reviewStatus?: string; remark?: string };

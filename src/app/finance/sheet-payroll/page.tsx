@@ -48,7 +48,7 @@ export default function SheetPayrollPage() {
     if (!response.ok) { setNotice({ type: 'error', message: 'Unable to download template.' }); return; }
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a'); link.href = url; link.download = 'sheet-payroll-template.csv'; link.click(); URL.revokeObjectURL(url);
+    const link = document.createElement('a'); link.href = url; link.download = 'sheet-payroll-template.xlsx'; link.click(); URL.revokeObjectURL(url);
   };
 
   const upload = async () => {
@@ -88,7 +88,7 @@ export default function SheetPayrollPage() {
         <CardContent>
           <div className="flex flex-col gap-4 md:flex-row md:items-end">
             <label className="text-xs font-semibold text-slate-700">Payroll month<input type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm" /></label>
-            <label className="flex-1 text-xs font-semibold text-slate-700">CSV count sheet<input type="file" accept=".csv,text/csv" onChange={(event) => setFile(event.target.files?.[0] || null)} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" /></label>
+            <label className="flex-1 text-xs font-semibold text-slate-700">Excel count sheet<input type="file" accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" onChange={(event) => setFile(event.target.files?.[0] || null)} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" /></label>
             <Button variant="outline" leftIcon={<Download className="h-4 w-4" />} onClick={() => void downloadTemplate()}>Download template</Button>
             <Button variant="primary" leftIcon={<Upload className="h-4 w-4" />} disabled={!file} onClick={() => void upload()}>Upload & calculate</Button>
           </div>

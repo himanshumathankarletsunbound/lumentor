@@ -65,6 +65,25 @@ function monthDates(month: string) {
   return { start, end };
 }
 
+async function getMonthCoverage(start: Date, end: Date, currentMentorIds: string[] = []) {
+  const [mentors, generated] = await Promise.all([
+    prisma.mentor.findMany({ select: { id: true, firstName: true, lastName: true, email: true }, orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }] }),
+    prisma.payrollBatch.findMany({
+      where: { startDate: { lte: end }, endDate: { gte: start }, status: { in: ['LOCKED', 'PAID'] } },
+      select: { lineItems: { select: { mentorId: true } } },
+    }),
+  ]);
+  const processedIds = new Set(generated.flatMap((batch) => batch.lineItems.map((line) => line.mentorId)));
+  currentMentorIds.forEach((mentorId) => processedIds.add(mentorId));
+  const done = mentors.filter((mentor) => processedIds.has(mentor.id));
+  const pending = mentors.filter((mentor) => !processedIds.has(mentor.id));
+  return {
+    totalMentors: mentors.length,
+    done: done.map((mentor) => ({ id: mentor.id, name: `${mentor.firstName} ${mentor.lastName}`.trim(), email: mentor.email })),
+    pending: pending.map((mentor) => ({ id: mentor.id, name: `${mentor.firstName} ${mentor.lastName}`.trim(), email: mentor.email })),
+  };
+}
+
 async function createSheetBatch(file: File, month: string) {
   const { start, end } = monthDates(month);
   const isExcel = /\.(xlsx|xls)$/i.test(file.name);
@@ -172,7 +191,11 @@ export async function GET(req: NextRequest) {
   const denied = await authorizationErrorAsync(req, 'payroll_processing', 'view');
   if (denied) return denied;
   const batches = await prisma.sheetPayrollBatch.findMany({ orderBy: { createdAt: 'desc' }, include: { lineItems: { include: { mentor: true } } } });
-  return NextResponse.json({ success: true, batches: batches.map(serializeBatch) });
+  const serialized = await Promise.all(batches.map(async (batch) => ({
+    ...serializeBatch(batch),
+    coverage: await getMonthCoverage(batch.startDate, batch.endDate, batch.status === 'SUBMITTED' ? batch.lineItems.map((item) => item.mentorId) : []),
+  })));
+  return NextResponse.json({ success: true, batches: serialized });
 }
 
 export async function POST(req: NextRequest) {
@@ -203,8 +226,30 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, lineItem: item });
     }
     if (body.action === 'SUBMIT') {
+      const existingBatch = await prisma.sheetPayrollBatch.findUnique({ where: { id: body.batchId }, include: { lineItems: { select: { mentorId: true, mentor: { select: { firstName: true, lastName: true, email: true } } } } } });
+      if (!existingBatch) throw new Error('Sheet payroll batch not found.');
+      const generated = await prisma.payrollLineItem.findMany({
+        where: {
+          mentorId: { in: existingBatch.lineItems.map((item) => item.mentorId) },
+          batch: { startDate: { lte: existingBatch.endDate }, endDate: { gte: existingBatch.startDate }, status: { in: ['LOCKED', 'PAID'] } },
+        },
+        select: { mentorId: true, mentor: { select: { firstName: true, lastName: true } } },
+      });
+      const generatedSheet = await prisma.sheetPayrollLineItem.findMany({
+        where: {
+          mentorId: { in: existingBatch.lineItems.map((item) => item.mentorId) },
+          batchId: { not: existingBatch.id },
+          batch: { startDate: { lte: existingBatch.endDate }, endDate: { gte: existingBatch.startDate }, status: 'LOCKED' },
+        },
+        select: { mentorId: true, mentor: { select: { firstName: true, lastName: true } } },
+      });
+      const duplicateMentors = [...generated, ...generatedSheet].filter((item, index, items) => items.findIndex((candidate) => candidate.mentorId === item.mentorId) === index);
+      if (duplicateMentors.length) {
+        const names = duplicateMentors.map((item) => `${item.mentor.firstName} ${item.mentor.lastName}`.trim()).join(', ');
+        throw new Error(`Payroll has already been generated for ${names} for ${existingBatch.periodName}. Do not submit duplicate mentor payroll.`);
+      }
       const batch = await prisma.sheetPayrollBatch.update({ where: { id: body.batchId }, data: { status: 'SUBMITTED', submittedBy: user?.id, submittedAt: new Date() }, include: { lineItems: { include: { mentor: true } } } });
-      return NextResponse.json({ success: true, batch: serializeBatch(batch) });
+      return NextResponse.json({ success: true, batch: serializeBatch(batch), coverage: await getMonthCoverage(batch.startDate, batch.endDate, batch.lineItems.map((item) => item.mentorId)) });
     }
     if (body.action === 'REQUEST_CHANGES') {
       const batch = await prisma.sheetPayrollBatch.update({ where: { id: body.batchId }, data: { status: 'CHANGES_REQUESTED', reviewedBy: user?.id, reviewedAt: new Date() } });

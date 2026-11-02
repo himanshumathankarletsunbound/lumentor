@@ -7,14 +7,15 @@ import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { Card, CardContent, CardHeader } from '../../../components/ui/Card';
 import { formatCurrency } from '../../../lib/utils/formatters';
-import { CheckCircle2, Download, MessageSquare, Send, Upload, XCircle } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Download, MessageSquare, Send, Upload, XCircle } from 'lucide-react';
 
 type Line = {
   id: string; mentorId: string; mentorName: string; mentorEmail: string; grossEarnings: number; totalAmount: number; deductions: number; netPayable: number;
   reviewStatus: string; reviewerRemark?: string | null;
   breakdown: Array<{ code: string; name: string; category: string; count: number; rate: number; amount: number }>;
 };
-type Batch = { id: string; batchNumber: string; periodName: string; sourceFileName: string; status: string; totalMentors: number; totalGross: number; totalNet: number; lineItems: Line[] };
+type MentorStatus = { id: string; name: string; email: string };
+type Batch = { id: string; batchNumber: string; periodName: string; sourceFileName: string; status: string; totalMentors: number; totalGross: number; totalNet: number; lineItems: Line[]; coverage?: { totalMentors: number; done: MentorStatus[]; pending: MentorStatus[] } };
 
 export default function SheetPayrollPage() {
   const [month, setMonth] = useState('');
@@ -23,6 +24,7 @@ export default function SheetPayrollPage() {
   const [selectedId, setSelectedId] = useState('');
   const [remark, setRemark] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [showCoverage, setShowCoverage] = useState(false);
   const active = batches.find((batch) => batch.id === selectedId) || batches[0];
 
   const load = useCallback(async () => {
@@ -97,7 +99,29 @@ export default function SheetPayrollPage() {
       </Card>
       <div className="grid gap-5 lg:grid-cols-[260px_1fr]">
         <Card><CardHeader title="Calculated batches" /><CardContent><div className="space-y-2">{batches.length === 0 && <p className="text-sm text-slate-500">No sheet payroll batches yet.</p>}{batches.map((batch) => <button key={batch.id} onClick={() => setSelectedId(batch.id)} className={`w-full rounded-lg border p-3 text-left ${active?.id === batch.id ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-white'}`}><p className="font-semibold text-slate-800">{batch.periodName}</p><p className="mt-1 text-xs text-slate-500">{batch.totalMentors} mentors · {formatCurrency(batch.totalNet, 'INR')}</p><Badge size="sm" variant={batch.status === 'LOCKED' ? 'success' : 'warning'}>{batch.status}</Badge></button>)}</div></CardContent></Card>
-        {active && <Card><CardHeader title={`${active.periodName} · Mentor review`} subtitle={`${active.sourceFileName} · ${active.batchNumber}`} /><CardContent><div className="space-y-4">{active.lineItems.map((line) => <div key={line.id} className="rounded-xl border border-slate-200 p-4"><div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between"><div><p className="font-bold text-slate-900">{line.mentorName}</p><p className="text-xs text-slate-500">{line.mentorEmail}</p></div><div className="text-right"><p className="text-lg font-bold text-indigo-700">{formatCurrency(line.netPayable, 'INR')}</p><p className="text-xs text-slate-600">Plans + initiatives {formatCurrency(line.grossEarnings, 'INR')} · After penalties {formatCurrency(line.totalAmount, 'INR')} · Total deductions {formatCurrency(line.deductions, 'INR')}</p><Badge size="sm" variant={line.reviewStatus === 'APPROVED' ? 'success' : line.reviewStatus === 'CHANGES_REQUESTED' ? 'danger' : 'warning'}>{line.reviewStatus}</Badge></div></div><div className="mt-3 overflow-x-auto"><table className="w-full text-xs"><thead><tr className="border-b text-left text-slate-500"><th className="py-2">Component</th><th className="py-2">Count</th><th className="py-2 text-right">Rate</th><th className="py-2 text-right">Amount</th></tr></thead><tbody>{line.breakdown.map((item) => <tr key={item.code} className="border-b border-slate-100"><td className="py-2">{item.name} <span className="text-slate-400">({item.code})</span></td><td className="py-2">{item.count}</td><td className="py-2 text-right">{formatCurrency(item.rate, 'INR')}</td><td className="py-2 text-right font-semibold">{item.category === 'PENALTY' ? '-' : ''}{formatCurrency(item.amount, 'INR')}</td></tr>)}</tbody></table></div><div className="mt-3 flex flex-col gap-2 sm:flex-row"><div className="relative flex-1"><MessageSquare className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><input value={remark[line.id] ?? line.reviewerRemark ?? ''} onChange={(event) => setRemark((current) => ({ ...current, [line.id]: event.target.value }))} placeholder="Mentor-specific review remark" className="w-full rounded-lg border border-slate-200 py-2 pl-9 pr-3 text-sm" /></div><Button variant="outline" leftIcon={<XCircle className="h-4 w-4" />} onClick={() => void reviewLine(line, 'CHANGES_REQUESTED')}>Send back</Button><Button variant="primary" leftIcon={<CheckCircle2 className="h-4 w-4" />} onClick={() => void reviewLine(line, 'APPROVED')}>Approve line</Button></div></div>)}</div><div className="mt-5 flex flex-wrap justify-end gap-2 border-t pt-4"><Button variant="outline" leftIcon={<Send className="h-4 w-4" />} disabled={active.status !== 'DRAFT' && active.status !== 'CHANGES_REQUESTED'} onClick={() => void action({ action: 'SUBMIT', batchId: active.id })}>Submit for approval</Button><Button variant="primary" disabled={active.status !== 'SUBMITTED'} onClick={() => void action({ action: 'APPROVE', batchId: active.id })}>Approve & publish payroll</Button></div></CardContent></Card>}
+        {active && <Card><CardHeader title={`${active.periodName} · Mentor review`} subtitle={`${active.sourceFileName} · ${active.batchNumber}`} /><CardContent>
+          {active.coverage && (
+            <div className={`mb-4 rounded-xl border p-4 ${active.coverage.pending.length ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50'}`}>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-semibold text-slate-900">
+                    {active.coverage.done.length} of {active.coverage.totalMentors} mentor payrolls processed for {active.periodName.replace('Sheet Payroll - ', '')}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-600">
+                    {active.coverage.pending.length ? `${active.coverage.pending.length} mentor payroll${active.coverage.pending.length === 1 ? '' : 's'} still pending.` : 'All mentors have payroll generated for this month.'}
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" leftIcon={<ChevronDown className="h-4 w-4" />} onClick={() => setShowCoverage((value) => !value)}>
+                  {showCoverage ? 'Hide details' : 'More details'}
+                </Button>
+              </div>
+              {showCoverage && <div className="mt-4 grid gap-4 border-t border-slate-200/70 pt-4 md:grid-cols-2">
+                <div><p className="mb-2 text-xs font-bold uppercase tracking-wide text-emerald-700">Processed / done</p>{active.coverage.done.length ? active.coverage.done.map((mentor) => <p key={mentor.id} className="text-xs text-slate-700">{mentor.name} <span className="text-slate-400">({mentor.email})</span></p>) : <p className="text-xs text-slate-500">None yet.</p>}</div>
+                <div><p className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">Pending</p>{active.coverage.pending.length ? active.coverage.pending.map((mentor) => <p key={mentor.id} className="text-xs text-slate-700">{mentor.name} <span className="text-slate-400">({mentor.email})</span></p>) : <p className="text-xs text-slate-500">None.</p>}</div>
+              </div>}
+            </div>
+          )}
+          <div className="space-y-4">{active.lineItems.map((line) => <div key={line.id} className="rounded-xl border border-slate-200 p-4"><div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between"><div><p className="font-bold text-slate-900">{line.mentorName}</p><p className="text-xs text-slate-500">{line.mentorEmail}</p></div><div className="text-right"><p className="text-lg font-bold text-indigo-700">{formatCurrency(line.netPayable, 'INR')}</p><p className="text-xs text-slate-600">Plans + initiatives {formatCurrency(line.grossEarnings, 'INR')} · After penalties {formatCurrency(line.totalAmount, 'INR')} · Total deductions {formatCurrency(line.deductions, 'INR')}</p><Badge size="sm" variant={line.reviewStatus === 'APPROVED' ? 'success' : line.reviewStatus === 'CHANGES_REQUESTED' ? 'danger' : 'warning'}>{line.reviewStatus}</Badge></div></div><div className="mt-3 overflow-x-auto"><table className="w-full text-xs"><thead><tr className="border-b text-left text-slate-500"><th className="py-2">Component</th><th className="py-2">Count</th><th className="py-2 text-right">Rate</th><th className="py-2 text-right">Amount</th></tr></thead><tbody>{line.breakdown.map((item) => <tr key={item.code} className="border-b border-slate-100"><td className="py-2">{item.name} <span className="text-slate-400">({item.code})</span></td><td className="py-2">{item.count}</td><td className="py-2 text-right">{formatCurrency(item.rate, 'INR')}</td><td className="py-2 text-right font-semibold">{item.category === 'PENALTY' ? '-' : ''}{formatCurrency(item.amount, 'INR')}</td></tr>)}</tbody></table></div><div className="mt-3 flex flex-col gap-2 sm:flex-row"><div className="relative flex-1"><MessageSquare className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><input value={remark[line.id] ?? line.reviewerRemark ?? ''} onChange={(event) => setRemark((current) => ({ ...current, [line.id]: event.target.value }))} placeholder="Mentor-specific review remark" className="w-full rounded-lg border border-slate-200 py-2 pl-9 pr-3 text-sm" /></div><Button variant="outline" leftIcon={<XCircle className="h-4 w-4" />} onClick={() => void reviewLine(line, 'CHANGES_REQUESTED')}>Send back</Button><Button variant="primary" leftIcon={<CheckCircle2 className="h-4 w-4" />} onClick={() => void reviewLine(line, 'APPROVED')}>Approve line</Button></div></div>)}</div><div className="mt-5 flex flex-wrap justify-end gap-2 border-t pt-4"><Button variant="outline" leftIcon={<Send className="h-4 w-4" />} disabled={active.status !== 'DRAFT' && active.status !== 'CHANGES_REQUESTED'} onClick={() => void action({ action: 'SUBMIT', batchId: active.id })}>Submit for approval</Button><Button variant="primary" disabled={active.status !== 'SUBMITTED'} onClick={() => void action({ action: 'APPROVE', batchId: active.id })}>Approve & publish payroll</Button></div></CardContent></Card>}
       </div>
     </div>
   </AppShell>;

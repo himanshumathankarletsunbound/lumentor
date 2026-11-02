@@ -4,21 +4,28 @@ import { ensureServerPersistence } from '../../../../lib/db/server-initializatio
 import { createInitiativeEntry, listInitiativeEntries } from '../../../../lib/db/state-repository';
 
 export async function GET(req: NextRequest) {
-  await ensureServerPersistence();
-  const denied = await authorizationErrorAsync(req, 'payroll_processing', 'view');
-  if (denied) return denied;
-  const { searchParams } = new URL(req.url);
-  const startDate = searchParams.get('startDate');
-  const endDate = searchParams.get('endDate');
-  if (!startDate || !endDate) return NextResponse.json({ success: false, error: 'startDate and endDate are required.' }, { status: 400 });
-  return NextResponse.json({ success: true, entries: await listInitiativeEntries(startDate, endDate, searchParams.get('mentorId') || undefined) });
+  try {
+    await ensureServerPersistence();
+    const denied = await authorizationErrorAsync(req, 'payroll_processing', 'view');
+    if (denied) return denied;
+    const { searchParams } = new URL(req.url);
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
+    if (!startDate || !endDate) return NextResponse.json({ success: false, error: 'startDate and endDate are required.' }, { status: 400 });
+    return NextResponse.json({ success: true, entries: await listInitiativeEntries(startDate, endDate, searchParams.get('mentorId') || undefined) });
+  } catch (error) {
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : 'Unable to load initiatives.' },
+      { status: 503 }
+    );
+  }
 }
 
 export async function POST(req: NextRequest) {
-  await ensureServerPersistence();
-  const denied = await authorizationErrorAsync(req, 'payroll_processing', 'create');
-  if (denied) return denied;
   try {
+    await ensureServerPersistence();
+    const denied = await authorizationErrorAsync(req, 'payroll_processing', 'create');
+    if (denied) return denied;
     const body = await req.json();
     const amount = Number(body.amount);
     const count = Number(body.count);
@@ -34,6 +41,9 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ success: true, entry }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Unable to create initiative entry.' }, { status: 400 });
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : 'Unable to create initiative entry.' },
+      { status: 503 }
+    );
   }
 }

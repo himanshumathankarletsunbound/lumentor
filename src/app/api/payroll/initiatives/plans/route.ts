@@ -4,17 +4,24 @@ import { ensureServerPersistence } from '../../../../../lib/db/server-initializa
 import { createInitiativePlan, listInitiativePlans } from '../../../../../lib/db/state-repository';
 
 export async function GET(req: NextRequest) {
-  await ensureServerPersistence();
-  const denied = await authorizationErrorAsync(req, 'payroll_rules', 'view');
-  if (denied) return denied;
-  return NextResponse.json({ success: true, plans: await listInitiativePlans() });
+  try {
+    await ensureServerPersistence();
+    const denied = await authorizationErrorAsync(req, 'payroll_rules', 'view');
+    if (denied) return denied;
+    return NextResponse.json({ success: true, plans: await listInitiativePlans() });
+  } catch (error) {
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : 'Unable to load initiative plans.' },
+      { status: 503 }
+    );
+  }
 }
 
 export async function POST(req: NextRequest) {
-  await ensureServerPersistence();
-  const denied = await authorizationErrorAsync(req, 'payroll_rules', 'create');
-  if (denied) return denied;
   try {
+    await ensureServerPersistence();
+    const denied = await authorizationErrorAsync(req, 'payroll_rules', 'create');
+    if (denied) return denied;
     const body = await req.json();
     const amount = Number(body.amount);
     const payoutFactor = Number(body.payoutFactor ?? 1);
@@ -28,6 +35,9 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ success: true, plan }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Unable to create initiative plan.' }, { status: 400 });
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : 'Unable to create initiative plan.' },
+      { status: 503 }
+    );
   }
 }

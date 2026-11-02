@@ -17,6 +17,20 @@ function monthBounds(month: string) {
   };
 }
 
+type ApiResponse<T extends object = Record<string, never>> = { success?: boolean; error?: string } & T;
+
+async function readJsonResponse<T extends object>(response: Response, fallbackMessage: string): Promise<ApiResponse<T>> {
+  const text = await response.text();
+  if (!text.trim()) {
+    throw new Error(`${fallbackMessage} (server returned an empty response, status ${response.status}).`);
+  }
+  try {
+    return JSON.parse(text) as ApiResponse<T>;
+  } catch {
+    throw new Error(`${fallbackMessage} (server returned an invalid response, status ${response.status}).`);
+  }
+}
+
 export default function InitiativesPage() {
   const [tab, setTab] = useState<'plans' | 'single'>('plans');
   const [plans, setPlans] = useState<InitiativePlan[]>([]);
@@ -35,7 +49,11 @@ export default function InitiativesPage() {
       fetch('/api/mentors'),
       fetch(`/api/payroll/initiatives?startDate=${encodeURIComponent(bounds.startDate)}&endDate=${encodeURIComponent(bounds.endDate)}`),
     ]);
-    const [plansResult, mentorsResult, entriesResult] = await Promise.all([plansResponse.json(), mentorsResponse.json(), entriesResponse.json()]);
+    const [plansResult, mentorsResult, entriesResult] = await Promise.all([
+      readJsonResponse<{ plans: InitiativePlan[] }>(plansResponse, 'Unable to load initiative plans.'),
+      readJsonResponse<{ mentors: Mentor[] }>(mentorsResponse, 'Unable to load mentors.'),
+      readJsonResponse<{ entries: InitiativeEntry[] }>(entriesResponse, 'Unable to load initiatives.'),
+    ]);
     if (!plansResponse.ok || !plansResult.success) throw new Error(plansResult.error || 'Unable to load initiative plans.');
     if (!mentorsResponse.ok || !mentorsResult.success) throw new Error(mentorsResult.error || 'Unable to load mentors.');
     if (!entriesResponse.ok || !entriesResult.success) throw new Error(entriesResult.error || 'Unable to load initiatives.');
@@ -61,7 +79,7 @@ export default function InitiativesPage() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...planForm, amount: Number(planForm.amount), payoutFactor: Number(planForm.payoutFactor) }),
     });
-    const result = await response.json();
+    const result = await readJsonResponse(response, 'Unable to save initiative plan.');
     if (!response.ok || !result.success) throw new Error(result.error || 'Unable to save plan.');
     setPlanForm({ name: '', code: '', planType: 'INITIATIVE', amount: '', payoutFactor: '1' });
     await load();
@@ -80,7 +98,7 @@ export default function InitiativesPage() {
         periodStart: bounds.startDate, periodEnd: bounds.endDate,
       }),
     });
-    const result = await response.json();
+    const result = await readJsonResponse(response, 'Unable to save initiative.');
     if (!response.ok || !result.success) throw new Error(result.error || 'Unable to save initiative.');
     setEntryForm({ mentorId: '', planId: '', name: '', amount: '', count: '1', payoutFactor: '1' });
     await load();

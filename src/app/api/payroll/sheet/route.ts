@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import * as XLSX from 'xlsx';
 import { prisma } from '../../../../lib/db/prisma';
-import { listInitiativePlans, listMentors, listPayrollPlans } from '../../../../lib/db/state-repository';
+import { listInitiativePlans, listMentors, listPayrollPlans, listPenaltyPolicies } from '../../../../lib/db/state-repository';
 import { authorizationErrorAsync, getSessionUserAsync } from '../../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../../lib/db/server-initialization';
+import { FINAL_SHEET_INITIATIVE_CODES, FINAL_SHEET_PAYROLL_PLAN_CODES, FINAL_SHEET_PENALTY_CODES, normalizeSheetCode } from '../../../../lib/payroll/sheet-payroll-catalog';
 
 type SheetRow = Record<string, string>;
 
@@ -68,15 +69,16 @@ async function createSheetBatch(file: File, month: string) {
   const { start, end } = monthDates(month);
   const isExcel = /\.(xlsx|xls)$/i.test(file.name);
   const rows = isExcel ? parseSpreadsheet(await file.arrayBuffer()) : parseCsv(await file.text());
-  const [mentors, payrollPlans, initiativePlans] = await Promise.all([listMentors(), listPayrollPlans(), listInitiativePlans()]);
+  const [mentors, payrollPlans, initiativePlans, penaltyPolicies] = await Promise.all([listMentors(), listPayrollPlans(), listInitiativePlans(), listPenaltyPolicies()]);
   const mentorById = new Map<string, (typeof mentors)[number]>();
   mentors.forEach((mentor) => {
     mentorById.set(mentor.id, mentor);
     if (mentor.externalId) mentorById.set(mentor.externalId, mentor);
   });
-  const payrollByCode = new Map(payrollPlans.map((plan) => [plan.code.toLowerCase(), plan]));
-  const initiativeByCode = new Map(initiativePlans.map((plan) => [plan.code.toLowerCase(), plan]));
-  const planColumns = new Set([...payrollByCode.keys(), ...initiativeByCode.keys()]);
+  const payrollByCode = new Map(payrollPlans.map((plan) => [normalizeSheetCode(plan.code), plan]));
+  const initiativeByCode = new Map(initiativePlans.map((plan) => [normalizeSheetCode(plan.code), plan]));
+  const penaltyByCode = new Map(penaltyPolicies.flatMap((policy) => policy.code ? [[normalizeSheetCode(policy.code), policy] as const] : []));
+  const planColumns = new Set([...payrollByCode.keys(), ...initiativeByCode.keys(), ...penaltyByCode.keys()]);
   const lineItems = rows.map((row, index) => {
     const mentorKey = valueFor(row, 'mentorid', 'mentor')?.trim();
     const mentor = mentorKey ? mentorById.get(mentorKey) : undefined;
@@ -87,13 +89,21 @@ async function createSheetBatch(file: File, month: string) {
     const durationMinutes = 0;
     const breakdown: Array<{ code: string; planId?: string; name: string; category: string; count: number; rate: number; amount: number }> = [];
     for (const [header, rawCount] of Object.entries(row)) {
-      const code = header.trim().toLowerCase();
+      const code = normalizeSheetCode(header);
       if (!planColumns.has(code)) continue;
       const count = numberValue(rawCount, `${header} count`);
       if (count === 0) continue;
-      const payrollPlan = payrollByCode.get(code);
-      const initiativePlan = initiativeByCode.get(code);
-      if (payrollPlan) {
+      const isPenalty = FINAL_SHEET_PENALTY_CODES.some((candidate) => normalizeSheetCode(candidate) === code);
+      const isInitiative = FINAL_SHEET_INITIATIVE_CODES.some((candidate) => normalizeSheetCode(candidate) === code);
+      const isPayrollPlan = FINAL_SHEET_PAYROLL_PLAN_CODES.some((candidate) => normalizeSheetCode(candidate) === code);
+      const payrollPlan = isPayrollPlan || (!isPenalty && !isInitiative) ? payrollByCode.get(code) : undefined;
+      const initiativePlan = isInitiative ? initiativeByCode.get(code) : undefined;
+      if (isPenalty) {
+        const penaltyPolicy = penaltyByCode.get(code);
+        if (!penaltyPolicy) throw new Error(`Row ${index + 2}: penalty policy "${header}" is not configured in the database.`);
+        const amount = count * penaltyPolicy.defaultAmount;
+        breakdown.push({ code: penaltyPolicy.code || code, name: penaltyPolicy.name, category: 'PENALTY', count, rate: penaltyPolicy.defaultAmount, amount: Math.round(amount * 100) / 100 });
+      } else if (payrollPlan) {
         let rate = payrollPlan.defaultClassRate;
         let amount = 0;
         if (payrollPlan.compensationModel === 'PER_CLASS') amount = count * rate;
@@ -116,12 +126,17 @@ async function createSheetBatch(file: File, month: string) {
       } else if (initiativePlan) {
         const amount = count * initiativePlan.amount * initiativePlan.payoutFactor;
         breakdown.push({ code: initiativePlan.code, name: initiativePlan.name, category: 'INITIATIVE', count, rate: initiativePlan.amount * initiativePlan.payoutFactor, amount: Math.round(amount * 100) / 100 });
+      } else {
+        throw new Error(`Row ${index + 2}: "${header}" is not configured in the database.`);
       }
     }
     if (!breakdown.length) throw new Error(`Row ${index + 2}: add at least one non-zero payroll-plan or initiative-plan count.`);
-    const grossEarnings = Math.round(breakdown.reduce((sum, item) => sum + item.amount, 0) * 100) / 100;
-    const deductions = Math.round(grossEarnings * 0.1 * 100) / 100;
-    const netPayable = Math.round((grossEarnings - deductions) * 100) / 100;
+    const grossEarnings = Math.round(breakdown.filter((item) => item.category !== 'PENALTY').reduce((sum, item) => sum + item.amount, 0) * 100) / 100;
+    const policyDeductions = Math.round(breakdown.filter((item) => item.category === 'PENALTY').reduce((sum, item) => sum + item.amount, 0) * 100) / 100;
+    const totalAmount = Math.round((grossEarnings - policyDeductions) * 100) / 100;
+    const tds = Math.round(totalAmount * 0.1 * 100) / 100;
+    const deductions = Math.round((tds + policyDeductions) * 100) / 100;
+    const netPayable = Math.round((totalAmount - tds) * 100) / 100;
     return { mentorId: mentor.id, presentCount, absentCount, absentBillableCount, durationMinutes, grossEarnings, deductions, netPayable, breakdown };
   });
   const batchNumber = `SHEET-${month.replace('-', '')}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -138,7 +153,18 @@ async function createSheetBatch(file: File, month: string) {
 }
 
 function serializeBatch(batch: Awaited<ReturnType<typeof prisma.sheetPayrollBatch.create>> & { lineItems: Array<{ mentor: { firstName: string; lastName: string; email: string }; id: string; mentorId: string; presentCount: number; absentCount: number; absentBillableCount: number; durationMinutes: number; grossEarnings: Prisma.Decimal; deductions: Prisma.Decimal; netPayable: Prisma.Decimal; breakdown: unknown; reviewStatus: string; reviewerRemark: string | null }> }) {
-  return { ...batch, totalGross: Number(batch.totalGross), totalDeductions: Number(batch.totalDeductions), totalNet: Number(batch.totalNet), lineItems: batch.lineItems.map((item) => ({ ...item, mentorName: `${item.mentor.firstName} ${item.mentor.lastName}`.trim(), mentorEmail: item.mentor.email, grossEarnings: Number(item.grossEarnings), deductions: Number(item.deductions), netPayable: Number(item.netPayable) })) };
+  return {
+    ...batch,
+    totalGross: Number(batch.totalGross),
+    totalDeductions: Number(batch.totalDeductions),
+    totalNet: Number(batch.totalNet),
+    lineItems: batch.lineItems.map((item) => {
+      const breakdown = item.breakdown as Array<{ category: string; amount: number }>;
+      const policyDeductions = Math.round(breakdown.filter((entry) => entry.category === 'PENALTY').reduce((sum, entry) => sum + entry.amount, 0) * 100) / 100;
+      const totalAmount = Math.round((Number(item.grossEarnings) - policyDeductions) * 100) / 100;
+      return { ...item, mentorName: `${item.mentor.firstName} ${item.mentor.lastName}`.trim(), mentorEmail: item.mentor.email, grossEarnings: Number(item.grossEarnings), totalAmount, deductions: Number(item.deductions), netPayable: Number(item.netPayable) };
+    }),
+  };
 }
 
 export async function GET(req: NextRequest) {
@@ -192,7 +218,10 @@ export async function POST(req: NextRequest) {
         const payrollBatch = await transaction.payrollBatch.create({ data: { batchNumber: `${batch.batchNumber}-FINAL`, periodName: batch.periodName, startDate: batch.startDate, endDate: batch.endDate, currency: batch.currency, status: 'LOCKED', lockedAt: new Date(), totalMentors: batch.totalMentors, totalGross: batch.totalGross, totalPenalties: batch.totalDeductions, totalAdjustments: 0, totalNet: batch.totalNet, lineItems: { create: batch.lineItems.map((item) => { const details = item.breakdown as Array<{ code: string; planId?: string; name: string; category: string; count: number; rate: number; amount: number }>; const firstPlan = details.find((entry) => entry.category === 'PAYROLL_PLAN'); return { mentorId: item.mentorId, payrollPlanId: firstPlan?.planId || item.mentor.payrollPlanId, planVersion: 1, planName: firstPlan?.name || 'Sheet-based payroll', compensationModel: 'PER_CLASS', eligibleClassesCount: item.presentCount + item.absentBillableCount, eligibleDurationMinutes: item.durationMinutes, baseSalaryAmount: 0, classEarnings: details.filter((entry) => entry.category === 'PAYROLL_PLAN').reduce((sum, entry) => sum + entry.amount, 0), durationEarnings: 0, studentEarnings: 0, revenueShareEarnings: 0, bonusAmount: details.filter((entry) => entry.category === 'INITIATIVE').reduce((sum, entry) => sum + entry.amount, 0), penaltyDeductions: item.deductions, appliedPenaltyIds: [], grossEarnings: item.grossEarnings, netPayable: item.netPayable, calculationDetails: { source: 'SHEET_PAYROLL', breakdown: details, notes: ['Calculated from an uploaded sheet.'] } }; }) } } });
         for (const item of batch.lineItems) {
           const details = item.breakdown as Array<{ code: string; planId?: string; name: string; category: string; count: number; rate: number; amount: number }>;
-          await transaction.payslip.create({ data: { payslipNumber: `PS-${batch.batchNumber}-${item.mentorId.slice(0, 8)}`, batchId: payrollBatch.id, mentorId: item.mentorId, periodName: batch.periodName, startDate: batch.startDate, endDate: batch.endDate, planName: details.map((detail) => detail.name).join(', '), compensationModel: 'PER_CLASS', planVersion: 1, eligibleClassesCount: 0, eligibleDurationMinutes: 0, earningsItems: details.map((detail) => ({ description: `${detail.category === 'INITIATIVE' ? 'Initiative' : 'Payroll plan'}: ${detail.name}`, quantity: detail.count, rate: detail.rate, amount: detail.amount })), penaltyItems: [{ id: `tds-${item.id}`, category: 'TDS (10%)', reason: 'Mandatory tax deduction on sheet-based payroll', amount: Number(item.deductions), date: batch.endDate.toISOString().slice(0, 10) }], grossEarnings: item.grossEarnings, totalDeductions: item.deductions, netPayable: item.netPayable, currency: batch.currency } });
+          const policyDeductions = Math.round(details.filter((detail) => detail.category === 'PENALTY').reduce((sum, detail) => sum + detail.amount, 0) * 100) / 100;
+          const totalAmount = Math.round((Number(item.grossEarnings) - policyDeductions) * 100) / 100;
+          const tds = Math.round(totalAmount * 0.1 * 100) / 100;
+          await transaction.payslip.create({ data: { payslipNumber: `PS-${batch.batchNumber}-${item.mentorId.slice(0, 8)}`, batchId: payrollBatch.id, mentorId: item.mentorId, periodName: batch.periodName, startDate: batch.startDate, endDate: batch.endDate, planName: details.map((detail) => detail.name).join(', '), compensationModel: 'PER_CLASS', planVersion: 1, eligibleClassesCount: 0, eligibleDurationMinutes: 0, earningsItems: details.filter((detail) => detail.category !== 'PENALTY').map((detail) => ({ description: `${detail.category === 'INITIATIVE' ? 'Initiative' : 'Payroll plan'}: ${detail.name}`, quantity: detail.count, rate: detail.rate, amount: detail.amount })), penaltyItems: [...details.filter((detail) => detail.category === 'PENALTY').map((detail) => ({ id: `penalty-${item.id}-${detail.code}`, category: 'Penalty', reason: detail.name, amount: detail.amount, date: batch.endDate.toISOString().slice(0, 10) })), { id: `tds-${item.id}`, category: 'TDS (10%)', reason: 'Mandatory tax deduction after payroll and penalties', amount: tds, date: batch.endDate.toISOString().slice(0, 10) }], grossEarnings: item.grossEarnings, totalDeductions: item.deductions, netPayable: item.netPayable, currency: batch.currency } });
         }
         return transaction.sheetPayrollBatch.update({ where: { id: batch.id }, data: { status: 'LOCKED', reviewedBy: user?.id, reviewedAt: new Date() } });
       });

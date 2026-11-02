@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authorizationErrorAsync, getSessionUserAsync } from '../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../lib/db/server-initialization';
 import { getMentorReview, listMentorReviews, listMentors, upsertMentorReview } from '../../../lib/db/state-repository';
+import * as XLSX from 'xlsx';
 
 export async function GET(req: NextRequest) {
   await ensureServerPersistence();
@@ -38,6 +39,34 @@ export async function POST(req: NextRequest) {
     const user = await getSessionUserAsync(req);
     if (!user || !['AUDIT', 'ADMINISTRATOR'].includes(user.role)) {
       return NextResponse.json({ success: false, error: 'Only the Audit Team can submit mentor reviews.' }, { status: 403 });
+    }
+    const contentType = req.headers.get('content-type') || '';
+    if (contentType.includes('multipart/form-data')) {
+      const form = await req.formData();
+      const file = form.get('file');
+      const reviewPeriod = String(form.get('reviewPeriod') || '').trim();
+      if (!(file instanceof File) || !/\.(csv|xlsx|xls)$/i.test(file.name)) {
+        return NextResponse.json({ success: false, error: 'Upload a CSV or Excel (.xlsx/.xls) rating sheet.' }, { status: 400 });
+      }
+      if (!reviewPeriod) return NextResponse.json({ success: false, error: 'Review period is required.' }, { status: 400 });
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
+      const mentors = await listMentors();
+      const mentorById = new Map(mentors.filter((mentor) => mentor.status === 'ACTIVE').map((mentor) => [mentor.id, mentor]));
+      if (!rows.length) throw new Error('The rating sheet must contain at least one mentor row.');
+      const saved = [];
+      for (const [index, row] of rows.entries()) {
+        const normalized = new Map(Object.entries(row).map(([key, value]) => [key.toLowerCase().replace(/[^a-z0-9]/g, ''), String(value).trim()]));
+        const mentorId = normalized.get('mentorid') || '';
+        const mentor = mentorById.get(mentorId);
+        if (!mentor) throw new Error(`Row ${index + 2}: active mentor ID "${mentorId}" was not found.`);
+        const auditScore = Number(normalized.get('auditrating') || normalized.get('auditscore') || '');
+        if (!Number.isFinite(auditScore) || auditScore < 0 || auditScore > 3) throw new Error(`Row ${index + 2}: Audit rating must be between 0 and 3.`);
+        const review = await upsertMentorReview({ mentorId, reviewPeriod, auditScore, operationScore: 2, auditComments: normalized.get('remark') || null, operationComments: normalized.get('remark') || null, reviewerId: user.id, reviewerRole: 'AUDIT' });
+        saved.push(review);
+      }
+      return NextResponse.json({ success: true, submitted: saved.length, reviews: saved });
     }
     const body = await req.json();
     const mentorId = String(body.mentorId || '').trim();

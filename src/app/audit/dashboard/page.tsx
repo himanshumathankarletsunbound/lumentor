@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { ChangeEvent } from 'react';
 import { AppShell } from '../../../components/layout/AppShell';
 import { Card, CardContent, CardHeader } from '../../../components/ui/Card';
 import { Alert } from '../../../components/ui/Alert';
@@ -33,6 +34,8 @@ export default function AuditDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<'post' | 'analyze'>('post');
+  const [uploading, setUploading] = useState(false);
   const isAudit = currentUser.role === 'AUDIT';
 
   const load = useCallback(async () => {
@@ -75,6 +78,7 @@ export default function AuditDashboardPage() {
       operationScore: existingReview?.operationScore?.toString() || '2',
       comments: '',
     };
+
     if (!value.auditScore.trim() || !value.operationScore.trim()) {
       setError('Enter both the Audit and Operations scores before submitting.');
       return;
@@ -105,6 +109,39 @@ export default function AuditDashboardPage() {
     }
   };
 
+  const downloadTemplate = async () => {
+    const response = await fetch('/api/mentor-reviews/template');
+    if (!response.ok) { setError('Unable to download the mentor rating template.'); return; }
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'mentor-rating-template.xlsx';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const uploadRatings = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      form.append('reviewPeriod', period);
+      const response = await fetch('/api/mentor-reviews', { method: 'POST', body: form });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Unable to submit ratings.');
+      await load();
+      setMode('analyze');
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : 'Unable to submit ratings.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   return (
     <AppShell>
       <div className="space-y-6">
@@ -113,7 +150,45 @@ export default function AuditDashboardPage() {
           <div><p className="text-sm font-medium text-amber-600">Audit workspace</p><h2 className="text-xl font-bold text-slate-900">Mentor review progress</h2></div>
           <label className="text-sm font-medium text-slate-700">Review period<input type="month" value={period} onChange={(event) => setPeriod(event.target.value)} className="mt-1 block rounded-lg border border-slate-300 px-3 py-2" /></label>
         </div>
+        <div className="flex gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+          <Button variant={mode === 'post' ? 'primary' : 'ghost'} onClick={() => setMode('post')}>Post rating</Button>
+          <Button variant={mode === 'analyze' ? 'primary' : 'ghost'} onClick={() => setMode('analyze')}>Analyze mentors</Button>
+        </div>
         {error && <Alert variant="error">{error}</Alert>}
+        {mode === 'post' && <Card>
+          <CardHeader title="Post mentor ratings" subtitle={`Upload audit ratings for ${period}. Operations points default to 2.`} />
+          <CardContent>
+            <div className="flex flex-wrap gap-3">
+              <Button variant="outline" onClick={() => void downloadTemplate()}>Download Excel template</Button>
+              <label className="inline-flex cursor-pointer items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
+                {uploading ? 'Submitting ratings...' : 'Upload Excel or CSV'}
+                <input type="file" accept=".xlsx,.xls,.csv" className="hidden" disabled={uploading} onChange={(event) => void uploadRatings(event)} />
+              </label>
+            </div>
+            <p className="mt-4 text-xs text-slate-500">The template includes every active mentor ID and name. Enter the Audit Rating (0–3) and an optional Remark, then upload it. Ratings are validated and submitted for the selected period.</p>
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Active mentors</p><p className="text-2xl font-bold">{mentors.length}</p></div>
+              <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Ratings already submitted</p><p className="text-2xl font-bold">{auditCompleted}</p></div>
+              <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Still to rate</p><p className="text-2xl font-bold">{Math.max(mentors.length - auditCompleted, 0)}</p></div>
+            </div>
+            <div className="mt-5 overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead><tr className="border-b border-slate-200 text-xs uppercase text-slate-500"><th className="px-3 py-2">Mentor</th><th className="px-3 py-2">Audit rating / 3</th><th className="px-3 py-2">Remark</th><th className="px-3 py-2"></th></tr></thead>
+                <tbody>{mentors.map((mentor) => {
+                  const review = reviewByMentor.get(mentor.id);
+                  const input = scores[mentor.id] || { auditScore: review?.auditScore?.toString() || '', operationScore: '2', comments: '' };
+                  return <tr key={mentor.id} className="border-b border-slate-100">
+                    <td className="px-3 py-3 font-medium">{mentor.firstName} {mentor.lastName}<span className="ml-2 text-xs text-slate-400">{mentor.id}</span></td>
+                    <td className="px-3 py-3"><input type="number" min="0" max="3" step="0.01" value={input.auditScore} onChange={(event) => setScores((previous) => ({ ...previous, [mentor.id]: { ...input, auditScore: event.target.value } }))} className="w-24 rounded border border-slate-300 px-2 py-1.5" /></td>
+                    <td className="px-3 py-3"><input value={input.comments} onChange={(event) => setScores((previous) => ({ ...previous, [mentor.id]: { ...input, comments: event.target.value } }))} placeholder="Optional remark" className="w-full min-w-48 rounded border border-slate-300 px-2 py-1.5" /></td>
+                    <td className="px-3 py-3"><Button size="sm" onClick={() => void saveScore(mentor.id)} disabled={saving === mentor.id}>{saving === mentor.id ? 'Saving' : 'Submit'}</Button></td>
+                  </tr>;
+                })}</tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>}
+        {mode === 'analyze' && <>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {[
             ['Mentors to review', mentors.length, 'All active mentors in this period'],
@@ -165,6 +240,7 @@ export default function AuditDashboardPage() {
             )}
           </CardContent>
         </Card>
+        </>}
       </div>
     </AppShell>
   );

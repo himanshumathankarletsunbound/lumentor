@@ -306,7 +306,7 @@ export default function MentorsPage() {
             const response = await fetch('/api/records', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'mentor', record: {
               firstName: values.firstName.trim(), lastName: values.lastName.trim(),
               email: values.email.trim(), phone: values.phone.trim(), panNumber: values.panNumber.trim().toUpperCase(), branchId: branch?.id || '',
-              branchName: branch?.name, subjectIds: [], payrollPlanId: plan?.id || '',
+              branchName: branch?.name, subjectIds: [], payrollPlanId: plan?.id,
               status: 'ACTIVE', provenance: 'LOCALLY_CREATED', teachingHoursThisMonth: 0,
               completedClassesCount: 0, attendanceRate: 0,
             }})});
@@ -469,9 +469,9 @@ export default function MentorsPage() {
                   <div className="rounded-xl border border-slate-200 p-4">
                     <p className="font-bold text-slate-800">Assigned payroll plans</p>
                     <div className="mt-3 space-y-2">{plans.map((candidate) => {
-                      const checked = (selectedMentor.payrollPlanIds || [selectedMentor.payrollPlanId]).includes(candidate.id);
+                      const checked = (selectedMentor.payrollPlanIds || (selectedMentor.payrollPlanId ? [selectedMentor.payrollPlanId] : [])).includes(candidate.id);
                       return <label key={candidate.id} className="flex items-center gap-2"><input type="checkbox" checked={checked} onChange={async (event) => {
-                        const current = new Set(selectedMentor.payrollPlanIds || [selectedMentor.payrollPlanId]);
+                        const current = new Set(selectedMentor.payrollPlanIds || (selectedMentor.payrollPlanId ? [selectedMentor.payrollPlanId] : []));
                         if (event.target.checked) current.add(candidate.id); else current.delete(candidate.id);
                         const payrollPlanIds = Array.from(current);
                         const response = await fetch('/api/mentors', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: selectedMentor.id, payrollPlanIds, payrollPlanId: payrollPlanIds[0] }) });

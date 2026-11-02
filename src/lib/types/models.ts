@@ -99,7 +99,7 @@ export interface Mentor {
   branchId: string;
   branchName?: string;
   subjectIds: string[];
-  payrollPlanId: string;
+  payrollPlanId?: string;
   payrollPlanIds?: string[];
   payoutScheduleId?: string;
   payoutDay?: number; // 3, 5, 15, or custom

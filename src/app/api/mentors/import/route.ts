@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizationErrorAsync } from '../../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../../lib/db/server-initialization';
-import { listBranches, listMentors, listPayrollPlans, saveNormalizedRecord } from '../../../../lib/db/state-repository';
+import { listBranches, listMentors, saveNormalizedRecord } from '../../../../lib/db/state-repository';
 import type { Mentor } from '../../../../lib/types/models';
 import { randomUUID } from 'node:crypto';
 
@@ -30,12 +30,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'At least one staff row is required.' }, { status: 400 });
     }
 
-    const [branches, payrollPlans, mentors] = await Promise.all([listBranches(), listPayrollPlans(), listMentors()]);
+    const [branches, mentors] = await Promise.all([listBranches(), listMentors()]);
     const branch = branches[0];
-    const payrollPlan = payrollPlans[0];
-    if (!branch || !payrollPlan) {
+    if (!branch) {
       return NextResponse.json(
-        { success: false, error: 'Create at least one campus branch and payroll plan before importing staff.' },
+        { success: false, error: 'Create at least one campus branch before importing staff.' },
         { status: 400 }
       );
     }
@@ -61,7 +60,7 @@ export async function POST(req: NextRequest) {
             phone: String(row.phone || '').trim(),
             branchId: branch.id,
             branchName: branch.name,
-            payrollPlanId: payrollPlan.id,
+            payrollPlanId: undefined,
             status: 'ACTIVE',
             provenance: 'CLASSCARD_SOURCED',
             updatedAt: new Date().toISOString(),
@@ -75,7 +74,7 @@ export async function POST(req: NextRequest) {
             branchId: branch.id,
             branchName: branch.name,
             subjectIds: [],
-            payrollPlanId: payrollPlan.id,
+            payrollPlanId: undefined,
             status: 'ACTIVE',
             provenance: 'CLASSCARD_SOURCED',
             teachingHoursThisMonth: 0,

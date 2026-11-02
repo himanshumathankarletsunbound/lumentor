@@ -196,8 +196,8 @@ export async function listMentors(branchId?: string): Promise<Mentor[]> {
     branchId: mentor.branchId,
     branchName: mentor.branch.name,
     subjectIds: [],
-    payrollPlanId: mentor.payrollPlanId,
-    payrollPlanIds: [mentor.payrollPlanId, ...mentor.payrollAssignments.map((assignment) => assignment.payrollPlanId)],
+    payrollPlanId: mentor.payrollPlanId || undefined,
+    payrollPlanIds: [mentor.payrollPlanId, ...mentor.payrollAssignments.map((assignment) => assignment.payrollPlanId)].filter((id): id is string => Boolean(id)),
     status: mentor.status as Mentor['status'],
     externalId: mentor.externalId || undefined,
     provenance: mentor.provenance,
@@ -358,9 +358,9 @@ export async function createBranch(input: Omit<Branch, 'id' | 'createdAt' | 'upd
 }
 
 export async function updateMentor(id: string, updates: Partial<Mentor>): Promise<Mentor> {
-  const data = {
+  const data: Prisma.MentorUncheckedUpdateInput = {
     branchId: updates.branchId,
-    payrollPlanId: updates.payrollPlanId,
+    payrollPlanId: updates.payrollPlanId === undefined ? undefined : updates.payrollPlanId || null,
     status: updates.status,
     phone: updates.phone,
     panNumber: updates.panNumber,
@@ -378,7 +378,7 @@ export async function updateMentor(id: string, updates: Partial<Mentor>): Promis
   }
   return {
     id: mentor.id, firstName: mentor.firstName, lastName: mentor.lastName, email: mentor.email,     phone: mentor.phone || '', panNumber: mentor.panNumber || undefined,
-    branchId: mentor.branchId, branchName: '', subjectIds: [], payrollPlanId: mentor.payrollPlanId, payrollPlanIds: updates.payrollPlanIds, status: mentor.status as Mentor['status'],
+    branchId: mentor.branchId, branchName: '', subjectIds: [], payrollPlanId: mentor.payrollPlanId || undefined, payrollPlanIds: updates.payrollPlanIds, status: mentor.status as Mentor['status'],
     externalId: mentor.externalId || undefined, provenance: mentor.provenance, teachingHoursThisMonth: mentor.teachingHoursThisMonth,
     completedClassesCount: mentor.completedClassesCount, attendanceRate: mentor.attendanceRate,
     createdAt: mentor.createdAt.toISOString(), updatedAt: mentor.updatedAt.toISOString(),
@@ -1201,15 +1201,15 @@ export async function saveNormalizedRecord(
     });
   } else {
     const mentor = record as Mentor;
-    if (!mentor.branchId || !mentor.payrollPlanId) throw new Error('A campus branch and payroll plan are required before creating a mentor.');
+    if (!mentor.branchId) throw new Error('A campus branch is required before creating a mentor.');
     await ensureBranch(organizationId, mentor.branchId, state);
-    const payrollPlanId = await ensurePayrollPlan(organizationId, mentor.payrollPlanId);
+    const payrollPlanId = mentor.payrollPlanId ? await ensurePayrollPlan(organizationId, mentor.payrollPlanId) : undefined;
     await prisma.mentor.upsert({
       where: { id: mentor.id },
       create: { id: mentor.id, branchId: mentor.branchId, firstName: mentor.firstName, lastName: mentor.lastName, email: mentor.email, phone: mentor.phone, panNumber: mentor.panNumber, payrollPlanId, status: mentor.status, provenance: mentor.provenance, teachingHoursThisMonth: mentor.teachingHoursThisMonth, completedClassesCount: mentor.completedClassesCount, attendanceRate: mentor.attendanceRate },
       update: { branchId: mentor.branchId, firstName: mentor.firstName, lastName: mentor.lastName, email: mentor.email, phone: mentor.phone, panNumber: mentor.panNumber, payrollPlanId, status: mentor.status, provenance: mentor.provenance },
     });
-    await prisma.mentorPayrollPlan.upsert({
+    if (payrollPlanId) await prisma.mentorPayrollPlan.upsert({
       where: { mentorId_payrollPlanId: { mentorId: mentor.id, payrollPlanId } },
       create: { mentorId: mentor.id, payrollPlanId, isActive: true },
       update: { isActive: true },

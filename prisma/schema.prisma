@@ -250,8 +250,8 @@ model Mentor {
   phone                  String?
   panNumber              String?
   avatarUrl              String?
-  payrollPlanId          String
-  payrollPlan            PayrollPlan    @relation(fields: [payrollPlanId], references: [id])
+  payrollPlanId          String?
+  payrollPlan            PayrollPlan?   @relation(fields: [payrollPlanId], references: [id], onDelete: SetNull)
   status                 String         @default("ACTIVE")
   externalId             String?        @unique
   provenance             DataProvenance @default(LOCALLY_CREATED)
@@ -465,6 +465,7 @@ model PayrollPlan {
 
   mentors Mentor[]
   mentorAssignments MentorPayrollPlan[]
+  payrollLineItems PayrollLineItem[]
 }
 
 model Penalty {
@@ -595,7 +596,8 @@ model PayrollLineItem {
   batch                   PayrollBatch      @relation(fields: [batchId], references: [id], onDelete: Cascade)
   mentorId                String
   mentor                  Mentor            @relation(fields: [mentorId], references: [id])
-  payrollPlanId           String
+  payrollPlanId           String?
+  payrollPlan             PayrollPlan?      @relation(fields: [payrollPlanId], references: [id], onDelete: SetNull)
   planVersion             Int
   planName                String
   compensationModel       CompensationModel

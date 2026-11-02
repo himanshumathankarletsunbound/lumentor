@@ -189,7 +189,7 @@ export interface PayrollLineItem {
   mentorEmail: string;
   branchId: string;
   branchName: string;
-  payrollPlanId: string;
+  payrollPlanId?: string;
   planVersion: number;
   planName: string;
   compensationModel: CompensationModel;

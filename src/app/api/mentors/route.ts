@@ -78,7 +78,7 @@ export async function PATCH(req: NextRequest) {
         return NextResponse.json({ success: false, error: 'One or more payroll plans are invalid.' }, { status: 400 });
       }
       updates.payrollPlanIds = payrollPlanIds;
-      if (!updates.payrollPlanId && payrollPlanIds[0]) updates.payrollPlanId = payrollPlanIds[0];
+      updates.payrollPlanId = payrollPlanIds[0] || '';
     }
 
     if (branchId) {

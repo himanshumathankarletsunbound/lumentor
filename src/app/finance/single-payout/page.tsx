@@ -82,7 +82,7 @@ export default function SinglePayoutPage() {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const selectedMentor = mentors.find((mentor) => mentor.id === mentorId);
-      if (selectedMentor) setPlanId(selectedMentor.payrollPlanId);
+      if (selectedMentor) setPlanId(selectedMentor.payrollPlanId || '');
     }, 0);
     return () => window.clearTimeout(timer);
   }, [mentorId, mentors]);

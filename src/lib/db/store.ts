@@ -709,7 +709,8 @@ class DataStore {
     return this.data.payrollPlans;
   }
 
-  public getPayrollPlanById(id: string): PayrollPlan | undefined {
+  public getPayrollPlanById(id: string | undefined): PayrollPlan | undefined {
+    if (!id) return undefined;
     return this.data.payrollPlans.find((p) => p.id === id);
   }
 

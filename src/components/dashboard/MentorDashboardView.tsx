@@ -23,9 +23,11 @@ import { Payslip } from '../../lib/types/payroll';
 
 export function MentorDashboardView() {
   const { currentUser } = useAuth();
-  const mentor = db.getMentors().find((m) => m.id === currentUser.mentorId) || db.getMentors()[0] || null;
+  const mentor = currentUser.mentorId
+    ? db.getMentors().find((candidate) => candidate.id === currentUser.mentorId) || null
+    : null;
   const plans = db.getPayrollPlans();
-  const mentorPlan = mentor ? (plans.find((p) => p.id === mentor.payrollPlanId) || plans[0]) : plans[0];
+  const mentorPlan = mentor ? plans.find((p) => p.id === mentor.payrollPlanId) || null : null;
 
   const [selectedEvent, setSelectedEvent] = useState<ClassEvent | null>(null);
   const [selectedPayslip, setSelectedPayslip] = useState<Payslip | null>(null);
@@ -35,13 +37,17 @@ export function MentorDashboardView() {
   const [mentorReview, setMentorReview] = useState<{ auditScore: number | null; operationScore: number | null; totalScore: number | null } | null>(null);
 
   useEffect(() => {
+    if (!currentUser.mentorId) {
+      setMentorReview(null);
+      return;
+    }
     fetch(`/api/mentor-reviews?period=${new Date().toISOString().slice(0, 7)}`)
       .then((response) => response.ok ? response.json() : null)
       .then((data) => {
         if (data?.success) setMentorReview(data.review || null);
       })
       .catch(() => setMentorReview(null));
-  }, []);
+  }, [currentUser.mentorId]);
 
   // Mentor's classes
   const classes = mentor ? db.getClasses({ mentorId: mentor.id }) : [];
@@ -51,6 +57,16 @@ export function MentorDashboardView() {
   // Current Cycle Estimate (Oct 16 - Oct 31, 2026)
   const currentEstimate = useMemo(() => {
     if (!mentor) {
+      return {
+        grossEarnings: 0,
+        netPayable: 0,
+        eligibleDurationMinutes: 0,
+        appliedPenaltyTotal: 0,
+        appliedPenaltyIds: [],
+        breakdown: [],
+      };
+    }
+    if (!mentorPlan) {
       return {
         grossEarnings: 0,
         netPayable: 0,
@@ -122,7 +138,7 @@ export function MentorDashboardView() {
                 {mentor ? `Welcome back, ${mentor.firstName}!` : 'Faculty Member Portal'}
               </h1>
               <p className="text-xs text-slate-300 mt-1">
-                {mentor ? `Primary Campus: ${mentor.branchName || 'Manhattan Campus'} • Contract Model: ${mentorPlan.compensationModel}` : 'Sync your Classcard staff roster to populate assigned faculty members.'}
+                {mentor ? `Primary Campus: ${mentor.branchName || 'Manhattan Campus'} • Contract Model: ${mentorPlan?.compensationModel || 'Not configured'}` : 'Sync your Classcard staff roster to populate assigned faculty members.'}
               </p>
             </div>
           </div>

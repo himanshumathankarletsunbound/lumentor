@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AppShell } from '../../../components/layout/AppShell';
@@ -26,7 +26,7 @@ type Review = {
 
 const currentPeriod = new Date().toISOString().slice(0, 7);
 
-export default function AuditDashboardPage() {
+function AuditDashboardContent() {
   const { currentUser } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -56,6 +56,7 @@ export default function AuditDashboardPage() {
     } finally {
       setLoading(false);
     }
+
   }, [period]);
 
   useEffect(() => {
@@ -243,5 +244,13 @@ export default function AuditDashboardPage() {
         </>}
       </div>
     </AppShell>
+  );
+}
+
+export default function AuditDashboardPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading audit workspace...</div>}>
+      <AuditDashboardContent />
+    </Suspense>
   );
 }

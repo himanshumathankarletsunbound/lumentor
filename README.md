@@ -44,6 +44,7 @@ Calculates mentor compensations with precision arithmetic (2 decimal places) acr
 - **Late Cancellation Compensation**: Configurable rules to compensate mentors when students cancel late.
 - **Separation of Concerns**: Calculating, Approving, Locking, and Payment Confirmation are separate, sequential state transitions.
 - **Initiatives & Fixed Payouts**: Finance users can create reusable fixed-amount plans and add period-scoped mentor initiatives. Each entry stores the mentor, name, amount, count, payout factor, and calculated total (`amount × count × factor`) and is included in payroll and the resulting payslip.
+- **Sheet-Based Payroll**: When Classcard attendance is unavailable, Finance can download a generated CSV template containing only mentor ID and count columns for payroll-plan and initiative-plan codes, select a month, upload counts, review each mentor's calculated breakdown, add remarks, send lines back for changes, and approve the month. Approval publishes locked payroll lines and itemized payslips without using the Classcard payroll calculation workflow. Rates and payout factors always come from the database. A mandatory 10% TDS deduction is applied to every sheet-payroll mentor and shown on the payslip.
 
 ### 5. Penalties, Adjustments & Anti-Tamper Workflow
 - **Four-Eyes Principle / Anti-Self-Approval**: Operations staff cannot approve penalties they submitted.

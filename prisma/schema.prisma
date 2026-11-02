@@ -78,6 +78,14 @@ enum PayrollBatchStatus {
   PAID
 }
 
+enum SheetPayrollBatchStatus {
+  DRAFT
+  SUBMITTED
+  CHANGES_REQUESTED
+  APPROVED
+  LOCKED
+}
+
 enum PaymentStatus {
   UNPAID
   PARTIAL
@@ -257,7 +265,8 @@ model Mentor {
   penalties    Penalty[]
   adjustments  Adjustment[]
   lineItems    PayrollLineItem[]
-  payslips     Payslip[]
+  sheetPayrollLineItems SheetPayrollLineItem[]
+  payslips             Payslip[]
   reviews      MentorReview[]
 }
 
@@ -612,6 +621,49 @@ model Payslip {
   paidAt                  DateTime?
   paymentReference        String?
   generatedAt             DateTime          @default(now())
+}
+
+model SheetPayrollBatch {
+  id             String                @id @default(uuid())
+  batchNumber    String                @unique
+  periodName     String
+  startDate      DateTime
+  endDate        DateTime
+  sourceFileName String
+  status         SheetPayrollBatchStatus @default(DRAFT)
+  currency       String                @default("INR")
+  totalMentors   Int                   @default(0)
+  totalGross     Decimal               @default(0) @db.Decimal(12, 2)
+  totalDeductions Decimal              @default(0) @db.Decimal(12, 2)
+  totalNet       Decimal               @default(0) @db.Decimal(12, 2)
+  submittedBy    String?
+  submittedAt    DateTime?
+  reviewedBy     String?
+  reviewedAt     DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  lineItems SheetPayrollLineItem[]
+}
+
+model SheetPayrollLineItem {
+  id              String   @id @default(uuid())
+  batchId         String
+  batch           SheetPayrollBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  mentorId        String
+  mentor          Mentor   @relation(fields: [mentorId], references: [id])
+  presentCount    Int      @default(0)
+  absentCount     Int      @default(0)
+  absentBillableCount Int   @default(0)
+  durationMinutes Int      @default(0)
+  grossEarnings   Decimal  @db.Decimal(12, 2)
+  deductions      Decimal  @db.Decimal(12, 2)
+  netPayable      Decimal  @db.Decimal(12, 2)
+  breakdown       Json
+  reviewStatus    String   @default("PENDING")
+  reviewerRemark  String?
+  reviewedBy      String?
+  reviewedAt      DateTime?
 }
 
 model AuditEvent {

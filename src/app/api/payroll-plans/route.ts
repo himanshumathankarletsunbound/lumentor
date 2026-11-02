@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
       hourlyRate: numberOrDefault(body.hourlyRate, 0),
       perStudentRate: numberOrDefault(body.perStudentRate, 0),
       revenuePercentage: numberOrDefault(body.revenuePercentage, 0),
-      minEligibleDurationMinutes: numberOrDefault(body.minEligibleDurationMinutes, 30),
+      minEligibleDurationMinutes: numberOrDefault(body.minEligibleDurationMinutes, body.compensationModel === 'DURATION_BASED' ? 30 : 0),
       payableClassStatuses: body.payableClassStatuses || ['COMPLETED', 'LATE_CANCELLED'],
       lateCancellationPayPercent: numberOrDefault(body.lateCancellationPayPercent, 50),
       groupMultiplier: numberOrDefault(body.groupMultiplier, 1.25),
@@ -142,7 +142,11 @@ export async function PUT(req: NextRequest) {
         ...(body.hourlyRate !== undefined && { hourlyRate: Number(body.hourlyRate) }),
         ...(body.perStudentRate !== undefined && { perStudentRate: Number(body.perStudentRate) }),
         ...(body.revenuePercentage !== undefined && { revenuePercentage: Number(body.revenuePercentage) }),
-        ...(body.minEligibleDurationMinutes !== undefined && { minEligibleDurationMinutes: Number(body.minEligibleDurationMinutes) }),
+        ...(body.minEligibleDurationMinutes !== undefined && {
+          minEligibleDurationMinutes: Number.isFinite(Number(body.minEligibleDurationMinutes))
+            ? Number(body.minEligibleDurationMinutes)
+            : current.compensationModel === 'DURATION_BASED' ? 30 : 0,
+        }),
         ...(body.lateCancellationPayPercent !== undefined && { lateCancellationPayPercent: Number(body.lateCancellationPayPercent) }),
         ...(body.groupMultiplier !== undefined && { groupMultiplier: Number(body.groupMultiplier) }),
         ...(body.formula !== undefined && { formula: body.formula.trim() }),

@@ -164,7 +164,7 @@ export default function PayrollRulesPage() {
   const [perStudentRate, setPerStudentRate] = useState('0');
   const [revenuePercentage, setRevenuePercentage] = useState('0');
   const [groupMultiplier, setGroupMultiplier] = useState('1');
-  const [minDuration, setMinDuration] = useState('0');
+  const [minDuration, setMinDuration] = useState('30');
   const [lateCancelPercent, setLateCancelPercent] = useState('0');
 
   // Formula state
@@ -227,7 +227,7 @@ export default function PayrollRulesPage() {
     setPerStudentRate('0');
     setRevenuePercentage('0');
     setGroupMultiplier('1');
-    setMinDuration('0');
+    setMinDuration('30');
     setLateCancelPercent('0');
     setIsCustomFormula(false);
     setCustomFormulaText('');
@@ -247,7 +247,7 @@ export default function PayrollRulesPage() {
     setPerStudentRate(String(p.perStudentRate || 0));
     setRevenuePercentage(String(p.revenuePercentage || 0));
     setGroupMultiplier(String(p.groupMultiplier ?? 1.25));
-    setMinDuration(String(p.minEligibleDurationMinutes ?? 30));
+    setMinDuration(String(p.minEligibleDurationMinutes > 0 ? p.minEligibleDurationMinutes : 30));
     setLateCancelPercent(String(p.lateCancellationPayPercent ?? 0));
 
     if (p.formula && p.formula.trim().length > 0) {
@@ -302,7 +302,7 @@ export default function PayrollRulesPage() {
             hourlyRate: parseNumericInput(hourlyRate),
             perStudentRate: parseNumericInput(perStudentRate),
             revenuePercentage: parseNumericInput(revenuePercentage),
-            minEligibleDurationMinutes: parseNumericInput(minDuration),
+            minEligibleDurationMinutes: parseNumericInput(minDuration, model === 'DURATION_BASED' ? 30 : 0),
             lateCancellationPayPercent: Number.isFinite(parseFloat(lateCancelPercent)) ? parseFloat(lateCancelPercent) : 0,
             groupMultiplier: parseNumericInput(groupMultiplier, 1),
             formula: formulaToSave,
@@ -326,7 +326,7 @@ export default function PayrollRulesPage() {
           hourlyRate: parseNumericInput(hourlyRate),
           perStudentRate: parseNumericInput(perStudentRate),
           revenuePercentage: parseNumericInput(revenuePercentage),
-          minEligibleDurationMinutes: parseNumericInput(minDuration),
+          minEligibleDurationMinutes: parseNumericInput(minDuration, model === 'DURATION_BASED' ? 30 : 0),
           payableClassStatuses: ['COMPLETED', 'LATE_CANCELLED'],
           lateCancellationPayPercent: Number.isFinite(parseFloat(lateCancelPercent)) ? parseFloat(lateCancelPercent) : 0,
           groupMultiplier: parseNumericInput(groupMultiplier, 1),
@@ -474,9 +474,6 @@ export default function PayrollRulesPage() {
                     <TableCell>
                       <div className="flex items-center gap-1.5">
                         <span className="font-semibold text-slate-900 text-xs">{p.name}</span>
-                        <Badge variant="purple" size="sm">
-                          v{p.version}
-                        </Badge>
                       </div>
                       <div className="flex items-center gap-2 mt-1">
                         <span className="text-[11px] text-slate-400 font-mono">{p.code}</span>
@@ -934,7 +931,7 @@ export default function PayrollRulesPage() {
             onClose={() => setSelectedPlan(null)}
             maxWidth="md"
             title={selectedPlan.name}
-            subtitle={`Plan Code: ${selectedPlan.code} • Version: v${selectedPlan.version}`}
+            subtitle={`Plan Code: ${selectedPlan.code}`}
             footer={
               <div className="flex items-center justify-between w-full">
                 <Button

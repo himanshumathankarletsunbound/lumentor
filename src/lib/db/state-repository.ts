@@ -1163,7 +1163,24 @@ async function ensurePayrollPlan(organizationId: string, id: string) {
 }
 
 async function ensureBranch(organizationId: string, branchId: string, state: Pick<AppDatabase, 'branches'>) {
-  const branch = state.branches.find((item) => item.id === branchId);
+  const stateBranch = state.branches.find((item) => item.id === branchId);
+  const persistedBranch = stateBranch
+    ? null
+    : await prisma.branch.findUnique({ where: { id: branchId } });
+  const branch = stateBranch || (persistedBranch
+    ? {
+        id: persistedBranch.id,
+        name: persistedBranch.name,
+        code: persistedBranch.code,
+        address: persistedBranch.address || '',
+        city: persistedBranch.city || '',
+        timezone: persistedBranch.timezone,
+        phone: persistedBranch.phone || '',
+        email: persistedBranch.email || '',
+        isActive: persistedBranch.isActive,
+        provenance: persistedBranch.provenance,
+      }
+    : undefined);
   if (!branch) throw new Error(`Branch ${branchId} must exist before creating a related record.`);
   await prisma.branch.upsert({
     where: { id: branch.id },

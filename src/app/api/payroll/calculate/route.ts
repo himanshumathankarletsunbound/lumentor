@@ -15,9 +15,11 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { periodId, startDate, endDate, branchId, mentorIds, payrollPlanId } = body;
 
-    if (!periodId || !startDate || !endDate) {
+    const parsedStart = new Date(startDate);
+    const parsedEnd = new Date(endDate);
+    if (!periodId || !startDate || !endDate || Number.isNaN(parsedStart.getTime()) || Number.isNaN(parsedEnd.getTime()) || parsedStart > parsedEnd) {
       return NextResponse.json(
-        { error: 'Missing required parameters: periodId, startDate, endDate' },
+        { error: 'Valid periodId, startDate, and endDate are required, and startDate must not be after endDate.' },
         { status: 400 }
       );
     }

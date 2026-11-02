@@ -13,16 +13,25 @@ export async function generateBatchFromPostgres(options: CalculatePayrollOptions
     listPayrollPlans(),
     listPenalties(),
     prisma.adjustment.findMany({ select: { mentorId: true, amount: true, appliedPayrollBatchId: true } }),
-    getOrganizationSettings().catch(() => ({ currency: 'INR' })),
+    getOrganizationSettings(),
   ]);
   const selectedMentors = options.mentorIds ? allMentors.filter((mentor) => options.mentorIds!.includes(mentor.id)) : allMentors;
+  if (selectedMentors.length === 0) {
+    throw new Error('No mentors matched the payroll calculation scope.');
+  }
   const context: PayrollContext = {
     adjustments: adjustments.map((item) => ({ mentorId: item.mentorId, amount: Number(item.amount), appliedPayrollBatchId: item.appliedPayrollBatchId })),
     penalties: penalties.map((item) => ({ id: item.id, mentorId: item.mentorId, status: item.status, amount: item.amount, appliedPayrollBatchId: item.appliedPayrollBatchId, category: item.category, reason: item.reason, createdAt: item.createdAt })),
   };
   const lineItems = selectedMentors.map((mentor) => {
-    const plan = plans.find((item) => item.id === (options.payrollPlanId || mentor.payrollPlanId)) || plans[0];
-    if (!plan) throw new Error(`No payroll plan is configured for ${mentor.firstName} ${mentor.lastName}.`);
+    const requestedPlanId = options.payrollPlanId ?? mentor.payrollPlanId;
+    if (!requestedPlanId) {
+      throw new Error(`No payroll plan is assigned to ${mentor.firstName} ${mentor.lastName}.`);
+    }
+    const plan = plans.find((item) => item.id === requestedPlanId);
+    if (!plan) {
+      throw new Error(`Payroll plan ${requestedPlanId} is not available for ${mentor.firstName} ${mentor.lastName}.`);
+    }
     return engine.calculateMentorPayroll(mentor, plan, allClasses, options.startDate, options.endDate, batchId, context);
   });
   const batch: PayrollBatch = {

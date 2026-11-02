@@ -493,10 +493,26 @@ export default function PayrollRulesPage() {
                           </div>
                         )}
                         <div className="text-[11px] text-slate-600 flex flex-wrap gap-x-2 gap-y-0.5">
-                          {p.defaultClassRate > 0 && <span>{getCurrencySymbol()}{p.defaultClassRate}/class</span>}
-                          {p.hourlyRate > 0 && <span>{getCurrencySymbol()}{p.hourlyRate}/hr</span>}
-                          {p.perStudentRate > 0 && <span>+{getCurrencySymbol()}{p.perStudentRate}/student</span>}
-                          {p.revenuePercentage > 0 && <span>{p.revenuePercentage}% rev</span>}
+                          {p.compensationModel === 'PER_CLASS' && p.defaultClassRate > 0 && (
+                            <span>{getCurrencySymbol()}{p.defaultClassRate}/class</span>
+                          )}
+                          {p.compensationModel === 'DURATION_BASED' && p.hourlyRate > 0 && (
+                            <span>{getCurrencySymbol()}{p.hourlyRate}/hr</span>
+                          )}
+                          {p.compensationModel === 'PER_STUDENT' && p.perStudentRate > 0 && (
+                            <span>+{getCurrencySymbol()}{p.perStudentRate}/student</span>
+                          )}
+                          {p.compensationModel === 'PERCENTAGE_BASED' && p.revenuePercentage > 0 && (
+                            <span>{p.revenuePercentage}% rev</span>
+                          )}
+                          {p.compensationModel === 'HYBRID' && (
+                            <>
+                              {p.defaultClassRate > 0 && <span>{getCurrencySymbol()}{p.defaultClassRate}/class</span>}
+                              {p.hourlyRate > 0 && <span>{getCurrencySymbol()}{p.hourlyRate}/hr</span>}
+                              {p.perStudentRate > 0 && <span>+{getCurrencySymbol()}{p.perStudentRate}/student</span>}
+                              {p.revenuePercentage > 0 && <span>{p.revenuePercentage}% rev</span>}
+                            </>
+                          )}
                           {p.groupMultiplier && p.groupMultiplier !== 1 && (
                             <span className="text-indigo-600 font-medium">{p.groupMultiplier}x group</span>
                           )}
@@ -643,7 +659,13 @@ export default function PayrollRulesPage() {
                 <select
                   value={model}
                   onChange={(e) => {
-                    setModel(e.target.value as CompensationModel);
+                    const nextModel = e.target.value as CompensationModel;
+                    setModel(nextModel);
+                    if (nextModel !== 'FIXED_SALARY' && nextModel !== 'HYBRID') setBaseSalary('0');
+                    if (nextModel !== 'PER_CLASS' && nextModel !== 'HYBRID') setClassRate('0');
+                    if (nextModel !== 'DURATION_BASED' && nextModel !== 'HYBRID') setHourlyRate('0');
+                    if (nextModel !== 'PER_STUDENT' && nextModel !== 'HYBRID') setPerStudentRate('0');
+                    if (nextModel !== 'PERCENTAGE_BASED' && nextModel !== 'HYBRID') setRevenuePercentage('0');
                     if (!isCustomFormula) {
                       setCustomFormulaText('');
                     }
@@ -1017,30 +1039,46 @@ export default function PayrollRulesPage() {
                       {selectedPlan.compensationModel.replace(/_/g, ' ')}
                     </span>
                   </div>
+                  {selectedPlan.compensationModel === 'FIXED_SALARY' && (
                   <div>
                     <span className="text-slate-400 block text-[10px]">Base Salary</span>
                     <span className="font-mono font-semibold text-slate-800">
                       {selectedPlan.baseSalary > 0 ? formatCurrency(selectedPlan.baseSalary) : '-'}
                     </span>
                   </div>
+                  )}
+                  {(selectedPlan.compensationModel === 'PER_CLASS' || selectedPlan.compensationModel === 'HYBRID') && (
                   <div>
                     <span className="text-slate-400 block text-[10px]">Class Rate</span>
                     <span className="font-mono font-semibold text-slate-800">
                       {selectedPlan.defaultClassRate > 0 ? formatCurrency(selectedPlan.defaultClassRate) : '-'}
                     </span>
                   </div>
+                  )}
+                  {(selectedPlan.compensationModel === 'DURATION_BASED' || selectedPlan.compensationModel === 'HYBRID') && (
                   <div>
                     <span className="text-slate-400 block text-[10px]">Hourly Rate</span>
                     <span className="font-mono font-semibold text-slate-800">
                       {selectedPlan.hourlyRate > 0 ? formatCurrency(selectedPlan.hourlyRate) : '-'}
                     </span>
                   </div>
+                  )}
+                  {(selectedPlan.compensationModel === 'PER_STUDENT' || selectedPlan.compensationModel === 'HYBRID') && (
                   <div>
                     <span className="text-slate-400 block text-[10px]">Per-Student</span>
                     <span className="font-mono font-semibold text-slate-800">
                       {selectedPlan.perStudentRate > 0 ? formatCurrency(selectedPlan.perStudentRate) : '-'}
                     </span>
                   </div>
+                  )}
+                  {(selectedPlan.compensationModel === 'PERCENTAGE_BASED' || selectedPlan.compensationModel === 'HYBRID') && (
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">Revenue Share</span>
+                    <span className="font-mono font-semibold text-slate-800">
+                      {selectedPlan.revenuePercentage > 0 ? `${selectedPlan.revenuePercentage}%` : '-'}
+                    </span>
+                  </div>
+                  )}
                   <div>
                     <span className="text-slate-400 block text-[10px]">Group Multiplier</span>
                     <span className="font-mono font-semibold text-slate-800">

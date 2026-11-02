@@ -35,8 +35,14 @@ export async function POST(req: NextRequest) {
 
     // Determine target schedule if specified
     const schedule = scheduleId ? db.getPayoutScheduleById(scheduleId) : null;
-    const effectiveStart = schedule?.startDate || startDate || '1970-01-01';
-    const effectiveEnd = schedule?.endDate || endDate || '2099-12-31';
+    const effectiveStart = schedule?.startDate || startDate;
+    const effectiveEnd = schedule?.endDate || endDate;
+    if (!effectiveStart || !effectiveEnd) {
+      return NextResponse.json(
+        { success: false, error: 'A payout schedule or explicit startDate and endDate are required.' },
+        { status: 400 }
+      );
+    }
     const effectiveFreeze = schedule?.freezingDate || freezingDate;
     const effectivePayout = schedule?.payoutDate || payoutDate;
 
@@ -47,6 +53,12 @@ export async function POST(req: NextRequest) {
 
     const startObj = new Date(effectiveStart);
     const endObj = new Date(effectiveEnd);
+    if (Number.isNaN(startObj.getTime()) || Number.isNaN(endObj.getTime()) || startObj > endObj) {
+      return NextResponse.json(
+        { success: false, error: 'Reminder dates must be valid and startDate must not be after endDate.' },
+        { status: 400 }
+      );
+    }
 
     const notifiedMentors: Array<{
       id: string;

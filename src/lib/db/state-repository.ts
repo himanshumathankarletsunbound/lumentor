@@ -559,6 +559,10 @@ export async function updatePayrollPlan(id: string, updates: Partial<PayrollPlan
   return (await listPayrollPlans()).find((item) => item.id === id)!;
 }
 
+export async function countMentorsAssignedToPayrollPlan(payrollPlanId: string): Promise<number> {
+  return prisma.mentor.count({ where: { payrollPlanId } });
+}
+
 export async function deletePayrollPlan(id: string): Promise<void> {
   await prisma.payrollPlan.delete({ where: { id } });
 }

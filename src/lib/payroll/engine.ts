@@ -128,7 +128,9 @@ export class PayrollEngine {
             }
           }
           if (!sessionRevenueBasis || sessionRevenueBasis <= 0) {
-            sessionRevenueBasis = baseClassRate > 0 ? baseClassRate : 120.0;
+            throw new Error(
+              `Revenue basis is missing for percentage-based payroll plan "${plan.name}" on class ${cls.id}. Configure a session revenue basis or package revenue before calculating payroll.`
+            );
           }
           const revShare = sessionRevenueBasis * (plan.revenuePercentage / 100) * lateMultiplier;
           revenueShareEarnings += revShare;
@@ -220,8 +222,10 @@ export class PayrollEngine {
     const lineItems: PayrollLineItem[] = [];
 
     for (const mentor of selectedMentors) {
-      const plan = plans.find((p) => p.id === (options.payrollPlanId || mentor.payrollPlanId)) || plans[0];
-      if (!plan) throw new Error(`No payroll plan is configured for ${mentor.firstName} ${mentor.lastName}.`);
+      const requestedPlanId = options.payrollPlanId ?? mentor.payrollPlanId;
+      if (!requestedPlanId) throw new Error(`No payroll plan is assigned to ${mentor.firstName} ${mentor.lastName}.`);
+      const plan = plans.find((p) => p.id === requestedPlanId);
+      if (!plan) throw new Error(`Payroll plan ${requestedPlanId} is not available for ${mentor.firstName} ${mentor.lastName}.`);
       const item = this.calculateMentorPayroll(
         mentor,
         plan,

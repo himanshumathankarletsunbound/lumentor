@@ -389,17 +389,26 @@ export default function MentorsPage() {
                       <div className="p-4 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-2">
                         <div className="flex items-center justify-between">
                           <span className="font-bold text-indigo-900 text-sm">{plan.name}</span>
-                          <Badge variant="purple" size="sm">
-                            v{plan.version}
-                          </Badge>
                         </div>
                         <p className="text-indigo-800">{plan.description}</p>
                         <div className="pt-2 border-t border-indigo-200 grid grid-cols-2 gap-2 text-slate-700">
                           <div>Model: <strong>{plan.compensationModel}</strong></div>
                           <div>Min Duration: <strong>{plan.minEligibleDurationMinutes} mins</strong></div>
-                          <div>Base Salary: <strong>{formatCurrency(plan.baseSalary)}</strong></div>
-                          <div>Per Class: <strong>{formatCurrency(plan.defaultClassRate)}</strong></div>
-                          <div>Hourly: <strong>{formatCurrency(plan.hourlyRate)}/hr</strong></div>
+                          {plan.compensationModel === 'FIXED_SALARY' && (
+                            <div>Base Salary: <strong>{formatCurrency(plan.baseSalary)}</strong></div>
+                          )}
+                          {(plan.compensationModel === 'PER_CLASS' || plan.compensationModel === 'HYBRID') && (
+                            <div>Per Class: <strong>{formatCurrency(plan.defaultClassRate)}</strong></div>
+                          )}
+                          {(plan.compensationModel === 'DURATION_BASED' || plan.compensationModel === 'HYBRID') && (
+                            <div>Hourly: <strong>{formatCurrency(plan.hourlyRate)}/hr</strong></div>
+                          )}
+                          {(plan.compensationModel === 'PER_STUDENT' || plan.compensationModel === 'HYBRID') && (
+                            <div>Per Student: <strong>{formatCurrency(plan.perStudentRate)}</strong></div>
+                          )}
+                          {(plan.compensationModel === 'PERCENTAGE_BASED' || plan.compensationModel === 'HYBRID') && (
+                            <div>Revenue Share: <strong>{plan.revenuePercentage}%</strong></div>
+                          )}
                           <div>Late Cancel Pay: <strong>{plan.lateCancellationPayPercent}%</strong></div>
                         </div>
                       </div>

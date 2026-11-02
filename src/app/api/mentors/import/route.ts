@@ -6,6 +6,8 @@ import type { Mentor } from '../../../../lib/types/models';
 import { randomUUID } from 'node:crypto';
 
 interface StaffImportRow {
+  firstName?: string;
+  lastName?: string;
   name?: string;
   role?: string;
   phone?: string;
@@ -41,7 +43,7 @@ export async function POST(req: NextRequest) {
     const uniqueRows = new Map<string, StaffImportRow>();
     for (const row of body.rows) {
       const email = String(row.email || '').trim().toLowerCase();
-      const name = String(row.name || '').trim();
+      const name = String(row.name || `${row.firstName || ''} ${row.lastName || ''}`).trim();
       if (email && name) uniqueRows.set(email, { ...row, email, name });
     }
 
@@ -78,7 +80,7 @@ export async function POST(req: NextRequest) {
             provenance: 'CLASSCARD_SOURCED',
             teachingHoursThisMonth: 0,
             completedClassesCount: 0,
-            attendanceRate: 100,
+            attendanceRate: 0,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           };

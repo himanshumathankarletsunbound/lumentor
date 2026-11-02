@@ -61,7 +61,7 @@ export default function PayrollProcessingPage() {
   const [paymentRef, setPaymentRef] = useState('');
   const [showPaymentInput, setShowPaymentInput] = useState(false);
   const [selectedPayslip, setSelectedPayslip] = useState<Payslip | null>(null);
-  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [notification, setNotification] = useState<{ type: 'success' | 'warning' | 'error'; message: string } | null>(null);
 
   const refreshData = () => {
     const freshSchedules = db.getPayoutSchedules();
@@ -79,17 +79,12 @@ export default function PayrollProcessingPage() {
   };
 
   useEffect(() => {
-    refreshData();
-
-    // Check query params safely on client
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const qScheduleId = params.get('scheduleId');
-      if (qScheduleId) {
-        setSelectedScheduleId(qScheduleId);
-        setCalculationMode('SCHEDULE');
-      }
-    }
+    const timer = window.setTimeout(() => {
+      refreshData();
+      const qScheduleId = new URLSearchParams(window.location.search).get('scheduleId');
+      if (qScheduleId) setSelectedScheduleId(qScheduleId);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const activeSchedule = schedules.find((s) => s.id === selectedScheduleId) || schedules[0];
@@ -245,8 +240,10 @@ export default function PayrollProcessingPage() {
       refreshData();
       setSelectedBatchId(batch.id);
       setNotification({
-        type: 'success',
-        message: `Calculated new batch ${batch.batchNumber} with ${batch.totalMentors} mentors (${formatCurrency(batch.totalNet)} total net).`,
+        type: batch.warnings?.length ? 'warning' : 'success',
+        message: batch.warnings?.length
+          ? `Calculated with warnings: ${batch.warnings.join(' ')}`
+          : `Calculated new batch ${batch.batchNumber} with ${batch.totalMentors} mentors (${formatCurrency(batch.totalNet)} total net).`,
       });
     } catch (err: unknown) {
       setNotification({
@@ -419,7 +416,7 @@ export default function PayrollProcessingPage() {
         {notification && (
           <Alert
             type={notification.type}
-            title={notification.type === 'success' ? 'Success' : 'Error'}
+            title={notification.type === 'success' ? 'Success' : notification.type === 'warning' ? 'Warning' : 'Error'}
             message={notification.message}
           />
         )}

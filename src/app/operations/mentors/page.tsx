@@ -10,8 +10,8 @@ import { Button } from '../../../components/ui/Button';
 import { Drawer } from '../../../components/ui/Drawer';
 import { Tabs } from '../../../components/ui/Tabs';
 import { Mentor } from '../../../lib/types/models';
-import { GraduationCap, Mail, Phone, MapPin, DollarSign, Calendar, ShieldAlert, FileText, CheckCircle2, RefreshCw, Plus, Upload } from 'lucide-react';
-import { formatCurrency, formatDuration, formatDate } from '../../../lib/utils/formatters';
+import { Mail, Phone, MapPin, RefreshCw, Plus, Upload, UserRound } from 'lucide-react';
+import { formatCurrency, formatDate } from '../../../lib/utils/formatters';
 import Link from 'next/link';
 import { AddRecordModal } from '../../../components/operations/AddRecordModal';
 
@@ -24,6 +24,7 @@ export default function MentorsPage() {
   const [showModal, setShowModal] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
+  const [userDetails, setUserDetails] = useState<{ user: { id: string; name: string; email: string; status: string; lastLoginAt?: string | null } | null; activity: Array<{ id: string; action: string; details: string; timestamp: string }> } | null>(null);
 
   const plans = db.getPayrollPlans();
   const canViewPayroll = hasPermission('payroll_dashboard', 'view_sensitive_payroll');
@@ -87,14 +88,16 @@ export default function MentorsPage() {
         return cells;
       };
       const headers = parse(lines.shift() || '').map((header) => header.toLowerCase());
-      const index = (name: string) => headers.indexOf(name);
+      const index = (...names: string[]) => headers.findIndex((header) => names.includes(header));
       const rows = lines.map((line) => {
         const cells = parse(line);
         return {
-          name: cells[index('name')] || '',
+          firstName: cells[index('first name')] || '',
+          lastName: cells[index('last name')] || '',
+          name: `${cells[index('first name')] || ''} ${cells[index('last name')] || ''}`.trim(),
           role: cells[index('role')] || '',
           phone: cells[index('phone')] || '',
-          email: cells[index('email')] || '',
+          email: cells[index('email', 'email id')] || '',
         };
       });
       const response = await fetch('/api/mentors/import', {
@@ -123,9 +126,18 @@ export default function MentorsPage() {
     ? db.getPayslips(selectedMentor.id)
     : [];
 
+  React.useEffect(() => {
+    if (!selectedMentor) return;
+    void fetch(`/api/mentors/${selectedMentor.id}/user`)
+      .then(async (response) => response.json())
+      .then((payload) => setUserDetails(payload.success ? payload : null))
+      .catch(() => setUserDetails(null));
+  }, [selectedMentor]);
+
   const drawerTabs = [
     { id: 'overview', label: 'Overview' },
     { id: 'classes', label: `Classes (${mentorClasses.length})` },
+    { id: 'user', label: 'User' },
     ...(canViewPayroll
       ? [
           { id: 'payroll', label: 'Payroll & Plan' },
@@ -286,16 +298,17 @@ export default function MentorsPage() {
             { name: 'lastName', label: 'Last name', placeholder: 'Patel' },
             { name: 'email', label: 'Email', type: 'email', placeholder: 'mentor@example.com' },
             { name: 'phone', label: 'Phone', required: false },
+            { name: 'panNumber', label: 'PAN number', placeholder: 'ABCDE1234F', required: false },
           ]}
           onSave={async (values) => {
             const branch = db.getBranches()[0];
             const plan = plans[0];
             const response = await fetch('/api/records', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'mentor', record: {
               firstName: values.firstName.trim(), lastName: values.lastName.trim(),
-              email: values.email.trim(), phone: values.phone.trim(), branchId: branch?.id || '',
+              email: values.email.trim(), phone: values.phone.trim(), panNumber: values.panNumber.trim().toUpperCase(), branchId: branch?.id || '',
               branchName: branch?.name, subjectIds: [], payrollPlanId: plan?.id || '',
               status: 'ACTIVE', provenance: 'LOCALLY_CREATED', teachingHoursThisMonth: 0,
-              completedClassesCount: 0, attendanceRate: 100,
+              completedClassesCount: 0, attendanceRate: 0,
             }})});
             const result = await response.json();
             if (!response.ok) throw new Error(result.error || 'Unable to create mentor.');
@@ -379,6 +392,45 @@ export default function MentorsPage() {
                 </div>
               )}
 
+              {/* USER TAB */}
+              {activeTab === 'user' && (
+                <div className="space-y-4 text-xs">
+                  {!userDetails?.user ? (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                      <p className="font-bold text-amber-900">No user made</p>
+                      <p className="mt-1 text-amber-800">Create the mentor portal user only when you are ready to grant access.</p>
+                      <div className="mt-3 flex gap-2">
+                        <Button size="sm" onClick={async () => {
+                          try {
+                            const response = await fetch(`/api/mentors/${selectedMentor.id}/user`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'invite' }) });
+                            const payload = await response.json();
+                            if (!response.ok || !payload.success) throw new Error(payload.error || 'Unable to create user.');
+                            setUserDetails({ user: payload.user, activity: [] });
+                          } catch (error) { setImportMessage(error instanceof Error ? error.message : 'Unable to create user.'); }
+                        }}>Make user & send invitation</Button>
+                        <Button size="sm" variant="outline" onClick={async () => {
+                          const password = window.prompt('Enter a password (minimum 8 characters):') || '';
+                          const confirmPassword = window.prompt('Confirm the password:') || '';
+                          try {
+                            const response = await fetch(`/api/mentors/${selectedMentor.id}/user`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'password', password, confirmPassword }) });
+                            const payload = await response.json();
+                            if (!response.ok || !payload.success) throw new Error(payload.error || 'Unable to create user.');
+                            setUserDetails({ user: payload.user, activity: [] });
+                          } catch (error) { setImportMessage(error instanceof Error ? error.message : 'Unable to create user.'); }
+                        }}>Make user & set password</Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="flex items-center gap-2"><UserRound className="h-4 w-4 text-indigo-600" /><strong>{userDetails.user.name}</strong><Badge size="sm" variant="success">{userDetails.user.status}</Badge></div>
+                      <p className="mt-2 text-slate-600">{userDetails.user.email}</p>
+                      <p className="mt-1 text-slate-500">Last login: {userDetails.user.lastLoginAt ? formatDate(userDetails.user.lastLoginAt) : 'Never'}</p>
+                      <div className="mt-4 border-t pt-3"><p className="font-semibold text-slate-700">Session activity</p>{userDetails.activity.length ? userDetails.activity.map((event) => <p key={event.id} className="mt-2 text-slate-600">{formatDate(event.timestamp)} · {event.action} · {event.details}</p>) : <p className="mt-2 text-slate-500">No activity recorded.</p>}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* PAYROLL TAB */}
               {activeTab === 'payroll' && canViewPayroll && (
                 <div className="space-y-4 text-xs">
@@ -414,6 +466,22 @@ export default function MentorsPage() {
                       </div>
                     );
                   })()}
+                  <div className="rounded-xl border border-slate-200 p-4">
+                    <p className="font-bold text-slate-800">Assigned payroll plans</p>
+                    <div className="mt-3 space-y-2">{plans.map((candidate) => {
+                      const checked = (selectedMentor.payrollPlanIds || [selectedMentor.payrollPlanId]).includes(candidate.id);
+                      return <label key={candidate.id} className="flex items-center gap-2"><input type="checkbox" checked={checked} onChange={async (event) => {
+                        const current = new Set(selectedMentor.payrollPlanIds || [selectedMentor.payrollPlanId]);
+                        if (event.target.checked) current.add(candidate.id); else current.delete(candidate.id);
+                        const payrollPlanIds = Array.from(current);
+                        const response = await fetch('/api/mentors', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: selectedMentor.id, payrollPlanIds, payrollPlanId: payrollPlanIds[0] }) });
+                        const payload = await response.json();
+                        if (!response.ok || !payload.success) throw new Error(payload.error || 'Unable to update payroll plans.');
+                        setSelectedMentor({ ...selectedMentor, payrollPlanIds, payrollPlanId: payrollPlanIds[0] });
+                        await refreshMentors();
+                      }} /><span>{candidate.name} ({candidate.code})</span></label>;
+                    })}</div>
+                  </div>
                 </div>
               )}
 

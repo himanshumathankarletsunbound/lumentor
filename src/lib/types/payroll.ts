@@ -242,6 +242,7 @@ export interface PayrollBatch {
   paidAt?: string;
   paymentReference?: string;
   lineItems: PayrollLineItem[];
+  warnings?: string[];
   createdAt: string;
   updatedAt: string;
 }

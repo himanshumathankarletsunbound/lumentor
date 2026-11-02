@@ -25,16 +25,19 @@ export async function generateBatchFromPostgres(options: CalculatePayrollOptions
     initiatives,
     penalties: penalties.map((item) => ({ id: item.id, mentorId: item.mentorId, status: item.status, amount: item.amount, appliedPayrollBatchId: item.appliedPayrollBatchId, category: item.category, reason: item.reason, createdAt: item.createdAt })),
   };
-  const lineItems = selectedMentors.map((mentor) => {
+  const warnings: string[] = [];
+  const lineItems = selectedMentors.flatMap((mentor) => {
     const requestedPlanId = options.payrollPlanId ?? mentor.payrollPlanId;
     if (!requestedPlanId) {
-      throw new Error(`No payroll plan is assigned to ${mentor.firstName} ${mentor.lastName}.`);
+      warnings.push(`No payroll plan is assigned to ${mentor.firstName} ${mentor.lastName}; mentor was skipped.`);
+      return [];
     }
     const plan = plans.find((item) => item.id === requestedPlanId);
     if (!plan) {
-      throw new Error(`Payroll plan ${requestedPlanId} is not available for ${mentor.firstName} ${mentor.lastName}.`);
+      warnings.push(`Payroll plan ${requestedPlanId} is not available for ${mentor.firstName} ${mentor.lastName}; mentor was skipped.`);
+      return [];
     }
-    return engine.calculateMentorPayroll(mentor, plan, allClasses, options.startDate, options.endDate, batchId, context);
+    return [engine.calculateMentorPayroll(mentor, plan, allClasses, options.startDate, options.endDate, batchId, context)];
   });
   const batch: PayrollBatch = {
     id: batchId, batchNumber: `PAY-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(100 + Math.random() * 900)}`,
@@ -45,7 +48,7 @@ export async function generateBatchFromPostgres(options: CalculatePayrollOptions
     totalPenalties: lineItems.reduce((sum, item) => sum + item.penaltyDeductions, 0),
     totalAdjustments: lineItems.reduce((sum, item) => sum + item.bonusAmount, 0),
     totalNet: lineItems.reduce((sum, item) => sum + item.netPayable, 0),
-    currency: orgSettings.currency || 'INR', paymentStatus: 'UNPAID', lineItems, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    currency: orgSettings.currency || 'INR', paymentStatus: 'UNPAID', lineItems, warnings, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
   };
   await prisma.payrollBatch.create({
     data: {

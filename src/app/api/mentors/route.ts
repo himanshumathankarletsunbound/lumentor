@@ -47,7 +47,7 @@ export async function PATCH(req: NextRequest) {
   if (denied) return denied;
   try {
     const body = await req.json();
-    const { id, payrollPlanId, branchId, status, hourlyRate, payoutScheduleId, payoutDay, updatedBy = 'Administrator' } = body;
+    const { id, payrollPlanId, payrollPlanIds, branchId, status, hourlyRate, payoutScheduleId, payoutDay, updatedBy = 'Administrator' } = body;
 
     if (!id) {
       return NextResponse.json(
@@ -71,6 +71,14 @@ export async function PATCH(req: NextRequest) {
         return NextResponse.json({ success: false, error: 'Invalid payrollPlanId' }, { status: 400 });
       }
       updates.payrollPlanId = payrollPlanId;
+    }
+    if (Array.isArray(payrollPlanIds)) {
+      const availablePlans = await listPayrollPlans();
+      if (payrollPlanIds.some((planId: unknown) => typeof planId !== 'string' || !availablePlans.some((plan) => plan.id === planId))) {
+        return NextResponse.json({ success: false, error: 'One or more payroll plans are invalid.' }, { status: 400 });
+      }
+      updates.payrollPlanIds = payrollPlanIds;
+      if (!updates.payrollPlanId && payrollPlanIds[0]) updates.payrollPlanId = payrollPlanIds[0];
     }
 
     if (branchId) {

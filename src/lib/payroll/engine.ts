@@ -226,12 +226,19 @@ export class PayrollEngine {
     const plans = db.getPayrollPlans();
 
     const lineItems: PayrollLineItem[] = [];
+    const warnings: string[] = [];
 
     for (const mentor of selectedMentors) {
       const requestedPlanId = options.payrollPlanId ?? mentor.payrollPlanId;
-      if (!requestedPlanId) throw new Error(`No payroll plan is assigned to ${mentor.firstName} ${mentor.lastName}.`);
+      if (!requestedPlanId) {
+        warnings.push(`No payroll plan is assigned to ${mentor.firstName} ${mentor.lastName}; mentor was skipped.`);
+        continue;
+      }
       const plan = plans.find((p) => p.id === requestedPlanId);
-      if (!plan) throw new Error(`Payroll plan ${requestedPlanId} is not available for ${mentor.firstName} ${mentor.lastName}.`);
+      if (!plan) {
+        warnings.push(`Payroll plan ${requestedPlanId} is not available for ${mentor.firstName} ${mentor.lastName}; mentor was skipped.`);
+        continue;
+      }
       const item = this.calculateMentorPayroll(
         mentor,
         plan,
@@ -268,6 +275,7 @@ export class PayrollEngine {
       currency: db.getOrgSettings()?.currency || 'INR',
       paymentStatus: 'UNPAID',
       lineItems,
+      warnings,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };

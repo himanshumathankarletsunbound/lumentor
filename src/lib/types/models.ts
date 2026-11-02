@@ -94,11 +94,13 @@ export interface Mentor {
   lastName: string;
   email: string;
   phone: string;
+  panNumber?: string;
   avatarUrl?: string;
   branchId: string;
   branchName?: string;
   subjectIds: string[];
   payrollPlanId: string;
+  payrollPlanIds?: string[];
   payoutScheduleId?: string;
   payoutDay?: number; // 3, 5, 15, or custom
   status: 'ACTIVE' | 'ON_LEAVE' | 'INACTIVE';

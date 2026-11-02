@@ -34,6 +34,7 @@ function toCurrentUser(user: {
   sessionExpiry: Date | null;
   resetToken: string | null;
   resetTokenExpiry: Date | null;
+  lastLoginAt?: Date | null;
   mentorId: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -55,6 +56,7 @@ function toCurrentUser(user: {
     sessionExpiry: user.sessionExpiry?.toISOString(),
     resetToken: user.resetToken || undefined,
     resetTokenExpiry: user.resetTokenExpiry?.toISOString(),
+    lastLoginAt: user.lastLoginAt?.toISOString(),
     mentorId: user.mentorId || undefined,
     assignedBranchIds: [],
     createdAt: user.createdAt.toISOString(),
@@ -105,6 +107,7 @@ export async function saveUser(user: CurrentUser): Promise<CurrentUser> {
       sessionExpiry: user.sessionExpiry ? new Date(user.sessionExpiry) : null,
       resetToken: user.resetToken,
       resetTokenExpiry: user.resetTokenExpiry ? new Date(user.resetTokenExpiry) : null,
+      lastLoginAt: user.lastLoginAt ? new Date(user.lastLoginAt) : null,
       mentorId: user.mentorId,
     },
     update: {
@@ -121,6 +124,7 @@ export async function saveUser(user: CurrentUser): Promise<CurrentUser> {
       sessionExpiry: user.sessionExpiry ? new Date(user.sessionExpiry) : null,
       resetToken: user.resetToken,
       resetTokenExpiry: user.resetTokenExpiry ? new Date(user.resetTokenExpiry) : null,
+      lastLoginAt: user.lastLoginAt ? new Date(user.lastLoginAt) : null,
       mentorId: user.mentorId,
     },
   });
@@ -177,7 +181,7 @@ export async function createRole(role: Omit<UserRole, 'id' | 'createdAt' | 'upda
 export async function listMentors(branchId?: string): Promise<Mentor[]> {
   const mentors = await prisma.mentor.findMany({
     where: branchId && branchId !== 'ALL' ? { branchId } : undefined,
-    include: { branch: true, user: true },
+    include: { branch: true, user: true, payrollAssignments: { where: { isActive: true }, select: { payrollPlanId: true } } },
     orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
   });
   return mentors.map((mentor) => ({
@@ -187,11 +191,13 @@ export async function listMentors(branchId?: string): Promise<Mentor[]> {
     lastName: mentor.lastName,
     email: mentor.email,
     phone: mentor.phone || '',
+    panNumber: mentor.panNumber || undefined,
     avatarUrl: mentor.avatarUrl || undefined,
     branchId: mentor.branchId,
     branchName: mentor.branch.name,
     subjectIds: [],
     payrollPlanId: mentor.payrollPlanId,
+    payrollPlanIds: [mentor.payrollPlanId, ...mentor.payrollAssignments.map((assignment) => assignment.payrollPlanId)],
     status: mentor.status as Mentor['status'],
     externalId: mentor.externalId || undefined,
     provenance: mentor.provenance,
@@ -357,13 +363,22 @@ export async function updateMentor(id: string, updates: Partial<Mentor>): Promis
     payrollPlanId: updates.payrollPlanId,
     status: updates.status,
     phone: updates.phone,
+    panNumber: updates.panNumber,
     firstName: updates.firstName,
     lastName: updates.lastName,
   };
   const mentor = await prisma.mentor.update({ where: { id }, data });
+  if (updates.payrollPlanIds) {
+    await prisma.mentorPayrollPlan.updateMany({ where: { mentorId: id }, data: { isActive: false } });
+    await prisma.mentorPayrollPlan.createMany({
+      data: [...new Set([updates.payrollPlanId, ...updates.payrollPlanIds].filter((value): value is string => Boolean(value)))]
+        .map((payrollPlanId) => ({ mentorId: id, payrollPlanId, isActive: true })),
+      skipDuplicates: true,
+    });
+  }
   return {
-    id: mentor.id, firstName: mentor.firstName, lastName: mentor.lastName, email: mentor.email, phone: mentor.phone || '',
-    branchId: mentor.branchId, branchName: '', subjectIds: [], payrollPlanId: mentor.payrollPlanId, status: mentor.status as Mentor['status'],
+    id: mentor.id, firstName: mentor.firstName, lastName: mentor.lastName, email: mentor.email,     phone: mentor.phone || '', panNumber: mentor.panNumber || undefined,
+    branchId: mentor.branchId, branchName: '', subjectIds: [], payrollPlanId: mentor.payrollPlanId, payrollPlanIds: updates.payrollPlanIds, status: mentor.status as Mentor['status'],
     externalId: mentor.externalId || undefined, provenance: mentor.provenance, teachingHoursThisMonth: mentor.teachingHoursThisMonth,
     completedClassesCount: mentor.completedClassesCount, attendanceRate: mentor.attendanceRate,
     createdAt: mentor.createdAt.toISOString(), updatedAt: mentor.updatedAt.toISOString(),
@@ -1191,8 +1206,13 @@ export async function saveNormalizedRecord(
     const payrollPlanId = await ensurePayrollPlan(organizationId, mentor.payrollPlanId);
     await prisma.mentor.upsert({
       where: { id: mentor.id },
-      create: { id: mentor.id, branchId: mentor.branchId, firstName: mentor.firstName, lastName: mentor.lastName, email: mentor.email, phone: mentor.phone, payrollPlanId, status: mentor.status, provenance: mentor.provenance, teachingHoursThisMonth: mentor.teachingHoursThisMonth, completedClassesCount: mentor.completedClassesCount, attendanceRate: mentor.attendanceRate },
-      update: { branchId: mentor.branchId, firstName: mentor.firstName, lastName: mentor.lastName, email: mentor.email, phone: mentor.phone, payrollPlanId, status: mentor.status, provenance: mentor.provenance },
+      create: { id: mentor.id, branchId: mentor.branchId, firstName: mentor.firstName, lastName: mentor.lastName, email: mentor.email, phone: mentor.phone, panNumber: mentor.panNumber, payrollPlanId, status: mentor.status, provenance: mentor.provenance, teachingHoursThisMonth: mentor.teachingHoursThisMonth, completedClassesCount: mentor.completedClassesCount, attendanceRate: mentor.attendanceRate },
+      update: { branchId: mentor.branchId, firstName: mentor.firstName, lastName: mentor.lastName, email: mentor.email, phone: mentor.phone, panNumber: mentor.panNumber, payrollPlanId, status: mentor.status, provenance: mentor.provenance },
+    });
+    await prisma.mentorPayrollPlan.upsert({
+      where: { mentorId_payrollPlanId: { mentorId: mentor.id, payrollPlanId } },
+      create: { mentorId: mentor.id, payrollPlanId, isActive: true },
+      update: { isActive: true },
     });
   }
 }

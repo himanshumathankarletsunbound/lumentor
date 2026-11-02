@@ -237,7 +237,7 @@ Set `CLASSCARD_API_KEY` only on the server. Live synchronization sends this key 
 
 ### Importing a Classcard staff CSV
 
-The **Operations → Mentors & Instructional Staff** page supports **Import staff CSV**. Upload a CSV with `Name`, `Role`, `Phone`, and `Email` columns, such as the Classcard staff export. The import runs through the authenticated server API, creates or updates mentors by unique email, and commits the records to PostgreSQL before reporting success. Duplicate rows with the same email are collapsed because mentor email addresses are unique. A campus branch and payroll plan must exist before importing.
+The **Operations → Mentors & Instructional Staff** page supports **Import staff CSV**. Upload a CSV with `First name`, `Last name`, and `Email ID` columns, such as the current mentor roster. The import runs through the authenticated server API, creates or updates mentors by unique email, stores zero initial attendance/teaching metrics, and never creates users or sends email. A mentor profile can later create a portal user using either an emailed password-setup invitation or an administrator-set password. The profile User tab shows account status, last login, and audit activity. Mentor profiles can have multiple active payroll-plan assignments. A campus branch and payroll plan must exist before importing.
 
 The documented Classcard endpoints currently integrated are:
 

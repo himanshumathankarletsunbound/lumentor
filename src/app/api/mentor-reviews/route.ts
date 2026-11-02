@@ -14,6 +14,14 @@ export async function GET(req: NextRequest) {
     const user = await getSessionUserAsync(req);
     if (user?.role === 'MENTOR') {
       if (!user.mentorId) return NextResponse.json({ success: true, review: null });
+      if (allPeriods) {
+        const reviews = await listMentorReviews();
+        return NextResponse.json({
+          success: true,
+          reviews: reviews.filter((review) => review.mentorId === user.mentorId),
+          leaderboard: reviews,
+        });
+      }
       const review = await getMentorReview(user.mentorId, period);
       return NextResponse.json({
         success: true,

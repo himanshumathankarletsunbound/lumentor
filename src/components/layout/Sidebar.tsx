@@ -35,6 +35,7 @@ import {
   Sparkles,
   Shield,
   Briefcase,
+  Award,
 } from 'lucide-react';
 import { cn } from '../../lib/utils/cn';
 
@@ -142,6 +143,11 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
               name: 'Mentor Dashboard',
               href: '/overview/mentor',
               icon: <GraduationCap className="w-4 h-4" />,
+            },
+            {
+              name: 'My Rating',
+              href: '/overview/mentor/rating',
+              icon: <Award className="w-4 h-4" />,
             },
             {
               name: 'My Teaching Schedule',

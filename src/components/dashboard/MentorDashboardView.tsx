@@ -31,7 +31,8 @@ export function MentorDashboardView() {
   const [disputeModalOpen, setDisputeModalOpen] = useState(false);
   const [disputeTargetId, setDisputeTargetId] = useState('');
   const [disputeNote, setDisputeNote] = useState('');
-  const [mentorReview, setMentorReview] = useState<{ auditScore: number | null; operationScore: number | null; totalScore: number | null } | null>(null);
+  const [mentorReviews, setMentorReviews] = useState<Array<{ mentorId: string; mentorName: string; reviewPeriod: string; totalScore: number | null }>>([]);
+  const [reviewLeaderboard, setReviewLeaderboard] = useState<Array<{ mentorId: string; mentorName: string; reviewPeriod: string; totalScore: number | null }>>([]);
 
   useEffect(() => {
     if (!currentUser.mentorId) return;
@@ -51,16 +52,35 @@ export function MentorDashboardView() {
   }, [currentUser.mentorId]);
 
   useEffect(() => {
-    if (!currentUser.mentorId) {
-      return;
-    }
-    fetch(`/api/mentor-reviews?period=${new Date().toISOString().slice(0, 7)}`)
+    if (!currentUser.mentorId) return;
+    fetch('/api/mentor-reviews?all=true')
       .then((response) => response.ok ? response.json() : null)
       .then((data) => {
-        if (data?.success) setMentorReview(data.review || null);
+        if (data?.success) {
+          setMentorReviews(data.reviews || []);
+          setReviewLeaderboard(data.leaderboard || []);
+        }
       })
-      .catch(() => setMentorReview(null));
+      .catch(() => {
+        setMentorReviews([]);
+        setReviewLeaderboard([]);
+      });
   }, [currentUser.mentorId]);
+
+  const lastMonthPeriod = (() => {
+    const date = new Date();
+    date.setUTCDate(1);
+    date.setUTCMonth(date.getUTCMonth() - 1);
+    return date.toISOString().slice(0, 7);
+  })();
+  const lastMonthRating = mentorReviews.find((review) => review.reviewPeriod === lastMonthPeriod);
+  const lastMonthRankers = reviewLeaderboard
+    .filter((review) => review.reviewPeriod === lastMonthPeriod && review.totalScore !== null)
+    .sort((a, b) => (b.totalScore ?? -1) - (a.totalScore ?? -1))
+    .slice(0, 3);
+  const ratingMood = lastMonthRating?.totalScore === undefined || lastMonthRating?.totalScore === null
+    ? '🙂'
+    : lastMonthRating.totalScore >= 4 ? '😊' : lastMonthRating.totalScore >= 2 ? '😐' : '😞';
 
   // Mentor's classes
   const classes = mentor ? db.getClasses({ mentorId: mentor.id }) : [];
@@ -100,15 +120,18 @@ export function MentorDashboardView() {
       {latestPayslip && <div className="flex justify-end"><Button variant="outline" size="sm" leftIcon={<FileText className="w-4 h-4" />} onClick={() => setSelectedPayslip(latestPayslip)}>View latest payslip ({latestPayslip.payslipNumber})</Button></div>}
 
       <Card>
-        <CardHeader title="Monthly mentor review score" subtitle="Your points are shown after the Audit Team submits the review." />
+        <CardHeader title="Last month rating" subtitle="Your rating and the top rankers from the previous review period." />
         <CardContent>
-          {mentorReview ? (
-            <div className="grid grid-cols-3 gap-3 text-center">
-              <div><p className="text-xs text-slate-500">Audit points</p><p className="mt-1 text-xl font-bold text-slate-900">{mentorReview.auditScore ?? 'Pending'} / 3</p></div>
-              <div><p className="text-xs text-slate-500">Operations points</p><p className="mt-1 text-xl font-bold text-slate-900">{mentorReview.operationScore ?? 'Pending'} / 2</p></div>
-              <div><p className="text-xs text-slate-500">Total points</p><p className="mt-1 text-xl font-bold text-indigo-700">{mentorReview.totalScore ?? 'Pending'} / 5</p></div>
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.8fr)]">
+            <div className="flex items-center gap-5 rounded-xl bg-indigo-50/70 p-5">
+              <span className="text-5xl" aria-label="last month rating mood">{ratingMood}</span>
+              <div><p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Last month score</p><p className="mt-1 text-3xl font-bold text-slate-900">{lastMonthRating?.totalScore ?? '—'} <span className="text-base font-medium text-slate-500">/ 5</span></p><p className="mt-1 text-xs text-slate-500">Happy 4+, okay 2–3.99, needs improvement below 2.</p></div>
             </div>
-          ) : <p className="text-sm text-slate-500">No review has been submitted for this month yet.</p>}
+            <div>
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Top rankers · {lastMonthPeriod}</p>
+              <div className="space-y-2">{lastMonthRankers.map((ranker, index) => <div key={ranker.mentorId} className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2"><span className="text-lg">{['🥇', '🥈', '🥉'][index]}</span><span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-800">{ranker.mentorName}</span><span className="text-sm font-bold text-indigo-700">{ranker.totalScore}/5</span></div>)}{lastMonthRankers.length === 0 && <p className="text-sm text-slate-500">Top rankers will appear after last month&apos;s reviews are submitted.</p>}</div>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

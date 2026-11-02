@@ -270,6 +270,12 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
           groupName: 'Audit Workspace',
           items: [
             {
+              name: 'Audit Dashboard',
+              href: '/audit/dashboard?mode=dashboard',
+              icon: <LayoutDashboard className="w-4 h-4" />,
+              module: 'mentor_reviews',
+            },
+            {
               name: 'Post rating',
               href: '/audit/dashboard?mode=post',
               icon: <Shield className="w-4 h-4" />,

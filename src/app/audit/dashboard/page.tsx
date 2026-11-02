@@ -38,7 +38,7 @@ function AuditDashboardContent() {
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const requestedMode = searchParams.get('mode');
-  const mode: 'post' | 'analyze' = requestedMode === 'analyze' ? 'analyze' : 'post';
+  const mode: 'dashboard' | 'post' | 'analyze' = requestedMode === 'analyze' ? 'analyze' : requestedMode === 'post' ? 'post' : 'dashboard';
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -97,6 +97,15 @@ function AuditDashboardContent() {
       count: values.count,
     }));
   }, [allReviews]);
+  const previousPeriod = useMemo(() => {
+    const date = new Date(`${period}-01T00:00:00`);
+    date.setMonth(date.getMonth() - 1);
+    return date.toISOString().slice(0, 7);
+  }, [period]);
+  const topPerformers = useMemo(() => (reviewPeriod: string) => allReviews
+    .filter((review) => review.reviewPeriod === reviewPeriod && review.totalScore !== null)
+    .sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0))
+    .slice(0, 5), [allReviews]);
 
   const saveScore = async (mentorId: string) => {
     const existingReview = reviewByMentor.get(mentorId);
@@ -178,6 +187,22 @@ function AuditDashboardContent() {
           <label className="text-sm font-medium text-slate-700">Review period<input type="month" value={period} onChange={(event) => setPeriod(event.target.value)} className="mt-1 block rounded-lg border border-slate-300 px-3 py-2" /></label>
         </div>
         {error && <Alert variant="error">{error}</Alert>}
+        {mode === 'dashboard' && <>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              ['Active mentors', mentors.length, 'Current active roster'],
+              ['Current month reviews', reviews.length, `${period} ratings submitted`],
+              ['Pending current ratings', pendingReviews, 'Mentors still awaiting review'],
+              ['Historical reviews', allReviews.length, 'All submitted review records'],
+            ].map(([label, value, detail]) => <Card key={String(label)}><CardContent><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-2 text-3xl font-bold text-slate-900">{value}</p><p className="mt-1 text-xs text-slate-400">{detail}</p></CardContent></Card>)}
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {[['Top performers · current month', period], ['Top performers · previous month', previousPeriod]].map(([title, reviewPeriod]) => <Card key={String(title)}>
+              <CardHeader title={String(title)} subtitle={String(reviewPeriod)} />
+              <CardContent>{topPerformers(String(reviewPeriod)).length ? <div className="space-y-3">{topPerformers(String(reviewPeriod)).map((review, index) => <div key={review.id} className="flex items-center justify-between rounded-lg bg-slate-50 p-3"><div><p className="font-semibold text-slate-900">{index + 1}. {review.mentorName}</p><p className="text-xs text-slate-500">{review.branchName}</p></div><p className="font-bold text-indigo-700">{review.totalScore} / 5</p></div>)}</div> : <p className="py-6 text-center text-sm text-slate-500">No completed ratings for {reviewPeriod}.</p>}</CardContent>
+            </Card>)}
+          </div>
+        </>}
         {mode === 'post' && <Card>
           <CardHeader title="Post mentor ratings" subtitle={`Upload audit ratings for ${period}. Operations points default to 2.`} />
           <CardContent>

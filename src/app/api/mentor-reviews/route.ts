@@ -64,7 +64,9 @@ export async function POST(req: NextRequest) {
         if (!mentor) throw new Error(`Row ${index + 2}: active mentor ID "${mentorId}" was not found.`);
         const auditScore = Number(normalized.get('auditrating') || normalized.get('auditscore') || '');
         if (!Number.isFinite(auditScore) || auditScore < 0 || auditScore > 3) throw new Error(`Row ${index + 2}: Audit rating must be between 0 and 3.`);
-        const review = await upsertMentorReview({ mentorId, reviewPeriod, auditScore, operationScore: 2, auditComments: normalized.get('remark') || null, operationComments: normalized.get('remark') || null, reviewerId: user.id, reviewerRole: 'AUDIT' });
+        const operationScore = Number(normalized.get('operationsrating') || normalized.get('operationsscore') || '2');
+        if (!Number.isFinite(operationScore) || operationScore < 0 || operationScore > 2) throw new Error(`Row ${index + 2}: Operations rating must be between 0 and 2.`);
+        const review = await upsertMentorReview({ mentorId, reviewPeriod, auditScore, operationScore, auditComments: normalized.get('remark') || null, operationComments: normalized.get('remark') || null, reviewerId: user.id, reviewerRole: 'AUDIT' });
         saved.push(review);
       }
       return NextResponse.json({ success: true, submitted: saved.length, reviews: saved });

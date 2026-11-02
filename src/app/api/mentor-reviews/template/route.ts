@@ -9,9 +9,16 @@ export async function GET(req: NextRequest) {
   const denied = await authorizationErrorAsync(req, 'mentor_reviews', 'view');
   if (denied) return denied;
   const mentors = (await listMentors()).filter((mentor) => mentor.status === 'ACTIVE');
-  const rows = mentors.map((mentor) => ({ 'Mentor ID': mentor.id, 'Mentor Name': `${mentor.firstName} ${mentor.lastName}`.trim(), 'Audit Rating': 2, Remark: '' }));
-  const worksheet = XLSX.utils.json_to_sheet(rows);
-  worksheet['!cols'] = [{ wch: 24 }, { wch: 30 }, { wch: 16 }, { wch: 45 }];
+  const headers = ['Mentor ID', 'Mentor Name', 'Audit Rating', 'Operations Rating', 'Remark'];
+  const rows = mentors.map((mentor) => [
+    mentor.id,
+    `${mentor.firstName} ${mentor.lastName}`.trim(),
+    '',
+    2,
+    '',
+  ]);
+  const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  worksheet['!cols'] = [{ wch: 24 }, { wch: 30 }, { wch: 16 }, { wch: 20 }, { wch: 45 }];
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Mentor Ratings');
   const output = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });

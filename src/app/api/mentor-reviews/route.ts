@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
   if (denied) return denied;
   try {
     const period = new URL(req.url).searchParams.get('period') || undefined;
+    const allPeriods = new URL(req.url).searchParams.get('all') === 'true';
     const user = await getSessionUserAsync(req);
     if (user?.role === 'MENTOR') {
       if (!user.mentorId) return NextResponse.json({ success: true, review: null });
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
         } : null,
       });
     }
-    const [reviews, mentors] = await Promise.all([listMentorReviews(period), listMentors()]);
+    const [reviews, mentors] = await Promise.all([listMentorReviews(allPeriods ? undefined : period), listMentors()]);
     return NextResponse.json({ success: true, reviews, mentors });
   } catch {
     return NextResponse.json({ success: false, error: 'Failed to load mentor reviews.' }, { status: 500 });

@@ -7,7 +7,6 @@ import { AppShell } from '../../../components/layout/AppShell';
 import { Card, CardContent, CardHeader } from '../../../components/ui/Card';
 import { Alert } from '../../../components/ui/Alert';
 import { Button } from '../../../components/ui/Button';
-import { useAuth } from '../../../lib/auth/AuthContext';
 import { WelcomeHeader } from '../../../components/dashboard/WelcomeHeader';
 
 type Mentor = { id: string; firstName: string; lastName: string; branchName?: string; status: string };
@@ -27,18 +26,17 @@ type Review = {
 const currentPeriod = new Date().toISOString().slice(0, 7);
 
 function AuditDashboardContent() {
-  const { currentUser } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
   const [period, setPeriod] = useState(currentPeriod);
   const [mentors, setMentors] = useState<Mentor[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [allReviews, setAllReviews] = useState<Review[]>([]);
   const [scores, setScores] = useState<Record<string, { auditScore: string; operationScore: string; comments: string }>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const isAudit = currentUser.role === 'AUDIT';
   const requestedMode = searchParams.get('mode');
   const mode: 'post' | 'analyze' = requestedMode === 'analyze' ? 'analyze' : 'post';
 
@@ -46,11 +44,17 @@ function AuditDashboardContent() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/mentor-reviews?period=${encodeURIComponent(period)}`);
+      const [response, allResponse] = await Promise.all([
+        fetch(`/api/mentor-reviews?period=${encodeURIComponent(period)}`),
+        fetch('/api/mentor-reviews?all=true'),
+      ]);
       const data = await response.json();
+      const allData = await allResponse.json();
       if (!response.ok || !data.success) throw new Error(data.error || 'Failed to load mentor reviews.');
+      if (!allResponse.ok || !allData.success) throw new Error(allData.error || 'Failed to load review analytics.');
       setMentors(data.mentors || []);
       setReviews(data.reviews || []);
+      setAllReviews(allData.reviews || []);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed to load mentor reviews.');
     } finally {
@@ -75,6 +79,24 @@ function AuditDashboardContent() {
     const scoreB = reviewByMentor.get(b.id)?.totalScore ?? -1;
     return scoreB - scoreA || `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
   }), [mentors, reviewByMentor]);
+  const monthlyAnalysis = useMemo(() => {
+    const grouped = new Map<string, { audit: number; operations: number; total: number; count: number }>();
+    allReviews.forEach((review) => {
+      const current = grouped.get(review.reviewPeriod) || { audit: 0, operations: 0, total: 0, count: 0 };
+      if (review.auditScore !== null) current.audit += review.auditScore;
+      if (review.operationScore !== null) current.operations += review.operationScore;
+      if (review.totalScore !== null) current.total += review.totalScore;
+      current.count += 1;
+      grouped.set(review.reviewPeriod, current);
+    });
+    return [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([month, values]) => ({
+      month,
+      audit: values.count ? values.audit / values.count : 0,
+      operations: values.count ? values.operations / values.count : 0,
+      total: values.count ? values.total / values.count : 0,
+      count: values.count,
+    }));
+  }, [allReviews]);
 
   const saveScore = async (mentorId: string) => {
     const existingReview = reviewByMentor.get(mentorId);
@@ -174,14 +196,15 @@ function AuditDashboardContent() {
             </div>
             <div className="mt-5 overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead><tr className="border-b border-slate-200 text-xs uppercase text-slate-500"><th className="px-3 py-2">Mentor</th><th className="px-3 py-2">Audit rating / 3</th><th className="px-3 py-2">Remark</th><th className="px-3 py-2"></th></tr></thead>
+                <thead><tr className="border-b border-slate-200 text-xs uppercase text-slate-500"><th className="px-3 py-2">Mentor</th><th className="px-3 py-2">Audit / 3</th><th className="px-3 py-2">Operations / 2</th><th className="px-3 py-2">Review</th><th className="px-3 py-2"></th></tr></thead>
                 <tbody>{mentors.map((mentor) => {
                   const review = reviewByMentor.get(mentor.id);
                   const input = scores[mentor.id] || { auditScore: review?.auditScore?.toString() || '', operationScore: '2', comments: '' };
                   return <tr key={mentor.id} className="border-b border-slate-100">
                     <td className="px-3 py-3 font-medium">{mentor.firstName} {mentor.lastName}<span className="ml-2 text-xs text-slate-400">{mentor.id}</span></td>
                     <td className="px-3 py-3"><input type="number" min="0" max="3" step="0.01" value={input.auditScore} onChange={(event) => setScores((previous) => ({ ...previous, [mentor.id]: { ...input, auditScore: event.target.value } }))} className="w-24 rounded border border-slate-300 px-2 py-1.5" /></td>
-                    <td className="px-3 py-3"><input value={input.comments} onChange={(event) => setScores((previous) => ({ ...previous, [mentor.id]: { ...input, comments: event.target.value } }))} placeholder="Optional remark" className="w-full min-w-48 rounded border border-slate-300 px-2 py-1.5" /></td>
+                    <td className="px-3 py-3"><input type="number" min="0" max="2" step="0.01" value={input.operationScore} onChange={(event) => setScores((previous) => ({ ...previous, [mentor.id]: { ...input, operationScore: event.target.value } }))} className="w-24 rounded border border-slate-300 px-2 py-1.5" /></td>
+                    <td className="px-3 py-3"><input value={input.comments} onChange={(event) => setScores((previous) => ({ ...previous, [mentor.id]: { ...input, comments: event.target.value } }))} placeholder="Write review" className="w-full min-w-48 rounded border border-slate-300 px-2 py-1.5" /></td>
                     <td className="px-3 py-3"><Button size="sm" onClick={() => void saveScore(mentor.id)} disabled={saving === mentor.id}>{saving === mentor.id ? 'Saving' : 'Submit'}</Button></td>
                   </tr>;
                 })}</tbody>
@@ -199,6 +222,18 @@ function AuditDashboardContent() {
             ['Still pending', pendingReviews, 'Needs final review'],
           ].map(([label, value, detail]) => <Card key={String(label)}><CardContent><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-2 text-3xl font-bold text-slate-900">{value}</p><p className="mt-1 text-xs text-slate-400">{detail}</p></CardContent></Card>)}
         </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card><CardContent><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">All-month reviews</p><p className="mt-2 text-3xl font-bold text-slate-900">{allReviews.length}</p><p className="mt-1 text-xs text-slate-400">Historical ratings recorded</p></CardContent></Card>
+          <Card><CardContent><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Historical average</p><p className="mt-2 text-3xl font-bold text-indigo-700">{allReviews.length ? (allReviews.reduce((sum, review) => sum + (review.totalScore || 0), 0) / allReviews.filter((review) => review.totalScore !== null).length || 0).toFixed(2) : '0.00'} / 5</p><p className="mt-1 text-xs text-slate-400">Average final score</p></CardContent></Card>
+          <Card><CardContent><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Months analyzed</p><p className="mt-2 text-3xl font-bold text-emerald-700">{monthlyAnalysis.length}</p><p className="mt-1 text-xs text-slate-400">Available review periods</p></CardContent></Card>
+        </div>
+        <Card>
+          <CardHeader title="Monthly rating trend" subtitle="Average Audit, Operations, and total scores across all submitted months." />
+          <CardContent>
+            {monthlyAnalysis.length === 0 ? <p className="py-8 text-center text-slate-500">No historical ratings available.</p> : <div className="space-y-4">{monthlyAnalysis.map((item) => <div key={item.month}><div className="mb-1 flex justify-between text-xs font-semibold text-slate-600"><span>{item.month} · {item.count} ratings</span><span>{item.total.toFixed(2)} / 5 total</span></div><div className="flex h-3 gap-1 overflow-hidden rounded-full bg-slate-100"><div className="bg-indigo-500" style={{ width: `${(item.audit / 3) * 50}%` }} title={`Audit ${item.audit.toFixed(2)} / 3`} /><div className="bg-amber-400" style={{ width: `${(item.operations / 2) * 25}%` }} title={`Operations ${item.operations.toFixed(2)} / 2`} /><div className="bg-emerald-500" style={{ width: `${(item.total / 5) * 25}%` }} title={`Total ${item.total.toFixed(2)} / 5`} /></div></div>)}</div>}
+            <div className="mt-4 flex flex-wrap gap-4 text-xs text-slate-500"><span><i className="mr-1 inline-block h-2 w-2 rounded-full bg-indigo-500" />Audit / 3</span><span><i className="mr-1 inline-block h-2 w-2 rounded-full bg-amber-400" />Operations / 2</span><span><i className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-500" />Total / 5</span></div>
+          </CardContent>
+        </Card>
         <Card>
           <CardHeader>
             <h2 className="font-semibold">Mentor ranking</h2>
@@ -211,11 +246,6 @@ function AuditDashboardContent() {
                   <tbody>
                     {rankedMentors.map((mentor, index) => {
                       const review = reviewByMentor.get(mentor.id);
-                      const input = scores[mentor.id] || {
-                        auditScore: review?.auditScore?.toString() || '',
-                        operationScore: review?.operationScore?.toString() || '2',
-                        comments: '',
-                      };
                       return <tr key={mentor.id} className="border-b border-slate-100 align-top">
                         <td className="px-3 py-4 font-semibold">{review?.totalScore === null || review?.totalScore === undefined ? '—' : index + 1}</td>
                         <td className="px-3 py-4 font-medium">{mentor.firstName} {mentor.lastName}</td>
@@ -223,16 +253,7 @@ function AuditDashboardContent() {
                         <td className="px-3 py-4">{review?.auditScore ?? '—'}</td>
                         <td className="px-3 py-4">{review?.operationScore ?? '—'}</td>
                         <td className="px-3 py-4 font-bold text-indigo-700">{review?.totalScore ?? 'Pending'}</td>
-                        <td className="min-w-[260px] px-3 py-3">
-                          {(isAudit || currentUser.role === 'ADMINISTRATOR') ? <div className="flex gap-2">
-                            <div className="flex-1 space-y-2">
-                              <input type="number" min="0" max={3} step="0.01" value={input.auditScore} onChange={(event) => setScores((previous) => ({ ...previous, [mentor.id]: { ...input, auditScore: event.target.value } }))} placeholder="Audit 0–3" className="w-full rounded border border-slate-300 px-2 py-1.5" />
-                              <input type="number" min="0" max={2} step="0.01" value={input.operationScore} onChange={(event) => setScores((previous) => ({ ...previous, [mentor.id]: { ...input, operationScore: event.target.value } }))} placeholder="Operations 0–2" className="w-full rounded border border-slate-300 px-2 py-1.5" />
-                              <input value={input.comments} onChange={(event) => setScores((previous) => ({ ...previous, [mentor.id]: { ...input, comments: event.target.value } }))} placeholder="Comments (optional)" className="w-full rounded border border-slate-300 px-2 py-1.5" />
-                            </div>
-                            <Button size="sm" onClick={() => saveScore(mentor.id)} disabled={saving === mentor.id}>{saving === mentor.id ? 'Saving' : 'Save'}</Button>
-                          </div> : <span className="text-slate-500">View only</span>}
-                        </td>
+                        <td className="px-3 py-4 text-slate-500">{review?.auditComments || review?.operationComments || '—'}</td>
                       </tr>;
                     })}
                   </tbody>

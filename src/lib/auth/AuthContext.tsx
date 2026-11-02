@@ -18,12 +18,10 @@ interface AuthContextType {
   currentUser: CurrentUser;
   isAuthenticated: boolean;
   isLoading: boolean;
-  switchUser: (userId: string) => void;
   login: (usernameOrEmail: string, password?: string, rememberMe?: boolean) => Promise<{ success: boolean; user?: CurrentUser; error?: string }>;
   logout: () => Promise<void>;
   requestPasswordReset: (email: string) => Promise<{ success: boolean; message?: string; error?: string; resetUrl?: string }>;
   resetPassword: (token: string, newPassword: string) => Promise<{ success: boolean; message?: string; error?: string }>;
-  availableUsers: CurrentUser[];
   selectedBranch: string; // 'ALL' or branchId
   setSelectedBranch: (branchId: string) => void;
   hasPermission: (module: PermissionModule, action: PermissionAction, branchId?: string) => boolean;
@@ -180,10 +178,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const switchUser = (userId: string) => {
-    void userId;
-  };
-
   const hasPerm = (module: PermissionModule, action: PermissionAction, branchId?: string) => {
     return checkPermission(currentUser, module, action, branchId || (selectedBranch !== 'ALL' ? selectedBranch : undefined));
   };
@@ -202,12 +196,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         currentUser,
         isAuthenticated,
         isLoading,
-        switchUser,
         login,
         logout,
         requestPasswordReset,
         resetPassword,
-        availableUsers: [],
         selectedBranch,
         setSelectedBranch,
         hasPermission: hasPerm,

@@ -24,13 +24,11 @@ import {
   FileText,
   ChevronRight,
   CreditCard,
-  Database,
 } from 'lucide-react';
 import { formatCurrency, formatDate, formatTime, formatPercentage, setSystemCurrency } from '../../lib/utils/formatters';
 import Link from 'next/link';
 import { ClassEvent, Student, Mentor, Branch, Invoice, Payment, AuditEvent } from '../../lib/types/models';
 import { Payslip, PayrollBatch, Penalty } from '../../lib/types/payroll';
-import { SyncJob } from '../../lib/types/classcard';
 import { WelcomeHeader } from './WelcomeHeader';
 
 export function ExecutiveDashboardView() {
@@ -38,9 +36,7 @@ export function ExecutiveDashboardView() {
   const [selectedEvent, setSelectedEvent] = useState<ClassEvent | null>(null);
   const [selectedPayslip, setSelectedPayslip] = useState<Payslip | null>(null);
 
-  const [isSyncing, setIsSyncing] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [syncNotice, setSyncNotice] = useState<{ success: boolean; message: string } | null>(null);
 
   // Live state initialized from local store, refreshed from API
   const [branches, setBranches] = useState<Branch[]>(() => db.getBranches());
@@ -49,7 +45,6 @@ export function ExecutiveDashboardView() {
   const [classes, setClasses] = useState<ClassEvent[]>(() => db.getClasses({ branchId: selectedBranch }));
   const [penalties, setPenalties] = useState<Penalty[]>(() => db.getPenalties());
   const [batches, setBatches] = useState<PayrollBatch[]>(() => db.getPayrollBatches());
-  const [syncJobs, setSyncJobs] = useState<SyncJob[]>(() => db.getSyncJobs());
   const [auditLogs, setAuditLogs] = useState<AuditEvent[]>(() => db.getAuditLogs(5));
   const [payslips, setPayslips] = useState<Payslip[]>(() => db.getPayslips());
   const [invoices, setInvoices] = useState<Invoice[]>(() => db.getInvoices());
@@ -67,7 +62,6 @@ export function ExecutiveDashboardView() {
         if (json.data.classes) setClasses(json.data.classes);
         if (json.data.penalties) setPenalties(json.data.penalties);
         if (json.data.batches) setBatches(json.data.batches);
-        if (json.data.syncJobs) setSyncJobs(json.data.syncJobs);
         if (json.data.auditLogs) setAuditLogs(json.data.auditLogs);
         if (json.data.payslips) setPayslips(json.data.payslips);
         if (json.data.invoices) setInvoices(json.data.invoices);
@@ -93,43 +87,6 @@ export function ExecutiveDashboardView() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshData();
   }, [refreshData]);
-
-  const handleLiveSync = async () => {
-    setIsSyncing(true);
-    setSyncNotice(null);
-    try {
-      const res = await fetch('/api/classcard/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobType: 'ALL' }),
-      });
-      const data = await res.json();
-      if (data.status === 'COMPLETED' || data.success || data.recordsProcessed > 0) {
-        setSyncNotice({
-          success: true,
-          message: `Successfully synchronized ${data.recordsProcessed || 0} live records from Classcard API (${data.recordsCreated || 0} new, ${data.recordsUpdated || 0} updated).`,
-        });
-        await refreshData();
-      } else {
-        const errorDetail =
-          data.errorMessage ||
-          data.error ||
-          (data.logSummary ? data.logSummary.filter((l: string) => l.includes('Warning:') || l.includes('Failed')).join('; ') : '') ||
-          'Failed to sync with Classcard API.';
-        setSyncNotice({
-          success: false,
-          message: `${errorDetail} - Check and configure your live Classcard API key in Classcard Settings.`,
-        });
-      }
-    } catch (err: unknown) {
-      setSyncNotice({
-        success: false,
-        message: err instanceof Error ? err.message : 'Network error during sync',
-      });
-    } finally {
-      setIsSyncing(false);
-    }
-  };
 
   // Metrics calculation
   const totalStudents = students.length;
@@ -214,16 +171,6 @@ export function ExecutiveDashboardView() {
             >
               Refresh Data
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleLiveSync}
-              isLoading={isSyncing}
-              className="bg-emerald-950/80 border-emerald-700/60 text-emerald-300 hover:bg-emerald-900"
-              leftIcon={<Database className="w-3.5 h-3.5 text-emerald-400" />}
-            >
-              Sync Classcard API
-            </Button>
             <Link href="/finance/payroll-processing">
               <Button
                 variant="primary"
@@ -236,52 +183,16 @@ export function ExecutiveDashboardView() {
             </Link>
       </div>
 
-      {/* Production Live Sync Alert Banner */}
-      {syncNotice && (
-        <div className={`p-4 rounded-xl border text-xs flex items-center justify-between ${
-          syncNotice.success
-            ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-            : 'bg-rose-50 border-rose-200 text-rose-800'
-        }`}>
-          <span>{syncNotice.message}</span>
-          <Button variant="ghost" size="sm" onClick={() => setSyncNotice(null)}>Dismiss</Button>
-        </div>
-      )}
-
       {totalStudents === 0 && totalClasses === 0 && (
-        <div className="rounded-2xl border border-indigo-200 bg-gradient-to-r from-indigo-50/80 via-white to-sky-50/80 p-5 sm:p-6 shadow-xs">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-xs">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[11px] font-bold">
-                  <RefreshCw className="w-3.5 h-3.5 text-indigo-600" />
-                  Production API Gateway
-                </span>
-                <span className="text-xs text-slate-500 font-medium">Demo Data Purged</span>
-              </div>
               <h3 className="text-base font-bold text-slate-900">
-                Classcard Cloud Synchronization Required
+                No operational activity yet
               </h3>
               <p className="text-xs text-slate-600 max-w-2xl leading-relaxed">
-                All mock entities have been removed. Connect your production Classcard API key to synchronize students, faculty staff, and scheduled classes directly into LUmentor.
+                Add students, faculty, and scheduled classes to begin using the operational dashboard.
               </p>
-            </div>
-            <div className="flex items-center gap-2.5 shrink-0">
-              <Link href="/admin/classcard-integration">
-                <Button variant="outline" size="sm" className="bg-white">
-                  Classcard Settings
-                </Button>
-              </Link>
-              <Button
-                variant="primary"
-                size="sm"
-                className="bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/20"
-                onClick={handleLiveSync}
-                isLoading={isSyncing}
-                leftIcon={<RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />}
-              >
-                Sync Production Now
-              </Button>
             </div>
           </div>
         </div>
@@ -315,7 +226,7 @@ export function ExecutiveDashboardView() {
           value={totalClasses > 0 ? formatPercentage(attendanceRate) : '0%'}
           icon={<Percent className="w-5 h-5" />}
           color="emerald"
-          subtitle={totalClasses > 0 ? 'Verified class roster' : 'Awaiting sync'}
+          subtitle={totalClasses > 0 ? 'Verified class roster' : 'Awaiting class data'}
         />
         <StatCard
           title="Cancellation Rate"
@@ -351,11 +262,11 @@ export function ExecutiveDashboardView() {
         />
       </div>
 
-      {/* Classcard Live API Telemetry Strip */}
+      {/* Financial and roster overview */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
         <StatCard
-          title="Classcard Students Synced"
-          value={students.filter((s) => s.provenance === 'CLASSCARD_SOURCED').length}
+          title="Students in Roster"
+          value={students.length}
           icon={<Users className="w-5 h-5" />}
           color="indigo"
           subtitle={`${students.length} total in roster`}
@@ -503,21 +414,6 @@ export function ExecutiveDashboardView() {
                 </div>
               )}
 
-              {/* Sync Health Status */}
-              <div className="p-3.5 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <RefreshCw className="w-4 h-4 text-emerald-600" />
-                  <div>
-                    <p className="font-semibold text-slate-800">Classcard Gateway</p>
-                    <p className="text-[11px] text-slate-400">
-                      {syncJobs[0]?.status === 'COMPLETED' ? 'Sync operational' : 'Sync pending'}
-                    </p>
-                  </div>
-                </div>
-                <Badge variant="success" size="sm" dot>
-                  Healthy
-                </Badge>
-              </div>
             </div>
           </CardContent>
         </Card>
@@ -527,7 +423,7 @@ export function ExecutiveDashboardView() {
       <Card>
         <CardHeader
           title="Verifiable System Audit Log"
-          subtitle="Cryptographically immutable records of approvals, syncs, and adjustments"
+          subtitle="Cryptographically immutable records of approvals and adjustments"
           action={
             <Link
               href="/admin/audit-logs"

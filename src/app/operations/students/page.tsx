@@ -8,8 +8,7 @@ import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { RowActions } from '../../../components/ui/RowActions';
 import { DeleteConfirmModal } from '../../../components/ui/DeleteConfirmModal';
-import { Search, RefreshCw, Plus, ArrowDown, ArrowUp } from 'lucide-react';
-import Link from 'next/link';
+import { Search, Plus, ArrowDown, ArrowUp } from 'lucide-react';
 import { AddRecordModal } from '../../../components/operations/AddRecordModal';
 import { Student } from '../../../lib/types/models';
 
@@ -19,7 +18,6 @@ export default function StudentsPage() {
   const [statusFilter, setStatusFilter] = useState<'ALL' | Student['status']>('ALL');
   const [branchFilter, setBranchFilter] = useState('ALL');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-  const [isSyncing, setIsSyncing] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [deletingStudent, setDeletingStudent] = useState<Student | null>(null);
@@ -49,23 +47,6 @@ export default function StudentsPage() {
     const timer = window.setTimeout(() => void refreshStudents(), 0);
     return () => window.clearTimeout(timer);
   }, []);
-
-  const handleSyncStudents = async () => {
-    setIsSyncing(true);
-    try {
-      const res = await fetch('/api/classcard/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobType: 'STUDENTS' }),
-      });
-      const data = await res.json();
-      if (data.status === 'COMPLETED' || data.success || data.recordsProcessed > 0) {
-        await refreshStudents();
-      }
-    } finally {
-      setIsSyncing(false);
-    }
-  };
 
   const handleCreateStudent = async (values: Record<string, string>) => {
     const response = await fetch('/api/records', {
@@ -207,44 +188,17 @@ export default function StudentsPage() {
               <option value="ALL">All branches</option>
               {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
             </select>
-            <Button
-              variant="outline"
-              size="sm"
-              isLoading={isSyncing}
-              leftIcon={<RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />}
-              onClick={handleSyncStudents}
-            >
-              Sync Classcard
-            </Button>
           </div>
         </div>
 
         {filtered.length === 0 ? (
           <div className="rounded-xl border border-slate-200 bg-white p-8">
             <TableEmptyState
-              title={search ? 'No matching students found' : 'No Students Synchronized Yet'}
+              title={search ? 'No matching students found' : 'No students found'}
               description={
                 search
                   ? 'Try adjusting your search criteria.'
-                  : 'Your database is in production mode with demo data purged. Connect to Classcard to import live student rosters.'
-              }
-              action={
-                <div className="flex items-center justify-center gap-3">
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    isLoading={isSyncing}
-                    leftIcon={<RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />}
-                    onClick={handleSyncStudents}
-                  >
-                    Sync Students from Classcard
-                  </Button>
-                  <Link href="/admin/classcard-integration">
-                    <Button variant="outline" size="sm">
-                      Integration Gateway
-                    </Button>
-                  </Link>
-                </div>
+                  : 'Add students to your production roster to begin using this workspace.'
               }
             />
           </div>

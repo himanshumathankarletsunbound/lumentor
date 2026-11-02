@@ -338,15 +338,8 @@ export function OperationsDashboardView() {
                   </div>
                   <p className="font-bold text-slate-800 text-sm">No Scheduled Classes</p>
                   <p className="text-slate-400 text-xs mt-1">
-                    Demo data has been purged. Synchronize class calendar events from your live Classcard account.
+                    No scheduled classes are available yet. Add class sessions to populate this calendar.
                   </p>
-                  <div className="mt-4">
-                    <Link href="/admin/classcard-integration">
-                      <Button variant="outline" size="sm">
-                        Classcard Integration
-                      </Button>
-                    </Link>
-                  </div>
                 </div>
               ) : (
                 classes.map((cls) => (

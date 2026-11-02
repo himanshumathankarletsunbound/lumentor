@@ -283,7 +283,6 @@ export function UnifiedCalendar({ initialClasses }: { initialClasses?: ClassEven
                         </Badge>
                         {cls.provenance === 'CLASSCARD_SOURCED' && (
                           <Badge variant="purple" size="sm">
-                            Classcard
                           </Badge>
                         )}
                       </div>

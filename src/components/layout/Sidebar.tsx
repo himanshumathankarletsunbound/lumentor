@@ -28,12 +28,10 @@ import {
   BarChart3,
   TrendingUp,
   UserCheck,
-  RefreshCw,
   History,
   Settings,
   ChevronDown,
   ChevronRight,
-  LogOut,
   Sparkles,
   Shield,
   Briefcase,
@@ -57,7 +55,7 @@ let globalSidebarScrollTop = 0;
 
 export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const pathname = usePathname();
-  const { currentUser, isMentor, canAccess } = useAuth();
+  const { currentUser } = useAuth();
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Persist collapsed groups state across page navigation
@@ -469,12 +467,6 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
             icon: <BarChart3 className="w-4 h-4" />,
             module: 'analytics',
           },
-          {
-            name: 'Sync Reports',
-            href: '/analytics/sync-reports',
-            icon: <RefreshCw className="w-4 h-4" />,
-            module: 'analytics',
-          },
         ],
       },
       {
@@ -485,12 +477,6 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
             href: '/admin/users-roles',
             icon: <Users className="w-4 h-4" />,
             module: 'users_roles',
-          },
-          {
-            name: 'Classcard Integration',
-            href: '/admin/classcard-integration',
-            icon: <RefreshCw className="w-4 h-4" />,
-            module: 'classcard_integration',
           },
           {
             name: 'Custom Fields & Schema',
@@ -683,32 +669,9 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
           })}
         </div>
 
-        {/* Sync Status & Sign Out in Footer */}
+        {/* Workspace footer */}
         <div className="p-3 border-t border-slate-800/80 bg-slate-950/70 space-y-2.5 shrink-0">
-          <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              <span className="text-slate-300 font-medium text-[11px]">Classcard API v2</span>
-            </div>
-            <Link
-              href="/admin/classcard-integration"
-              className="text-indigo-400 hover:text-indigo-300 text-[11px] font-semibold"
-            >
-              Active
-            </Link>
-          </div>
-
           <div className="flex items-center justify-between px-2 pt-1 text-xs">
-            <Link
-              href="/login"
-              className="flex items-center gap-2 text-slate-400 hover:text-rose-400 transition-colors text-[11px] font-medium"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Switch / Sign Out</span>
-            </Link>
             <span className="text-[10px] text-slate-600">v2.4.0</span>
           </div>
         </div>

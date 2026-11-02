@@ -6,10 +6,9 @@ import { db } from '../../../lib/db/store';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell, TableEmptyState } from '../../../components/ui/Table';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
-import { Card } from '../../../components/ui/Card';
 import { CalendarEventModal } from '../../../components/calendar/CalendarEventModal';
 import { ClassEvent } from '../../../lib/types/models';
-import { Search, Plus, Filter, Calendar, Users, MapPin, CheckCircle2 } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { formatDate, formatTime } from '../../../lib/utils/formatters';
 
 export default function ClassesPage() {
@@ -18,7 +17,6 @@ export default function ClassesPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [branchFilter, setBranchFilter] = useState('ALL');
-  const [isSyncing, setIsSyncing] = useState(false);
 
   const branches = db.getBranches();
 
@@ -38,25 +36,9 @@ export default function ClassesPage() {
   };
 
   React.useEffect(() => {
-    refreshClasses();
+    const timer = window.setTimeout(() => void refreshClasses(), 0);
+    return () => window.clearTimeout(timer);
   }, []);
-
-  const handleSyncEvents = async () => {
-    setIsSyncing(true);
-    try {
-      const res = await fetch('/api/classcard/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobType: 'EVENTS' }),
-      });
-      const data = await res.json();
-      if (data.status === 'COMPLETED' || data.success || data.recordsProcessed > 0) {
-        await refreshClasses();
-      }
-    } finally {
-      setIsSyncing(false);
-    }
-  };
 
   const filtered = useMemo(() => {
     return classes.filter((c) => {
@@ -96,14 +78,6 @@ export default function ClassesPage() {
             <span className="text-xs text-slate-500 font-medium">
               Showing {filtered.length} of {classes.length} sessions
             </span>
-            <Button
-              variant="outline"
-              size="sm"
-              isLoading={isSyncing}
-              onClick={handleSyncEvents}
-            >
-              Sync Events from Classcard
-            </Button>
           </div>
         </div>
 
@@ -220,17 +194,6 @@ export default function ClassesPage() {
                     >
                       {cls.status}
                     </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {cls.provenance === 'CLASSCARD_SOURCED' ? (
-                      <Badge variant="purple" size="sm">
-                        Classcard
-                      </Badge>
-                    ) : (
-                      <Badge variant="neutral" size="sm">
-                        Local
-                      </Badge>
-                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button variant="outline" size="sm" onClick={() => setSelectedEvent(cls)}>

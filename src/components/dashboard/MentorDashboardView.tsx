@@ -138,7 +138,7 @@ export function MentorDashboardView() {
                 {mentor ? `Welcome back, ${mentor.firstName}!` : 'Faculty Member Portal'}
               </h1>
               <p className="text-xs text-slate-300 mt-1">
-                {mentor ? `Primary Campus: ${mentor.branchName || 'Manhattan Campus'} • Contract Model: ${mentorPlan?.compensationModel || 'Not configured'}` : 'Sync your Classcard staff roster to populate assigned faculty members.'}
+                {mentor ? `Primary Campus: ${mentor.branchName || 'Manhattan Campus'} • Contract Model: ${mentorPlan?.compensationModel || 'Not configured'}` : 'Your mentor profile is not available yet.'}
               </p>
             </div>
           </div>

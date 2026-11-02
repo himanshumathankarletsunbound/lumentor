@@ -145,12 +145,9 @@ export function CalendarEventModal({
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-base font-bold text-slate-900">{eventData.title}</span>
           {getStatusBadge(eventData.status)}
-          {eventData.provenance === 'CLASSCARD_SOURCED' && (
-            <Badge variant="purple" size="sm">Classcard Synced</Badge>
-          )}
         </div>
       }
-      subtitle={`Session ID: ${eventData.id} ${eventData.externalId ? `(Classcard: ${eventData.externalId})` : ''}`}
+      subtitle={`Session ID: ${eventData.id}`}
       footer={
         <div className="flex items-center justify-between w-full">
           <div>

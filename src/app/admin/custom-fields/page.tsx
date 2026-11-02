@@ -348,7 +348,7 @@ export default function CustomFieldsPage() {
             <div className="p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl space-y-3">
               <div className="flex items-center gap-1.5 font-bold text-indigo-900">
                 <Database className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Classcard API v2 Synchronization Mapping</span>
+                <span>External Field Mapping</span>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

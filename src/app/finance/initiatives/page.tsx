@@ -43,7 +43,12 @@ export default function InitiativesPage() {
     setEntries(entriesResult.entries);
   };
 
-  useEffect(() => { void load().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to load initiatives.' })); }, [bounds.startDate, bounds.endDate]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void load().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to load initiatives.' }));
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [bounds.startDate, bounds.endDate]);
 
   const savePlan = async () => {
     const response = await fetch('/api/payroll/initiatives/plans', {

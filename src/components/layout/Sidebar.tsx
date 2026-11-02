@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '../../lib/auth/AuthContext';
 import { PermissionModule, SystemRole } from '../../lib/types/auth';
@@ -31,7 +32,6 @@ import {
   History,
   Settings,
   ChevronDown,
-  Layers,
   ChevronRight,
   LogOut,
   Sparkles,
@@ -563,17 +563,14 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
         {/* Brand Header */}
         <div className="h-16 px-5 flex items-center justify-between border-b border-slate-800/80 shrink-0 bg-slate-950/90">
           <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-500 flex items-center justify-center text-white font-bold shadow-md shadow-indigo-600/30 group-hover:scale-105 transition-transform">
-              <Layers className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="font-extrabold text-white text-base tracking-tight leading-none block">
-                LUmentor
-              </span>
-              <span className="text-[10px] text-indigo-400 font-medium tracking-wider uppercase block mt-1">
-                Classcard Integrated
-              </span>
-            </div>
+            <Image
+              src="/lets-unbound-logo.webp"
+              alt="Lets Unbound"
+              width={150}
+              height={50}
+              priority
+              className="h-12 w-[150px] object-contain object-left transition-transform group-hover:scale-[1.02]"
+            />
           </Link>
         </div>
 

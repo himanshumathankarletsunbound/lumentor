@@ -39,7 +39,10 @@ function parseSpreadsheet(buffer: ArrayBuffer): SheetRow[] {
   if (!firstSheet) throw new Error('The uploaded Excel workbook does not contain a worksheet.');
   const values = XLSX.utils.sheet_to_json<unknown[]>(firstSheet, { header: 1, defval: '' });
   if (values.length < 2) throw new Error('The uploaded Excel sheet must contain a header row and at least one mentor row.');
-  const headers = values[0].map((header) => String(header).trim());
+  const rawHeaders = values[0].map((header) => String(header).trim());
+  const lastHeaderIndex = rawHeaders.reduce((lastIndex, header, index) => (header ? index : lastIndex), -1);
+  if (lastHeaderIndex < 0) throw new Error('The Excel sheet must contain a header row.');
+  const headers = rawHeaders.slice(0, lastHeaderIndex + 1);
   if (headers.some((header) => !header)) throw new Error('The Excel sheet contains an empty column header.');
   return values.slice(1)
     .filter((values) => values.some((value) => String(value).trim()))

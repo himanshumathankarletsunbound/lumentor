@@ -111,6 +111,38 @@ export interface Adjustment {
   createdAt: string;
 }
 
+export type InitiativePlanType = 'INITIATIVE' | 'FIXED_PAYOUT';
+
+export interface InitiativePlan {
+  id: string;
+  name: string;
+  code: string;
+  planType: InitiativePlanType;
+  amount: number;
+  payoutFactor: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InitiativeEntry {
+  id: string;
+  mentorId: string;
+  mentorName: string;
+  planId?: string;
+  planName?: string;
+  name: string;
+  amount: number;
+  count: number;
+  payoutFactor: number;
+  totalAmount: number;
+  periodStart: string;
+  periodEnd: string;
+  appliedPayrollBatchId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type PayrollBatchStatus =
   | 'DRAFT'
   | 'SUBMITTED'

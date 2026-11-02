@@ -21,6 +21,7 @@ export interface CalculatePayrollOptions {
 
 export interface PayrollContext {
   adjustments: Array<{ mentorId: string; amount: number; appliedPayrollBatchId?: string | null }>;
+  initiatives?: Array<{ mentorId: string; totalAmount: number; name: string }>;
   penalties: PayrollBatch['lineItems'][number] extends never ? never : Array<{ id: string; mentorId: string; status: string; amount: number; appliedPayrollBatchId?: string; category: string; reason: string; createdAt: string }>;
 }
 
@@ -154,7 +155,12 @@ export class PayrollEngine {
     const adjustments = (context?.adjustments ?? db.getAdjustments(mentor.id)).filter(
       (a) => !a.appliedPayrollBatchId || a.appliedPayrollBatchId === batchId
     );
-    const bonusAmount = adjustments.reduce((sum, a) => sum + a.amount, 0);
+    const initiatives = (context?.initiatives ?? []).filter((entry) => entry.mentorId === mentor.id);
+    const initiativeAmount = initiatives.reduce((sum, entry) => sum + entry.totalAmount, 0);
+    const bonusAmount = adjustments.reduce((sum, a) => sum + a.amount, 0) + initiativeAmount;
+    if (initiatives.length > 0) {
+      calculationNotes.push(...initiatives.map((entry) => `Initiative: ${entry.name} (+${entry.totalAmount.toFixed(2)}).`));
+    }
 
     // Approved Penalties (MUST be strictly APPROVED and not already APPLIED elsewhere)
     const approvedPenalties = (context?.penalties ?? db.getPenalties(mentor.id)).filter(

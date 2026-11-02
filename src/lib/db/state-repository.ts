@@ -5,7 +5,7 @@ import type { Branch, ClassEvent, Mentor, Package, Student, Subject } from '../t
 import type { UserRole } from '../types/auth';
 import { SEED_ROLES } from './seedData';
 import type { CurrentUser } from '../types/auth';
-import type { PayrollPlan, Penalty, PenaltyPolicy } from '../types/payroll';
+import type { InitiativeEntry, InitiativePlan, PayrollPlan, Penalty, PenaltyPolicy } from '../types/payroll';
 import type { AuditEvent } from '../types/models';
 import type { EmailConfig } from '../types/email';
 
@@ -561,6 +561,54 @@ export async function updatePayrollPlan(id: string, updates: Partial<PayrollPlan
 
 export async function countMentorsAssignedToPayrollPlan(payrollPlanId: string): Promise<number> {
   return prisma.mentor.count({ where: { payrollPlanId } });
+}
+
+export async function listInitiativePlans(): Promise<InitiativePlan[]> {
+  const rows = await prisma.initiativePlan.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } });
+  return rows.map((row) => ({
+    id: row.id, name: row.name, code: row.code, planType: row.planType,
+    amount: Number(row.amount), payoutFactor: Number(row.payoutFactor), isActive: row.isActive,
+    createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(),
+  }));
+}
+
+export async function createInitiativePlan(input: Omit<InitiativePlan, 'id' | 'createdAt' | 'updatedAt'>): Promise<InitiativePlan> {
+  const organizationId = await ensureOrganization();
+  const row = await prisma.initiativePlan.create({
+    data: { organizationId, name: input.name, code: input.code, planType: input.planType, amount: input.amount, payoutFactor: input.payoutFactor, isActive: input.isActive },
+  });
+  return (await listInitiativePlans()).find((plan) => plan.id === row.id)!;
+}
+
+export async function listInitiativeEntries(startDate: string, endDate: string, mentorId?: string): Promise<InitiativeEntry[]> {
+  const rows = await prisma.initiativeEntry.findMany({
+    where: { ...(mentorId ? { mentorId } : {}), periodStart: { lte: new Date(endDate) }, periodEnd: { gte: new Date(startDate) }, appliedPayrollBatchId: null },
+    include: { mentor: true, plan: true }, orderBy: { createdAt: 'asc' },
+  });
+  return rows.map((row) => ({
+    id: row.id, mentorId: row.mentorId, mentorName: `${row.mentor.firstName} ${row.mentor.lastName}`.trim(),
+    planId: row.planId || undefined, planName: row.plan?.name || undefined, name: row.name,
+    amount: Number(row.amount), count: row.count, payoutFactor: Number(row.payoutFactor), totalAmount: Number(row.totalAmount),
+    periodStart: row.periodStart.toISOString(), periodEnd: row.periodEnd.toISOString(), appliedPayrollBatchId: row.appliedPayrollBatchId || undefined,
+    createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(),
+  }));
+}
+
+export async function createInitiativeEntry(input: {
+  mentorId: string; planId?: string; name: string; amount: number; count: number; payoutFactor: number; periodStart: string; periodEnd: string;
+}): Promise<InitiativeEntry> {
+  const totalAmount = Math.round(input.amount * input.count * input.payoutFactor * 100) / 100;
+  if (!Number.isFinite(totalAmount) || totalAmount < 0) throw new Error('Initiative total must be a valid non-negative amount.');
+  const row = await prisma.initiativeEntry.create({
+    data: { mentorId: input.mentorId, planId: input.planId || null, name: input.name, amount: input.amount, count: input.count, payoutFactor: input.payoutFactor, totalAmount, periodStart: new Date(input.periodStart), periodEnd: new Date(input.periodEnd) },
+    include: { mentor: true, plan: true },
+  });
+  return {
+    id: row.id, mentorId: row.mentorId, mentorName: `${row.mentor.firstName} ${row.mentor.lastName}`.trim(),
+    planId: row.planId || undefined, planName: row.plan?.name || undefined, name: row.name,
+    amount: Number(row.amount), count: row.count, payoutFactor: Number(row.payoutFactor), totalAmount: Number(row.totalAmount),
+    periodStart: row.periodStart.toISOString(), periodEnd: row.periodEnd.toISOString(), createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(),
+  };
 }
 
 export async function deletePayrollPlan(id: string): Promise<void> {

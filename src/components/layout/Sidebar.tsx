@@ -392,6 +392,12 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
             module: 'payroll_processing',
           },
           {
+            name: 'Initiatives & Fixed Payouts',
+            href: '/finance/initiatives',
+            icon: <Sparkles className="w-4 h-4" />,
+            module: 'payroll_processing',
+          },
+          {
             name: 'Penalties & Policy Deductions',
             href: '/finance/penalties',
             icon: <ShieldAlert className="w-4 h-4" />,

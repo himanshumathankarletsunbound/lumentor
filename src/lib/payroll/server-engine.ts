@@ -1,5 +1,5 @@
 import { prisma } from '../db/prisma';
-import { getOrganizationSettings, listClasses, listMentors, listPayrollPlans, listPenalties } from '../db/state-repository';
+import { getOrganizationSettings, listClasses, listInitiativeEntries, listMentors, listPayrollPlans, listPenalties } from '../db/state-repository';
 import { PayrollEngine, type CalculatePayrollOptions, type PayrollContext } from './engine';
 import type { PayrollBatch } from '../types/payroll';
 
@@ -7,12 +7,13 @@ const engine = new PayrollEngine();
 
 export async function generateBatchFromPostgres(options: CalculatePayrollOptions): Promise<PayrollBatch> {
   const batchId = `batch-${Date.now()}`;
-  const [allMentors, allClasses, plans, penalties, adjustments, orgSettings] = await Promise.all([
+  const [allMentors, allClasses, plans, penalties, adjustments, initiatives, orgSettings] = await Promise.all([
     listMentors(options.branchId),
     listClasses({ branchId: options.branchId }),
     listPayrollPlans(),
     listPenalties(),
     prisma.adjustment.findMany({ select: { mentorId: true, amount: true, appliedPayrollBatchId: true } }),
+    listInitiativeEntries(options.startDate, options.endDate),
     getOrganizationSettings(),
   ]);
   const selectedMentors = options.mentorIds ? allMentors.filter((mentor) => options.mentorIds!.includes(mentor.id)) : allMentors;
@@ -21,6 +22,7 @@ export async function generateBatchFromPostgres(options: CalculatePayrollOptions
   }
   const context: PayrollContext = {
     adjustments: adjustments.map((item) => ({ mentorId: item.mentorId, amount: Number(item.amount), appliedPayrollBatchId: item.appliedPayrollBatchId })),
+    initiatives,
     penalties: penalties.map((item) => ({ id: item.id, mentorId: item.mentorId, status: item.status, amount: item.amount, appliedPayrollBatchId: item.appliedPayrollBatchId, category: item.category, reason: item.reason, createdAt: item.createdAt })),
   };
   const lineItems = selectedMentors.map((mentor) => {

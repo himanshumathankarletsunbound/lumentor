@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppShell } from '../../../components/layout/AppShell';
 import { Button } from '../../../components/ui/Button';
 import { Card, CardContent, CardHeader } from '../../../components/ui/Card';
@@ -28,7 +28,7 @@ export default function InitiativesPage() {
   const [entryForm, setEntryForm] = useState({ mentorId: '', planId: '', name: '', amount: '', count: '1', payoutFactor: '1' });
   const bounds = useMemo(() => monthBounds(month), [month]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const [plansResponse, mentorsResponse, entriesResponse] = await Promise.all([
       fetch('/api/payroll/initiatives/plans'),
       fetch('/api/mentors'),
@@ -41,14 +41,14 @@ export default function InitiativesPage() {
     setPlans(plansResult.plans);
     setMentors(mentorsResult.mentors);
     setEntries(entriesResult.entries);
-  };
+  }, [bounds.endDate, bounds.startDate]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void load().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to load initiatives.' }));
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [bounds.startDate, bounds.endDate]);
+  }, [load]);
 
   const savePlan = async () => {
     const response = await fetch('/api/payroll/initiatives/plans', {

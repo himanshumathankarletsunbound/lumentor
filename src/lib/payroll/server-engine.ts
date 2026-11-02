@@ -79,6 +79,15 @@ export async function finalizeBatchAndGeneratePayslipsFromPostgres(batchId: stri
         },
       }));
     }
+    await transaction.initiativeEntry.updateMany({
+      where: {
+        mentorId: { in: batch.lineItems.map((item) => item.mentorId) },
+        periodStart: { lte: batch.endDate },
+        periodEnd: { gte: batch.startDate },
+        appliedPayrollBatchId: null,
+      },
+      data: { appliedPayrollBatchId: batch.id },
+    });
     await transaction.payrollBatch.update({ where: { id: batch.id }, data: { status: 'LOCKED', lockedAt } });
     return generated;
   });

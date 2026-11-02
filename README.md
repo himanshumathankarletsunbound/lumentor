@@ -43,6 +43,7 @@ Calculates mentor compensations with precision arithmetic (2 decimal places) acr
 - **Immutability & Plan Versioning**: Historical payroll batches freeze the active plan version snapshot. Future rate or policy adjustments will never silently mutate past paid cycles.
 - **Late Cancellation Compensation**: Configurable rules to compensate mentors when students cancel late.
 - **Separation of Concerns**: Calculating, Approving, Locking, and Payment Confirmation are separate, sequential state transitions.
+- **Initiatives & Fixed Payouts**: Finance users can create reusable fixed-amount plans and add period-scoped mentor initiatives. Each entry stores the mentor, name, amount, count, payout factor, and calculated total (`amount × count × factor`) and is included in payroll and the resulting payslip.
 
 ### 5. Penalties, Adjustments & Anti-Tamper Workflow
 - **Four-Eyes Principle / Anti-Self-Approval**: Operations staff cannot approve penalties they submitted.

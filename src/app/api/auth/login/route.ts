@@ -125,9 +125,9 @@ export async function POST(req: NextRequest) {
         error: isMissingTable
           ? 'The production database schema is not initialized. Deploy the pending Prisma migrations, then try again.'
           : isDatabaseUnavailable
-          ? 'The production database is unavailable from Vercel. Configure SUPABASE_POOLER_URL with the Supabase Session Pooler connection string, then redeploy.'
+          ? 'The production database is unavailable from Vercel. Configure SUPABASE_POOLER_URL with the Supabase Transaction Pooler connection string on port 6543, then redeploy.'
           : isDatabaseAuthenticationFailure
-          ? 'The Supabase database credentials are invalid. Copy a fresh Session Pooler connection string from Supabase, update SUPABASE_POOLER_URL in Vercel, and redeploy.'
+          ? 'The Supabase database credentials are invalid. Copy a fresh Transaction Pooler connection string from Supabase, update SUPABASE_POOLER_URL in Vercel, and redeploy.'
           : errorMsg,
       },
       { status: 500 }

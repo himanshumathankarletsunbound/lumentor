@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Fragment, useState, useEffect } from 'react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 
@@ -99,13 +99,14 @@ export function AddRecordModal({
           const previousVisibleField = fields.slice(0, index).reverse().find((item) => !item.visibleWhen || item.visibleWhen(values));
           const showSection = field.section && field.section !== previousVisibleField?.section;
           return (
-            <div key={field.name} className={field.type === 'textarea' ? 'sm:col-span-2' : ''}>
+            <Fragment key={field.name}>
               {showSection && (
-                <div className="mb-1 mt-2 border-b border-slate-200 pb-2 sm:col-span-2 first:mt-0">
+                <div className="col-span-1 mb-1 mt-3 border-b border-slate-200 pb-2 sm:col-span-2 first:mt-0">
                   <p className="text-[11px] font-bold uppercase tracking-wider text-indigo-600">{field.section}</p>
                 </div>
               )}
-              <label className="block text-xs font-semibold text-slate-700">
+              <div className={field.type === 'textarea' ? 'sm:col-span-2' : ''}>
+                <label className="block text-xs font-semibold text-slate-700">
                 {field.label}{field.required !== false ? ' *' : ''}
             {field.type === 'select' ? (
               <select
@@ -140,8 +141,9 @@ export function AddRecordModal({
                 className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-50 p-2 text-xs font-normal text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             )}
-              </label>
-            </div>
+                </label>
+              </div>
+            </Fragment>
           );
         })}
       </div>

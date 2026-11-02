@@ -17,6 +17,7 @@ import { AddRecordModal } from '../../../components/operations/AddRecordModal';
 export default function MentorsPage() {
   const { hasPermission } = useAuth();
   const [mentors, setMentors] = useState<Mentor[]>(db.getMentors());
+  const [branches, setBranches] = useState(() => db.getBranches());
   const [selectedMentor, setSelectedMentor] = useState<Mentor | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [showModal, setShowModal] = useState(false);
@@ -25,7 +26,6 @@ export default function MentorsPage() {
   const [userDetails, setUserDetails] = useState<{ user: { id: string; name: string; email: string; status: string; lastLoginAt?: string | null } | null; activity: Array<{ id: string; action: string; details: string; timestamp: string }> } | null>(null);
 
   const plans = db.getPayrollPlans();
-  const branches = db.getBranches();
   const canViewPayroll = hasPermission('payroll_dashboard', 'view_sensitive_payroll');
 
   const refreshMentors = async () => {
@@ -44,6 +44,20 @@ export default function MentorsPage() {
       });
     }, 0);
     return () => window.clearTimeout(timer);
+  }, []);
+
+  React.useEffect(() => {
+    const loadBranches = async () => {
+      const response = await fetch('/api/branches');
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Unable to load campus branches.');
+      }
+      setBranches(result.branches);
+    };
+    void loadBranches().catch((error: unknown) => {
+      setImportMessage(error instanceof Error ? error.message : 'Unable to load campus branches.');
+    });
   }, []);
 
   const handleStaffImport = async (event: React.ChangeEvent<HTMLInputElement>) => {

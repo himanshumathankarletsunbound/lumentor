@@ -954,9 +954,16 @@ export async function updatePayrollBatchStatus(input: { id: string; status: 'DRA
 }
 
 export async function listPayslips(mentorId?: string) {
-  const rows = await prisma.payslip.findMany({ where: mentorId ? { mentorId } : undefined, orderBy: { generatedAt: 'desc' } });
+  const rows = await prisma.payslip.findMany({
+    where: mentorId ? { mentorId } : undefined,
+    include: { mentor: { select: { firstName: true, lastName: true, email: true, branch: { select: { name: true } } } } },
+    orderBy: { generatedAt: 'desc' },
+  });
   return rows.map((row) => ({
     ...row,
+    mentorName: `${row.mentor.firstName} ${row.mentor.lastName}`.trim(),
+    mentorEmail: row.mentor.email,
+    branchName: row.mentor.branch.name,
     grossEarnings: Number(row.grossEarnings), totalDeductions: Number(row.totalDeductions), netPayable: Number(row.netPayable),
     startDate: row.startDate.toISOString(), endDate: row.endDate.toISOString(), generatedAt: row.generatedAt.toISOString(),
     paidAt: row.paidAt?.toISOString(),

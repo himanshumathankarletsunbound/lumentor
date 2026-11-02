@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../lib/auth/AuthContext';
 import { db } from '../../lib/db/store';
-import { payrollEngine } from '../../lib/payroll/engine';
 import { StatCard } from '../ui/StatCard';
 import { Card, CardHeader, CardContent } from '../ui/Card';
 import { Badge } from '../ui/Badge';
@@ -11,23 +10,21 @@ import { Button } from '../ui/Button';
 import { Alert } from '../ui/Alert';
 import { CalendarEventModal } from '../calendar/CalendarEventModal';
 import { PayslipViewer } from '../payroll/PayslipViewer';
+import { WelcomeHeader } from './WelcomeHeader';
 import {
-  Clock,
   DollarSign,
   FileText,
   CheckCircle2,
 } from 'lucide-react';
-import { formatCurrency, formatDuration, formatDate, formatTime } from '../../lib/utils/formatters';
+import { formatCurrency, formatDate, formatTime } from '../../lib/utils/formatters';
 import { ClassEvent } from '../../lib/types/models';
 import { Payslip } from '../../lib/types/payroll';
 
 export function MentorDashboardView() {
   const { currentUser } = useAuth();
-  const mentor = currentUser.mentorId
-    ? db.getMentors().find((candidate) => candidate.id === currentUser.mentorId) || null
-    : null;
-  const plans = db.getPayrollPlans();
-  const mentorPlan = mentor ? plans.find((p) => p.id === mentor.payrollPlanId) || null : null;
+  const [mentor, setMentor] = useState<ReturnType<typeof db.getMentors>[number] | null>(null);
+  const [payslips, setPayslips] = useState<Payslip[]>([]);
+  const [dataError, setDataError] = useState<string | null>(null);
 
   const [selectedEvent, setSelectedEvent] = useState<ClassEvent | null>(null);
   const [selectedPayslip, setSelectedPayslip] = useState<Payslip | null>(null);
@@ -37,8 +34,24 @@ export function MentorDashboardView() {
   const [mentorReview, setMentorReview] = useState<{ auditScore: number | null; operationScore: number | null; totalScore: number | null } | null>(null);
 
   useEffect(() => {
+    if (!currentUser.mentorId) return;
+    const loadPortalData = async () => {
+      const [mentorResponse, payslipResponse] = await Promise.all([
+        fetch('/api/mentors'),
+        fetch(`/api/payslips?mentorId=${encodeURIComponent(currentUser.mentorId || '')}`),
+      ]);
+      const mentorPayload = await mentorResponse.json();
+      const payslipPayload = await payslipResponse.json();
+      if (!mentorResponse.ok || !mentorPayload.success) throw new Error(mentorPayload.error || 'Unable to load your mentor profile.');
+      if (!payslipResponse.ok || !payslipPayload.success) throw new Error(payslipPayload.error || 'Unable to load your payslips.');
+      setMentor(mentorPayload.mentors.find((candidate: { id: string }) => candidate.id === currentUser.mentorId) || null);
+      setPayslips(payslipPayload.payslips);
+    };
+    void loadPortalData().catch((error: unknown) => setDataError(error instanceof Error ? error.message : 'Unable to load mentor portal data.'));
+  }, [currentUser.mentorId]);
+
+  useEffect(() => {
     if (!currentUser.mentorId) {
-      setMentorReview(null);
       return;
     }
     fetch(`/api/mentor-reviews?period=${new Date().toISOString().slice(0, 7)}`)
@@ -54,44 +67,9 @@ export function MentorDashboardView() {
   const completedClasses = classes.filter((c) => c.status === 'COMPLETED');
   const upcomingClasses = classes.filter((c) => c.status === 'SCHEDULED');
 
-  // Current Cycle Estimate (Oct 16 - Oct 31, 2026)
-  const currentEstimate = useMemo(() => {
-    if (!mentor) {
-      return {
-        grossEarnings: 0,
-        netPayable: 0,
-        eligibleDurationMinutes: 0,
-        appliedPenaltyTotal: 0,
-        appliedPenaltyIds: [],
-        breakdown: [],
-      };
-    }
-    if (!mentorPlan) {
-      return {
-        grossEarnings: 0,
-        netPayable: 0,
-        eligibleDurationMinutes: 0,
-        appliedPenaltyTotal: 0,
-        appliedPenaltyIds: [],
-        breakdown: [],
-      };
-    }
-    return payrollEngine.calculateMentorPayroll(
-      mentor,
-      mentorPlan,
-      classes,
-      '2026-10-16',
-      '2026-10-31',
-      'batch-preview'
-    );
-  }, [mentor, mentorPlan, classes]);
-
   // Mentor's penalties and disputes
   const penalties = mentor ? db.getPenalties(mentor.id) : [];
-  const disputes = penalties.filter((p) => p.disputeStatus === 'DISPUTED');
 
-  // Mentor's finalized payslips
-  const payslips = mentor ? db.getPayslips(mentor.id) : [];
   const latestPayslip = payslips[0] || null;
 
   const handleOpenDispute = (penId: string) => {
@@ -117,54 +95,9 @@ export function MentorDashboardView() {
 
   return (
     <div className="space-y-6">
-      {/* Welcome Hero Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-950 via-slate-900 to-indigo-950 border border-slate-800 p-6 sm:p-7 text-white shadow-xl">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5">
-          <div className="flex items-start gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-500 to-indigo-600 flex items-center justify-center text-white font-extrabold text-xl shadow-lg shadow-emerald-900/40 shrink-0">
-              {mentor ? `${mentor.firstName[0]}${mentor.lastName[0]}` : 'F'}
-            </div>
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-[11px] uppercase tracking-wider font-semibold text-emerald-300">
-                  Faculty Member Portal
-                </span>
-                <Badge variant="success" size="sm">
-                  {mentorPlan?.name || 'Standard Plan'}
-                </Badge>
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-                {mentor ? `Welcome back, ${mentor.firstName}!` : 'Faculty Member Portal'}
-              </h1>
-              <p className="text-xs text-slate-300 mt-1">
-                {mentor ? `Primary Campus: ${mentor.branchName || 'Manhattan Campus'} • Contract Model: ${mentorPlan?.compensationModel || 'Not configured'}` : 'Your mentor profile is not available yet.'}
-              </p>
-            </div>
-          </div>
-
-          {latestPayslip && (
-            <div className="shrink-0">
-              <Button
-                variant="secondary"
-                size="sm"
-                className="bg-white/10 hover:bg-white/20 text-white border border-white/20 shadow-md backdrop-blur-xs"
-                leftIcon={<FileText className="w-4 h-4 text-emerald-400" />}
-                onClick={() => setSelectedPayslip(latestPayslip)}
-              >
-                View Latest Payslip ({latestPayslip.payslipNumber})
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Current Cycle Estimate Notice */}
-      <Alert
-        type="info"
-        title="Current Cycle Status: October 2026 - Cycle 2 (Oct 16 - Oct 31)"
-        message="Figures shown below reflect completed classes and active bookings to date. Final compensation will be officially calculated and finalized upon payroll cutoff on October 31."
-      />
+      <WelcomeHeader subtitle="Mentor workspace · Your finalized payroll, schedule, and review activity." />
+      {dataError && <Alert type="error" title="Unable to load mentor portal data" message={dataError} />}
+      {latestPayslip && <div className="flex justify-end"><Button variant="outline" size="sm" leftIcon={<FileText className="w-4 h-4" />} onClick={() => setSelectedPayslip(latestPayslip)}>View latest payslip ({latestPayslip.payslipNumber})</Button></div>}
 
       <Card>
         <CardHeader title="Monthly mentor review score" subtitle="Your points are shown after the Audit Team submits the review." />
@@ -189,25 +122,11 @@ export function MentorDashboardView() {
           subtitle="This billing period"
         />
         <StatCard
-          title="Instruction Time"
-          value={formatDuration(currentEstimate.eligibleDurationMinutes || 120)}
-          icon={<Clock className="w-5 h-5" />}
-          color="indigo"
-          subtitle="Eligible verified time"
-        />
-        <StatCard
-          title="Estimated Gross"
-          value={formatCurrency(currentEstimate.grossEarnings)}
-          icon={<DollarSign className="w-5 h-5" />}
-          color="indigo"
-          subtitle="Before deductions"
-        />
-        <StatCard
-          title="Estimated Net Payable"
-          value={formatCurrency(currentEstimate.netPayable)}
+          title="Previous Month Net Pay"
+          value={latestPayslip ? formatCurrency(latestPayslip.netPayable, latestPayslip.currency) : formatCurrency(0)}
           icon={<DollarSign className="w-5 h-5" />}
           color="emerald"
-          subtitle="Settlement on Oct 31"
+          subtitle={latestPayslip ? latestPayslip.periodName : 'No finalized payroll yet'}
         />
       </div>
 

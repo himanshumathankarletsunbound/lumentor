@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizationErrorAsync } from '../../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../../lib/db/server-initialization';
-import { listBranches, listMentors, saveNormalizedRecord } from '../../../../lib/db/state-repository';
+import { listBranches, listMentors, nextMentorId, saveNormalizedRecord } from '../../../../lib/db/state-repository';
 import type { Mentor } from '../../../../lib/types/models';
-import { randomUUID } from 'node:crypto';
+import { nextDemoMentorId } from '../../../../lib/mentors/ids';
 
 interface StaffImportRow {
   firstName?: string;
@@ -66,7 +66,9 @@ export async function POST(req: NextRequest) {
             updatedAt: new Date().toISOString(),
           }
         : {
-            id: randomUUID(),
+            id: process.env.DEMO_MODE === 'true'
+              ? nextDemoMentorId(mentors.map((item) => item.id))
+              : await nextMentorId(),
             firstName,
             lastName,
             email,

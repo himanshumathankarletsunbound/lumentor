@@ -253,19 +253,52 @@ export default function MentorsPage() {
             { name: 'email', label: 'Email', type: 'email', placeholder: 'mentor@example.com' },
             { name: 'phone', label: 'Phone', required: false },
             { name: 'panNumber', label: 'PAN number', placeholder: 'ABCDE1234F', required: false },
+            {
+              name: 'userMode',
+              label: 'Platform login',
+              type: 'select',
+              required: false,
+              options: [
+                { label: 'Do not create a user', value: 'none' },
+                { label: 'Create user and send invitation link', value: 'invite' },
+                { label: 'Create user and set password', value: 'password' },
+              ],
+            },
+            { name: 'password', label: 'Login password (8+ characters for password mode)', type: 'password', required: false },
+            { name: 'confirmPassword', label: 'Confirm login password', type: 'password', required: false },
           ]}
           onSave={async (values) => {
             const branch = db.getBranches()[0];
-            const plan = plans[0];
+            const userMode = values.userMode || 'none';
+            const password = values.password?.trim() || '';
+            const confirmPassword = values.confirmPassword?.trim() || '';
+            if (userMode === 'password' && (password.length < 8 || password !== confirmPassword)) {
+              throw new Error('Login password must be at least 8 characters and match the confirmation.');
+            }
             const response = await fetch('/api/records', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'mentor', record: {
               firstName: values.firstName.trim(), lastName: values.lastName.trim(),
-              email: values.email.trim(), phone: values.phone.trim(), panNumber: values.panNumber.trim().toUpperCase(), branchId: branch?.id || '',
-              branchName: branch?.name, subjectIds: [], payrollPlanId: plan?.id,
+              email: values.email.trim(), phone: values.phone?.trim() || '', panNumber: values.panNumber?.trim().toUpperCase() || '', branchId: branch?.id || '',
+              branchName: branch?.name, subjectIds: [],
               status: 'ACTIVE', provenance: 'LOCALLY_CREATED', teachingHoursThisMonth: 0,
               completedClassesCount: 0, attendanceRate: 0,
             }})});
             const result = await response.json();
             if (!response.ok) throw new Error(result.error || 'Unable to create mentor.');
+            if (userMode !== 'none') {
+              const userResponse = await fetch(`/api/mentors/${encodeURIComponent(result.record.id)}/user`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  mode: userMode,
+                  password: userMode === 'password' ? password : undefined,
+                  confirmPassword: userMode === 'password' ? confirmPassword : undefined,
+                }),
+              });
+              const userResult = await userResponse.json();
+              if (!userResponse.ok || !userResult.success) {
+                throw new Error(`Mentor created, but the platform user could not be created: ${userResult.error || 'try again from the mentor profile.'}`);
+              }
+            }
             await refreshMentors();
             setShowModal(false);
           }}

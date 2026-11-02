@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authorizationErrorAsync } from '../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../lib/db/server-initialization';
 import { db } from '../../../lib/db/store';
-import { saveNormalizedRecord, deleteNormalizedRecord } from '../../../lib/db/state-repository';
+import { saveNormalizedRecord, deleteNormalizedRecord, nextMentorId } from '../../../lib/db/state-repository';
+import { nextDemoMentorId } from '../../../lib/mentors/ids';
 import { listBranches, listMentors, listPackages, listStudents, listSubjects } from '../../../lib/db/state-repository';
 
 const allowedTypes = ['mentor', 'student', 'branch', 'subject', 'package'] as const;
@@ -66,7 +67,12 @@ export async function POST(req: NextRequest) {
     let created: unknown;
     switch (body.type) {
       case 'mentor':
-        created = db.createMentor(record as Parameters<typeof db.createMentor>[0]);
+        created = db.createMentor({
+          ...(record as Parameters<typeof db.createMentor>[0]),
+          id: process.env.DEMO_MODE === 'true'
+            ? nextDemoMentorId(db.getMentors().map((mentor) => mentor.id))
+            : await nextMentorId(),
+        });
         break;
       case 'student':
         created = db.createStudent(record as Parameters<typeof db.createStudent>[0]);

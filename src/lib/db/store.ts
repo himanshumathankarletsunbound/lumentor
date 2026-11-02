@@ -33,6 +33,7 @@ import {
   SEED_CUSTOM_FIELDS,
 } from './seedData';
 import { EmailConfig, OrganizationSettings } from '../types/email';
+import { nextDemoMentorId } from '../mentors/ids';
 
 type PostgresRepository = typeof import('./state-repository');
 
@@ -542,10 +543,10 @@ class DataStore {
     return this.data.mentors.find((m) => m.email.toLowerCase() === email.toLowerCase());
   }
 
-  public createMentor(mentor: Omit<Mentor, 'id' | 'createdAt' | 'updatedAt'>): Mentor {
+  public createMentor(mentor: Omit<Mentor, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): Mentor {
     const record: Mentor = {
       ...mentor,
-      id: `mentor-${Date.now()}`,
+      id: mentor.id || nextDemoMentorId(this.data.mentors.map((item) => item.id)),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };

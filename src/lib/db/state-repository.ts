@@ -9,6 +9,15 @@ import type { InitiativeEntry, InitiativePlan, PayrollPlan, Penalty, PenaltyPoli
 import type { AuditEvent } from '../types/models';
 import type { EmailConfig } from '../types/email';
 
+export async function nextMentorId(): Promise<string> {
+  const rows = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT 'LU-MEM-' || EXTRACT(YEAR FROM CURRENT_DATE)::int::text || '-' ||
+      nextval('mentor_id_seq')::text AS id
+  `;
+  if (!rows[0]?.id) throw new Error('Unable to allocate a mentor ID.');
+  return rows[0].id;
+}
+
 async function ensureOrganization() {
   const existing = await prisma.organization.findFirst({ select: { id: true } });
   if (existing) return existing.id;

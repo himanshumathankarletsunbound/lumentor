@@ -8,7 +8,7 @@ export interface AddRecordField {
   name: string;
   label: string;
   placeholder?: string;
-  type?: 'text' | 'email' | 'number' | 'select' | 'textarea';
+  type?: 'text' | 'email' | 'password' | 'number' | 'select' | 'textarea';
   options?: { label: string; value: string }[];
   required?: boolean;
 }
@@ -38,6 +38,8 @@ export function AddRecordModal({
 
   useEffect(() => {
     if (isOpen) {
+      // Form state must reset when the modal opens with a new record.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setValues(initialValues ? { ...initialValues } : {});
       setError(null);
     }

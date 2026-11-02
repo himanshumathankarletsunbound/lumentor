@@ -241,7 +241,7 @@ model Student {
 }
 
 model Mentor {
-  id                     String         @id @default(uuid())
+  id                     String         @id
   branchId               String
   branch                 Branch         @relation(fields: [branchId], references: [id])
   firstName              String

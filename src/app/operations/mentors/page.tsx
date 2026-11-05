@@ -265,12 +265,12 @@ export default function MentorsPage() {
           isOpen={showModal}
           onClose={() => setShowModal(false)}
           fields={[
+            { name: 'externalId', label: 'Classcard staff ID', placeholder: 'e.g. 974867', section: 'Classcard integration' },
             { name: 'firstName', label: 'First name', placeholder: 'Priya', section: 'Personal details' },
             { name: 'lastName', label: 'Last name', placeholder: 'Patel', section: 'Personal details' },
             { name: 'email', label: 'Email', type: 'email', placeholder: 'mentor@example.com', section: 'Personal details' },
             { name: 'phone', label: 'Phone', required: false, section: 'Personal details' },
             { name: 'panNumber', label: 'PAN number', placeholder: 'ABCDE1234F', required: false, section: 'Personal details' },
-            { name: 'externalId', label: 'Classcard ID', placeholder: 'Enter the Classcard staff ID', section: 'Assignment' },
             {
               name: 'branchId',
               label: 'Campus branch',

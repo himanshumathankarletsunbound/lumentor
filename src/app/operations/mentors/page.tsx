@@ -94,6 +94,7 @@ export default function MentorsPage() {
           role: cells[index('role')] || '',
           phone: cells[index('phone')] || '',
           email: cells[index('email', 'email id')] || '',
+          externalId: cells[index('classcard id', 'classcard staff id')] || '',
         };
       });
       const response = await fetch('/api/mentors/import', {
@@ -269,6 +270,7 @@ export default function MentorsPage() {
             { name: 'email', label: 'Email', type: 'email', placeholder: 'mentor@example.com', section: 'Personal details' },
             { name: 'phone', label: 'Phone', required: false, section: 'Personal details' },
             { name: 'panNumber', label: 'PAN number', placeholder: 'ABCDE1234F', required: false, section: 'Personal details' },
+            { name: 'externalId', label: 'Classcard ID', placeholder: 'Enter the Classcard staff ID', section: 'Assignment' },
             {
               name: 'branchId',
               label: 'Campus branch',
@@ -295,6 +297,7 @@ export default function MentorsPage() {
           onSave={async (values) => {
             const branch = branches.find((item) => item.id === values.branchId);
             if (!branch) throw new Error('Select a campus branch before creating the mentor.');
+            if (!values.externalId?.trim()) throw new Error('Classcard ID is required before creating the mentor.');
             const userMode = values.userMode || 'none';
             const password = values.password?.trim() || '';
             const confirmPassword = values.confirmPassword?.trim() || '';
@@ -304,6 +307,7 @@ export default function MentorsPage() {
             const response = await fetch('/api/records', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'mentor', record: {
               firstName: values.firstName.trim(), lastName: values.lastName.trim(),
               email: values.email.trim(), phone: values.phone?.trim() || '', panNumber: values.panNumber?.trim().toUpperCase() || '', branchId: branch.id,
+              externalId: values.externalId.trim(),
               branchName: branch.name, subjectIds: [],
               status: 'ACTIVE', provenance: 'LOCALLY_CREATED', teachingHoursThisMonth: 0,
               completedClassesCount: 0, attendanceRate: 0,

@@ -253,7 +253,7 @@ model Mentor {
   payrollPlanId          String?
   payrollPlan            PayrollPlan?   @relation(fields: [payrollPlanId], references: [id], onDelete: SetNull)
   status                 String         @default("ACTIVE")
-  externalId             String?        @unique
+  externalId             String         @unique
   provenance             DataProvenance @default(LOCALLY_CREATED)
   teachingHoursThisMonth Float          @default(0)
   completedClassesCount  Int            @default(0)

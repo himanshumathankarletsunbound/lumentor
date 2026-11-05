@@ -9,7 +9,7 @@ import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { PayslipViewer } from '../../../components/payroll/PayslipViewer';
 import { Payslip } from '../../../lib/types/payroll';
-import { FileText, Printer, Download } from 'lucide-react';
+import { Printer } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../../lib/utils/formatters';
 
 export default function PayslipsPage() {
@@ -50,7 +50,6 @@ export default function PayslipsPage() {
               <TableHead>Payslip Number</TableHead>
               <TableHead>Mentor</TableHead>
               <TableHead>Cycle & Period</TableHead>
-              <TableHead>Applied Plan</TableHead>
               <TableHead>Eligible Classes</TableHead>
               <TableHead>Gross</TableHead>
               <TableHead>Deductions</TableHead>
@@ -62,7 +61,7 @@ export default function PayslipsPage() {
           <TableBody>
             {payslips.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10}>
+                <TableCell colSpan={9}>
                   <TableEmptyState
                     title="No payslips generated yet"
                     description="Lock an approved payroll batch to generate official payslips."
@@ -86,11 +85,6 @@ export default function PayslipsPage() {
                     <p className="text-slate-400 text-[11px]">
                       {formatDate(slip.startDate)} - {formatDate(slip.endDate)}
                     </p>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="purple" size="sm">
-                      {slip.planName}
-                    </Badge>
                   </TableCell>
                   <TableCell className="text-xs font-semibold text-slate-700">
                     {slip.eligibleClassesCount} classes

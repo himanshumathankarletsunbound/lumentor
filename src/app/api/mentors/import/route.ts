@@ -12,6 +12,7 @@ interface StaffImportRow {
   role?: string;
   phone?: string;
   email?: string;
+  externalId?: string;
 }
 
 function splitName(value: string) {
@@ -52,12 +53,17 @@ export async function POST(req: NextRequest) {
       const email = String(row.email);
       const { firstName, lastName } = splitName(String(row.name));
       const existing = mentors.find((item) => item.email.toLowerCase() === email);
+      const externalId = String(row.externalId || existing?.externalId || '').trim();
+      if (!externalId) {
+        return NextResponse.json({ success: false, error: `Classcard ID is required for ${email || name}.` }, { status: 400 });
+      }
       const mentor: Mentor = existing
         ? {
             ...existing,
             firstName,
             lastName,
             phone: String(row.phone || '').trim(),
+            externalId,
             branchId: branch.id,
             branchName: branch.name,
             payrollPlanId: undefined,
@@ -73,6 +79,7 @@ export async function POST(req: NextRequest) {
             lastName,
             email,
             phone: String(row.phone || '').trim(),
+            externalId,
             branchId: branch.id,
             branchName: branch.name,
             subjectIds: [],

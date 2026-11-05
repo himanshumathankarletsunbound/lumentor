@@ -67,6 +67,9 @@ export async function POST(req: NextRequest) {
     let created: unknown;
     switch (body.type) {
       case 'mentor':
+        if (!String(record.externalId || '').trim()) {
+          return NextResponse.json({ success: false, error: 'Classcard ID is required before creating a mentor.' }, { status: 400 });
+        }
         created = db.createMentor({
           ...(record as Parameters<typeof db.createMentor>[0]),
           id: process.env.DEMO_MODE === 'true'

@@ -104,7 +104,7 @@ export interface Mentor {
   payoutScheduleId?: string;
   payoutDay?: number; // 3, 5, 15, or custom
   status: 'ACTIVE' | 'ON_LEAVE' | 'INACTIVE';
-  externalId?: string; // Classcard staff ID
+  externalId?: string; // Classcard staff ID; required for persisted mentors
   provenance: DataProvenance;
   teachingHoursThisMonth: number;
   completedClassesCount: number;

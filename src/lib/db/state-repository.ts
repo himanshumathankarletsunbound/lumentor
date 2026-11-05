@@ -208,7 +208,7 @@ export async function listMentors(branchId?: string): Promise<Mentor[]> {
     payrollPlanId: mentor.payrollPlanId || undefined,
     payrollPlanIds: [mentor.payrollPlanId, ...mentor.payrollAssignments.map((assignment) => assignment.payrollPlanId)].filter((id): id is string => Boolean(id)),
     status: mentor.status as Mentor['status'],
-    externalId: mentor.externalId || undefined,
+    externalId: mentor.externalId || `LEGACY-${mentor.id}`,
     provenance: mentor.provenance,
     teachingHoursThisMonth: mentor.teachingHoursThisMonth,
     completedClassesCount: mentor.completedClassesCount,
@@ -375,6 +375,7 @@ export async function updateMentor(id: string, updates: Partial<Mentor>): Promis
     panNumber: updates.panNumber,
     firstName: updates.firstName,
     lastName: updates.lastName,
+    externalId: updates.externalId,
   };
   const mentor = await prisma.mentor.update({ where: { id }, data });
   if (updates.payrollPlanIds) {
@@ -388,7 +389,7 @@ export async function updateMentor(id: string, updates: Partial<Mentor>): Promis
   return {
     id: mentor.id, firstName: mentor.firstName, lastName: mentor.lastName, email: mentor.email,     phone: mentor.phone || '', panNumber: mentor.panNumber || undefined,
     branchId: mentor.branchId, branchName: '', subjectIds: [], payrollPlanId: mentor.payrollPlanId || undefined, payrollPlanIds: updates.payrollPlanIds, status: mentor.status as Mentor['status'],
-    externalId: mentor.externalId || undefined, provenance: mentor.provenance, teachingHoursThisMonth: mentor.teachingHoursThisMonth,
+    externalId: mentor.externalId || `LEGACY-${mentor.id}`, provenance: mentor.provenance, teachingHoursThisMonth: mentor.teachingHoursThisMonth,
     completedClassesCount: mentor.completedClassesCount, attendanceRate: mentor.attendanceRate,
     createdAt: mentor.createdAt.toISOString(), updatedAt: mentor.updatedAt.toISOString(),
   };
@@ -1235,12 +1236,13 @@ export async function saveNormalizedRecord(
   } else {
     const mentor = record as Mentor;
     if (!mentor.branchId) throw new Error('A campus branch is required before creating a mentor.');
+    if (!mentor.externalId?.trim()) throw new Error('A Classcard ID is required before creating a mentor.');
     await ensureBranch(organizationId, mentor.branchId, state);
     const payrollPlanId = mentor.payrollPlanId ? await ensurePayrollPlan(organizationId, mentor.payrollPlanId) : undefined;
     await prisma.mentor.upsert({
       where: { id: mentor.id },
-      create: { id: mentor.id, branchId: mentor.branchId, firstName: mentor.firstName, lastName: mentor.lastName, email: mentor.email, phone: mentor.phone, panNumber: mentor.panNumber, payrollPlanId, status: mentor.status, provenance: mentor.provenance, teachingHoursThisMonth: mentor.teachingHoursThisMonth, completedClassesCount: mentor.completedClassesCount, attendanceRate: mentor.attendanceRate },
-      update: { branchId: mentor.branchId, firstName: mentor.firstName, lastName: mentor.lastName, email: mentor.email, phone: mentor.phone, panNumber: mentor.panNumber, payrollPlanId, status: mentor.status, provenance: mentor.provenance },
+      create: { id: mentor.id, branchId: mentor.branchId, firstName: mentor.firstName, lastName: mentor.lastName, email: mentor.email, phone: mentor.phone, panNumber: mentor.panNumber, externalId: mentor.externalId, payrollPlanId, status: mentor.status, provenance: mentor.provenance, teachingHoursThisMonth: mentor.teachingHoursThisMonth, completedClassesCount: mentor.completedClassesCount, attendanceRate: mentor.attendanceRate },
+      update: { branchId: mentor.branchId, firstName: mentor.firstName, lastName: mentor.lastName, email: mentor.email, phone: mentor.phone, panNumber: mentor.panNumber, externalId: mentor.externalId, payrollPlanId, status: mentor.status, provenance: mentor.provenance },
     });
     if (payrollPlanId) await prisma.mentorPayrollPlan.upsert({
       where: { mentorId_payrollPlanId: { mentorId: mentor.id, payrollPlanId } },

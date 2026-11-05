@@ -10,7 +10,7 @@ import { Button } from '../../../components/ui/Button';
 import { Drawer } from '../../../components/ui/Drawer';
 import { Tabs } from '../../../components/ui/Tabs';
 import { Mentor } from '../../../lib/types/models';
-import { Mail, Phone, MapPin, Plus, Upload, UserRound } from 'lucide-react';
+import { Check, Copy, Mail, Phone, MapPin, Plus, Upload, UserRound } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../../lib/utils/formatters';
 import { AddRecordModal } from '../../../components/operations/AddRecordModal';
 
@@ -24,6 +24,7 @@ export default function MentorsPage() {
   const [isImporting, setIsImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const [userDetails, setUserDetails] = useState<{ user: { id: string; name: string; email: string; status: string; lastLoginAt?: string | null } | null; activity: Array<{ id: string; action: string; details: string; timestamp: string }> } | null>(null);
+  const [copiedClasscardId, setCopiedClasscardId] = useState<string | null>(null);
 
   const plans = db.getPayrollPlans();
   const canViewPayroll = hasPermission('payroll_dashboard', 'view_sensitive_payroll');
@@ -119,6 +120,16 @@ export default function MentorsPage() {
   const mentorPenalties = selectedMentor
     ? db.getPenalties(selectedMentor.id)
     : [];
+
+  const copyClasscardId = async (classcardId: string) => {
+    try {
+      await navigator.clipboard.writeText(classcardId);
+      setCopiedClasscardId(classcardId);
+      window.setTimeout(() => setCopiedClasscardId(null), 1500);
+    } catch {
+      setImportMessage('Unable to copy the Classcard ID.');
+    }
+  };
   const mentorPayslips = selectedMentor
     ? db.getPayslips(selectedMentor.id)
     : [];
@@ -365,6 +376,21 @@ export default function MentorsPage() {
                     <div className="flex items-center gap-2">
                       <MapPin className="w-4 h-4 text-slate-400" />
                       <span className="text-slate-800">{selectedMentor.branchName}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-4 text-center text-[10px] font-bold text-slate-400">CC</span>
+                      <span className="font-mono text-slate-800">{selectedMentor.externalId || 'No Classcard ID recorded'}</span>
+                      {selectedMentor.externalId && (
+                        <button
+                          type="button"
+                          title="Copy Classcard ID"
+                          aria-label="Copy Classcard ID"
+                          onClick={() => void copyClasscardId(selectedMentor.externalId!)}
+                          className="ml-auto rounded-md p-1.5 text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600"
+                        >
+                          {copiedClasscardId === selectedMentor.externalId ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+                        </button>
+                      )}
                     </div>
                   </div>
 

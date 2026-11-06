@@ -17,8 +17,13 @@ export default function ClassesPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [branchFilter, setBranchFilter] = useState('ALL');
+  const [subjectFilter, setSubjectFilter] = useState('ALL');
+  const [mentorFilter, setMentorFilter] = useState('ALL');
+  const [dateFilter, setDateFilter] = useState('');
 
   const branches = db.getBranches();
+  const subjects = Array.from(new Map(classes.map((item) => [item.subjectId, { id: item.subjectId, name: item.subjectName }])).values());
+  const mentors = Array.from(new Map(classes.map((item) => [item.mentorId, { id: item.mentorId, name: item.mentorName }])).values());
 
   const refreshClasses = async () => {
     try {
@@ -44,6 +49,9 @@ export default function ClassesPage() {
     return classes.filter((c) => {
       if (statusFilter !== 'ALL' && c.status !== statusFilter) return false;
       if (branchFilter !== 'ALL' && c.branchId !== branchFilter) return false;
+      if (subjectFilter !== 'ALL' && c.subjectId !== subjectFilter) return false;
+      if (mentorFilter !== 'ALL' && c.mentorId !== mentorFilter) return false;
+      if (dateFilter && !c.startTime.startsWith(dateFilter)) return false;
       if (search.trim()) {
         const q = search.toLowerCase();
         if (
@@ -56,7 +64,7 @@ export default function ClassesPage() {
       }
       return true;
     });
-  }, [classes, statusFilter, branchFilter, search]);
+  }, [classes, statusFilter, branchFilter, subjectFilter, mentorFilter, dateFilter, search]);
 
   const handleSaveClass = (updated: ClassEvent) => {
     db.updateClass(updated.id, updated);
@@ -108,6 +116,15 @@ export default function ClassesPage() {
                 </option>
               ))}
             </select>
+            <select value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)} aria-label="Filter by Subject" className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700">
+              <option value="ALL">All Subjects</option>
+              {subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
+            </select>
+            <select value={mentorFilter} onChange={(e) => setMentorFilter(e.target.value)} aria-label="Filter by Mentor" className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700">
+              <option value="ALL">All Mentors</option>
+              {mentors.map((mentor) => <option key={mentor.id} value={mentor.id}>{mentor.name}</option>)}
+            </select>
+            <input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} aria-label="Filter by Date" className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700" />
 
             <select
               value={statusFilter}

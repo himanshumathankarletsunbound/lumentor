@@ -11,12 +11,17 @@ const defaultBaseUrl = 'https://api.classcardapp.com/api/v2/public';
 async function config() {
   const raw = await getEncryptedSecret('classcard.config');
   const value = raw ? JSON.parse(raw) as { baseUrl?: string; apiKey?: string; syncIntervalMinutes?: number; enabled?: boolean } : {};
+  const storedApiKey = String(value.apiKey || '').trim();
   return {
     baseUrl: value.baseUrl || process.env.CLASSCARD_API_BASE_URL || defaultBaseUrl,
-    apiKey: value.apiKey || process.env.CLASSCARD_API_KEY || '',
+    apiKey: storedApiKey && !isMaskedApiKey(storedApiKey) ? storedApiKey : process.env.CLASSCARD_API_KEY?.trim() || '',
     syncIntervalMinutes: value.syncIntervalMinutes || 60,
     enabled: value.enabled ?? true,
   };
+}
+
+function isMaskedApiKey(value: string): boolean {
+  return value.includes('••••') || value.includes('…') || value === '[configured]';
 }
 
 async function classcardFetch(path: string, method: 'GET' | 'POST', body?: unknown) {
@@ -36,7 +41,12 @@ async function classcardFetch(path: string, method: 'GET' | 'POST', body?: unkno
   if (text) {
     try { data = JSON.parse(text); } catch { data = text; }
   }
-  if (!response.ok) throw new Error(`Classcard API returned ${response.status}: ${typeof data === 'string' ? data : response.statusText}`);
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('Classcard rejected the API key (401 Unauthorized). Re-enter the complete current API key in Settings; do not paste the masked value shown on screen.');
+    }
+    throw new Error(`Classcard API returned ${response.status}: ${typeof data === 'string' ? data : response.statusText}`);
+  }
   return data;
 }
 
@@ -114,7 +124,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ success: true, logs: await prisma.syncJob.findMany({ orderBy: { startedAt: 'desc' }, take: 100 }) });
   }
   const settings = await config();
-  return NextResponse.json({ success: true, settings: { ...settings, apiKey: settings.apiKey ? `${settings.apiKey.slice(0, 4)}••••${settings.apiKey.slice(-4)}` : '', isConfigured: Boolean(settings.apiKey) } });
+  return NextResponse.json({ success: true, settings: { ...settings, apiKey: '', apiKeyHint: settings.apiKey ? `${settings.apiKey.slice(0, 4)}••••${settings.apiKey.slice(-4)}` : '', isConfigured: Boolean(settings.apiKey) } });
 }
 
 export async function POST(req: NextRequest) {
@@ -127,14 +137,17 @@ export async function POST(req: NextRequest) {
       const current = await config();
       const next = {
         baseUrl: String(body.baseUrl || current.baseUrl).trim(),
-        apiKey: String(body.apiKey || current.apiKey).trim(),
+        apiKey: (() => {
+          const submitted = String(body.apiKey || '').trim();
+          return submitted && !isMaskedApiKey(submitted) ? submitted : current.apiKey;
+        })(),
         syncIntervalMinutes: Math.max(5, Number(body.syncIntervalMinutes || current.syncIntervalMinutes)),
         enabled: Boolean(body.enabled),
       };
       if (!next.baseUrl.startsWith('https://')) throw new Error('Classcard base URL must use HTTPS.');
       if (!next.apiKey) throw new Error('Classcard API key is required.');
       await setEncryptedSecret('classcard.config', JSON.stringify(next));
-      return NextResponse.json({ success: true, settings: { ...next, apiKey: `${next.apiKey.slice(0, 4)}••••${next.apiKey.slice(-4)}`, isConfigured: true } });
+      return NextResponse.json({ success: true, settings: { ...next, apiKey: '', apiKeyHint: `${next.apiKey.slice(0, 4)}••••${next.apiKey.slice(-4)}`, isConfigured: true } });
     }
     if (body.action === 'reconcile-month') {
       const start = String(body.start || '2026-10-01').trim();

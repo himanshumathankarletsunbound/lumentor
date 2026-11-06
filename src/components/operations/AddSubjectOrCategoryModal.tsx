@@ -230,7 +230,7 @@ export function AddSubjectOrCategoryModal({
         {/* Tab 1: Add Subject */}
         {mode === 'subject' && (
           <form onSubmit={handleSubjectSubmit} className="space-y-3.5 text-xs">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
                   Subject Name <span className="text-rose-500">*</span>
@@ -244,21 +244,6 @@ export function AddSubjectOrCategoryModal({
                   className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Classcard subject ID</label>
-                  <input value={externalId} onChange={(e) => setExternalId(e.target.value)} placeholder="Classcard subject ID" className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-900" />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Payroll plan</label>
-                  <select value={payrollPlanId} onChange={(e) => setPayrollPlanId(e.target.value)} className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-900">
-                    <option value="">No payroll plan</option>
-                    {payrollPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} ({plan.code})</option>)}
-                  </select>
-                </div>
-              </div>
-
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
                   Subject Code <span className="text-rose-500">*</span>
@@ -266,11 +251,25 @@ export function AddSubjectOrCategoryModal({
                 <input
                   type="text"
                   required
-                  placeholder="e.g. MATH-201"
+                  placeholder="e.g. LU-SUB-1"
                   value={subjectCode}
                   onChange={(e) => setSubjectCode(e.target.value)}
                   className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-mono text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 uppercase"
                 />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3 sm:grid-cols-2">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Classcard subject ID</label>
+                <input value={externalId} onChange={(e) => setExternalId(e.target.value)} placeholder="e.g. 86692" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Payroll plan</label>
+                <select value={payrollPlanId} onChange={(e) => setPayrollPlanId(e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  <option value="">No payroll plan</option>
+                  {payrollPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} ({plan.code})</option>)}
+                </select>
               </div>
             </div>
 

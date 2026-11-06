@@ -281,6 +281,7 @@ export async function POST(req: NextRequest) {
           create: { id: `classcard-${externalId}`, branchId: mentor.branchId, subjectId: subject.id, mentorId: mentor.id, title: String(event.subjectName || subject.name), startTime, endTime, durationMinutes: Math.max(1, Math.round((endTime.getTime() - startTime.getTime()) / 60000)), status: 'COMPLETED', externalId, provenance: 'CLASSCARD_SOURCED' },
           update: { branchId: mentor.branchId, subjectId: subject.id, mentorId: mentor.id, title: String(event.subjectName || subject.name), startTime, endTime, status: 'COMPLETED', provenance: 'CLASSCARD_SOURCED' },
         });
+        await prisma.classcardEvent.update({ where: { externalId }, data: { classEventId: classEvent.id } });
         sessionsMapped++;
         const eventStudents = classcardStudentRows(event);
         const knownStudentIds = new Set(eventStudents.map(studentId));

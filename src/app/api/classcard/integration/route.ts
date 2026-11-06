@@ -22,7 +22,10 @@ async function config() {
 async function classcardFetch(path: string, method: 'GET' | 'POST', body?: unknown) {
   const settings = await config();
   if (!settings.apiKey) throw new Error('Classcard API key is not configured.');
-  const response = await fetch(`${settings.baseUrl.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`, {
+  const requestUrl = path.startsWith('/api/public/')
+    ? new URL(path, settings.baseUrl).origin + path
+    : `${settings.baseUrl.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`;
+  const response = await fetch(requestUrl, {
     method,
     headers: { Accept: 'application/json', 'api-key': settings.apiKey, ...(body ? { 'Content-Type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
@@ -36,6 +39,22 @@ async function classcardFetch(path: string, method: 'GET' | 'POST', body?: unkno
   if (!response.ok) throw new Error(`Classcard API returned ${response.status}: ${typeof data === 'string' ? data : response.statusText}`);
   return data;
 }
+
+const apiCatalog = {
+  staffOneOnOneServices: { path: '/api/public/staff/one-on-one-services', parameter: 'staff_id' },
+  staffEvents: { path: '/staff/events/', parameter: 'staff' },
+  staffServices: { path: '/staff/services', parameter: 'staff_id' },
+  inventoryProducts: { path: '/inventory/products', parameter: null },
+  students: { path: '/students', parameter: null },
+  studentEvents: { path: '/students/{student_id}/events', parameter: 'student_id' },
+  studentDetails: { path: '/students/{student_id}', parameter: 'student_id' },
+  studentInvoices: { path: '/students/{student_id}/invoices', parameter: 'student_id' },
+  events: { path: '/events', parameter: null },
+  attendance: { path: '/attendance', parameter: null },
+  invoices: { path: '/invoices', parameter: null },
+} as const;
+
+type ApiKey = keyof typeof apiCatalog;
 
 function eventRows(data: unknown): Record<string, unknown>[] {
   if (Array.isArray(data)) return data.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'));
@@ -143,6 +162,26 @@ export async function POST(req: NextRequest) {
       }
       await prisma.syncJob.create({ data: { id: crypto.randomUUID(), jobType: 'EVENTS', status: 'COMPLETED', startedAt: new Date(), completedAt: new Date(), recordsProcessed: rows.length, recordsCreated: saved, recordsUpdated: 0, recordsFailed: rows.length - saved, logSummary: [`Fetched ${rows.length} event records and saved ${saved}.`] } });
       return NextResponse.json({ success: true, fetched: rows.length, saved, materialized });
+    }
+    if (body.action === 'request-api') {
+      const api = String(body.api || '') as ApiKey;
+      if (!(api in apiCatalog)) throw new Error('That Classcard API is not available.');
+      const definition = apiCatalog[api];
+      const params = body.params && typeof body.params === 'object' ? body.params as Record<string, unknown> : {};
+      const query = new URLSearchParams();
+      for (const [key, value] of Object.entries(params)) {
+        if (value !== undefined && value !== null && String(value).trim()) query.set(key, String(value).trim());
+      }
+      if (definition.parameter && !query.get(definition.parameter)) {
+        throw new Error(`${definition.parameter} is required.`);
+      }
+      if (api === 'inventoryProducts') {
+        const perPage = Number(query.get('per_page') || 15);
+        if (!Number.isInteger(perPage) || perPage < 1 || perPage > 100) throw new Error('per_page must be between 1 and 100.');
+      }
+      const path = `${definition.path.replace(/\{([^}]+)\}/g, (_, key: string) => encodeURIComponent(query.get(key) || ''))}${query.toString() ? `?${query.toString()}` : ''}`;
+      const data = await classcardFetch(path, 'GET');
+      return NextResponse.json({ success: true, api, data });
     }
     if (body.action === 'sync-attendance') {
       const start = String(body.start || '').trim();

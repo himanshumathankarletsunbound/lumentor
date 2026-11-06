@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authorizationErrorAsync } from '../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../lib/db/server-initialization';
 import { db } from '../../../lib/db/store';
-import { saveNormalizedRecord, deleteNormalizedRecord, nextMentorId } from '../../../lib/db/state-repository';
+import { saveNormalizedRecord, deleteNormalizedRecord, nextMentorId, updateSubjectRecord, deleteSubjectRecord, updateStudentRecord, deleteStudentRecord } from '../../../lib/db/state-repository';
 import { nextDemoMentorId } from '../../../lib/mentors/ids';
 import { listBranches, listMentors, listPackages, listStudents, listSubjects } from '../../../lib/db/state-repository';
 
@@ -125,13 +125,17 @@ export async function PUT(req: NextRequest) {
         updated = db.updateMentor(body.id, body.updates as Parameters<typeof db.updateMentor>[1]);
         break;
       case 'student':
-        updated = db.updateStudent(body.id, body.updates as Parameters<typeof db.updateStudent>[1]);
+        updated = process.env.DEMO_MODE === 'true'
+          ? db.updateStudent(body.id, body.updates as Parameters<typeof db.updateStudent>[1])
+          : await updateStudentRecord(body.id, body.updates as Parameters<typeof updateStudentRecord>[1]);
         break;
       case 'branch':
         updated = db.updateBranch(body.id, body.updates as Parameters<typeof db.updateBranch>[1]);
         break;
       case 'subject':
-        updated = db.updateSubject(body.id, body.updates as Parameters<typeof db.updateSubject>[1]);
+        updated = process.env.DEMO_MODE === 'true'
+          ? db.updateSubject(body.id, body.updates as Parameters<typeof db.updateSubject>[1])
+          : await updateSubjectRecord(body.id, body.updates as Parameters<typeof updateSubjectRecord>[1]);
         break;
       case 'package':
         updated = db.updatePackage(body.id, body.updates as Parameters<typeof db.updatePackage>[1]);
@@ -172,13 +176,15 @@ export async function DELETE(req: NextRequest) {
         deleted = db.deleteMentor(id);
         break;
       case 'student':
-        deleted = db.deleteStudent(id);
+        if (process.env.DEMO_MODE === 'true') deleted = db.deleteStudent(id);
+        else { await deleteStudentRecord(id); deleted = true; }
         break;
       case 'branch':
         deleted = db.deleteBranch(id);
         break;
       case 'subject':
-        deleted = db.deleteSubject(id);
+        if (process.env.DEMO_MODE === 'true') deleted = db.deleteSubject(id);
+        else { await deleteSubjectRecord(id); deleted = true; }
         break;
       case 'package':
         deleted = db.deletePackage(id);

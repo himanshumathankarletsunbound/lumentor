@@ -305,6 +305,31 @@
       "updatedAt": "2026-01-01T00:00:00Z"
     },
     {
+      "id": "role-audit",
+      "name": "Audit Team",
+      "systemRole": "AUDIT",
+      "description": "Reviews mentor performance and assigns the audit score out of 3.",
+      "permissions": [
+        {
+          "module": "overview",
+          "actions": [
+            "view",
+            "export"
+          ]
+        },
+        {
+          "module": "mentor_reviews",
+          "actions": [
+            "view",
+            "edit",
+            "export"
+          ]
+        }
+      ],
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
       "id": "role-mentor",
       "name": "Mentor (Personal Portal)",
       "systemRole": "MENTOR",
@@ -561,7 +586,9 @@
       "passwordHash": "435d06d2937015006c74079f799d0b92fe8fbd29d24600faffd4b474a6a0177146e7e2bd0b45eae1f1c688512d5448539b63807c2384b256a20a9efaea7cd616",
       "salt": "4bdf413f8a507f6e5046b89627425ad4",
       "status": "ACTIVE",
-      "createdAt": "2026-01-01T00:00:00Z"
+      "createdAt": "2026-01-01T00:00:00Z",
+      "sessionToken": "94add694ba89aa38a4d53fe6f9a481faf452d53e66b815a6938b092b868409b0",
+      "sessionExpiry": "2026-11-06T05:39:01.794Z"
     }
   ],
   "branches": [],

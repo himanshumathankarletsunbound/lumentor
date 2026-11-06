@@ -12,6 +12,7 @@ import { AddRecordModal } from '../../../components/operations/AddRecordModal';
 import { AddSubjectOrCategoryModal } from '../../../components/operations/AddSubjectOrCategoryModal';
 import { BookOpen, Plus, FolderKanban, FolderPlus, ChevronDown, Search } from 'lucide-react';
 import { Subject } from '../../../lib/types/models';
+import type { PayrollPlan } from '../../../lib/types/payroll';
 
 export default function SubjectsPage() {
   const [subjects, setSubjects] = useState<Subject[]>(db.getSubjects());
@@ -23,6 +24,7 @@ export default function SubjectsPage() {
   const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
   const [deletingSubject, setDeletingSubject] = useState<Subject | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [payrollPlans, setPayrollPlans] = useState<PayrollPlan[]>([]);
 
   // Dropdown menu state for header "Add" button
   const [addMenuOpen, setAddMenuOpen] = useState(false);
@@ -53,6 +55,12 @@ export default function SubjectsPage() {
       });
     }, 0);
     return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    void fetch('/api/payroll-plans').then((response) => response.json()).then((result) => {
+      if (result.success) setPayrollPlans(result.plans || result.records || []);
+    }).catch((error: unknown) => console.error('Failed to load payroll plans:', error));
   }, []);
 
   // Close add menu when clicking outside
@@ -119,6 +127,8 @@ export default function SubjectsPage() {
     category: string;
     duration: number;
     description?: string;
+    externalId?: string;
+    payrollPlanId?: string;
   }) => {
     const response = await fetch('/api/records', {
       method: 'POST',
@@ -135,6 +145,8 @@ export default function SubjectsPage() {
           isActive: true,
           color: '#6366f1',
           provenance: 'LOCALLY_CREATED',
+          externalId: data.externalId,
+          payrollPlanId: data.payrollPlanId,
         },
       }),
     });
@@ -197,6 +209,8 @@ export default function SubjectsPage() {
           description: values.description?.trim() || '',
           defaultDurationMinutes: duration,
           availableDurations: [duration],
+          externalId: values.externalId?.trim() || undefined,
+          payrollPlanId: values.payrollPlanId || undefined,
         },
       }),
     });
@@ -530,6 +544,7 @@ export default function SubjectsPage() {
           existingCategories={categories}
           onSaveSubject={handleSaveSubject}
           onSaveCategory={handleSaveCategory}
+          payrollPlans={payrollPlans}
         />
 
         {/* Edit Subject Modal */}
@@ -544,12 +559,16 @@ export default function SubjectsPage() {
               code: editingSubject.code,
               category: editingSubject.category,
               duration: String(editingSubject.defaultDurationMinutes),
+              externalId: editingSubject.externalId || '',
+              payrollPlanId: editingSubject.payrollPlanId || '',
             }}
             fields={[
               { name: 'name', label: 'Subject name' },
               { name: 'code', label: 'Subject code' },
               { name: 'category', label: 'Category' },
               { name: 'duration', label: 'Default duration (minutes)', type: 'number' },
+              { name: 'externalId', label: 'Classcard subject ID', required: false },
+              { name: 'payrollPlanId', label: 'Payroll plan', required: false, type: 'select', options: payrollPlans.map((plan) => ({ label: `${plan.name} (${plan.code})`, value: plan.id })) },
             ]}
             onSave={handleUpdateSubject}
           />

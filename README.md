@@ -15,7 +15,11 @@ All monetary values in the application are denominated and displayed in Indian r
 - **Security**: The API key is securely stored server-side. Frontend requests only receive a masked representation (e.g. `sk_live_••••••••xyz9`).
 - **Endpoint Matrix**: Covers all 27 documented endpoints across Students, Leads, Staff, Invoices, Payments, Enrolments, Categories/Items, Coupons/Events, Attendance, Credit Notes, and Guardians.
 - **Idempotent Sync**: Ingests students, staff/mentors, classes/events, invoices, and attendance without duplicate creations via external ID and email upserts.
+- **External ID mapping**: Mentors, students, and academic subjects retain their Classcard identifiers in PostgreSQL. Subjects can be assigned an authoritative payroll plan for payroll subject-rate mapping.
 - **Resilience**: Automatic retry with exponential backoff, circuit-breaker awareness, timeout handling, empty-body HTTP 200/204 response normalization, and full provenance tagging (`CLASSCARD_SOURCED`).
+- **Administration workflow**: Administrators use **Administration → Classcard Integration** for Sync data, Sync logs, Single sync, and encrypted Settings. Staff/date-range event sync stores the complete Classcard payload in the PostgreSQL `ClasscardEvent` table and is idempotent by Classcard event ID.
+- **Attendance reconciliation**: The attendance sync matches Classcard attendance rows by `event_id`, records Present/Absent status on saved events, and writes a `SyncJob` audit record. The scheduled endpoint (`/api/cron/classcard`) syncs the configured date window every five minutes when `CRON_SECRET` and an enabled encrypted configuration are present.
+- **Mentor sync**: Operations can open a mentor profile's Sync tab to fetch events by the mentor's required Classcard staff ID and date range. Subject and location filters are passed through to the staff-events endpoint when supplied.
 - **Explicit demo mode**: JSON fixtures are available only when `DEMO_MODE=true` for local acceptance tests. Production never falls back to mock Classcard data.
 
 ### 2. Fine-Grained Role-Based Access Control (RBAC)
@@ -127,6 +131,7 @@ Create a `.env.local` file in the root directory (optional, mock mode will activ
 # Classcard Public API v2 Credentials
 CLASSCARD_API_KEY=your_classcard_api_key_here
 CLASSCARD_API_BASE_URL=https://api.classcardapp.com/api/v2/public/
+CRON_SECRET="generate-a-separate-random-secret"
 
 # Database (for production PostgreSQL deployment via Prisma)
 APP_ENCRYPTION_KEY="generate-a-long-random-secret"
@@ -241,6 +246,9 @@ The **Operations → Mentors & Instructional Staff** page supports **Import staf
 
 The documented Classcard endpoints currently integrated are:
 
+- `POST /api/classcard/integration` with `action=sync-events` for staff/date-range or general event ingestion
+- `POST /api/classcard/integration` with `action=sync-attendance` for attendance reconciliation by saved event ID
+- `GET /api/cron/classcard` for authenticated Vercel scheduled event synchronization
 - `POST /api/classcard/leads` for `POST /api/v2/public/leads/add`
 - `GET /api/classcard/staff/:staffId/one-on-one-services` for `GET /api/public/staff/one-on-one-services`
 - `GET /api/classcard/inventory` for `GET /api/v2/public/inventory/products`

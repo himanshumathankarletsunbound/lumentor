@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
-import { BookOpen, FolderPlus, Plus, Sparkles } from 'lucide-react';
+import { BookOpen, FolderPlus } from 'lucide-react';
 
 interface AddSubjectOrCategoryModalProps {
   isOpen: boolean;
@@ -11,12 +11,15 @@ interface AddSubjectOrCategoryModalProps {
   initialMode?: 'subject' | 'category';
   defaultCategory?: string;
   existingCategories: string[];
+  payrollPlans?: { id: string; name: string; code: string }[];
   onSaveSubject: (data: {
     name: string;
     code: string;
     category: string;
     duration: number;
     description?: string;
+    externalId?: string;
+    payrollPlanId?: string;
   }) => Promise<void>;
   onSaveCategory: (data: {
     categoryName: string;
@@ -37,6 +40,7 @@ export function AddSubjectOrCategoryModal({
   existingCategories,
   onSaveSubject,
   onSaveCategory,
+  payrollPlans = [],
 }: AddSubjectOrCategoryModalProps) {
   const [mode, setMode] = useState<'subject' | 'category'>(initialMode);
 
@@ -48,6 +52,8 @@ export function AddSubjectOrCategoryModal({
   const [customCategoryInput, setCustomCategoryInput] = useState('');
   const [duration, setDuration] = useState('60');
   const [subjectDescription, setSubjectDescription] = useState('');
+  const [externalId, setExternalId] = useState('');
+  const [payrollPlanId, setPayrollPlanId] = useState('');
 
   // Category fields
   const [categoryName, setCategoryName] = useState('');
@@ -63,6 +69,7 @@ export function AddSubjectOrCategoryModal({
 
   useEffect(() => {
     if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setMode(initialMode);
       setError(null);
       if (defaultCategory) {
@@ -81,6 +88,8 @@ export function AddSubjectOrCategoryModal({
     setSubjectName('');
     setSubjectCode('');
     setCustomCategoryInput('');
+    setExternalId('');
+    setPayrollPlanId('');
     setIsCustomCategory(false);
     setCategoryName('');
     setCategoryDescription('');
@@ -115,6 +124,8 @@ export function AddSubjectOrCategoryModal({
         category: finalCategory,
         duration: Number(duration) || 60,
         description: subjectDescription.trim(),
+        externalId: externalId.trim() || undefined,
+        payrollPlanId: payrollPlanId || undefined,
       });
       handleClose();
     } catch (err) {
@@ -232,6 +243,20 @@ export function AddSubjectOrCategoryModal({
                   onChange={(e) => setSubjectName(e.target.value)}
                   className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Classcard subject ID</label>
+                  <input value={externalId} onChange={(e) => setExternalId(e.target.value)} placeholder="Classcard subject ID" className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-900" />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Payroll plan</label>
+                  <select value={payrollPlanId} onChange={(e) => setPayrollPlanId(e.target.value)} className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-900">
+                    <option value="">No payroll plan</option>
+                    {payrollPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} ({plan.code})</option>)}
+                  </select>
+                </div>
               </div>
 
               <div>

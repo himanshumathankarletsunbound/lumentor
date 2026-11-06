@@ -34,6 +34,7 @@ export interface Subject {
   color: string;
   provenance: DataProvenance;
   externalId?: string;
+  payrollPlanId?: string;
   createdAt: string;
   updatedAt: string;
 }

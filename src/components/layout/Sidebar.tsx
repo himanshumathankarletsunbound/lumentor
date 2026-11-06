@@ -515,6 +515,12 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
             icon: <Settings className="w-4 h-4" />,
             module: 'settings',
           },
+          {
+            name: 'Classcard Integration',
+            href: '/admin/classcard-integration',
+            icon: <History className="w-4 h-4" />,
+            module: 'classcard_integration',
+          },
         ],
       },
     ];

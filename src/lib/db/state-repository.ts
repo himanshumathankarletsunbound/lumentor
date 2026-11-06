@@ -408,10 +408,41 @@ export async function listSubjects(): Promise<Subject[]> {
     isActive: subject.isActive,
     color: subject.color,
     externalId: subject.externalId || undefined,
+    payrollPlanId: subject.payrollPlanId || undefined,
     provenance: subject.provenance,
     createdAt: subject.createdAt.toISOString(),
     updatedAt: subject.updatedAt.toISOString(),
   }));
+}
+
+export async function updateSubjectRecord(id: string, updates: Partial<Subject>): Promise<Subject> {
+  const subject = await prisma.subject.update({
+    where: { id },
+    data: {
+      name: updates.name,
+      code: updates.code,
+      category: updates.category,
+      description: updates.description,
+      defaultDurationMinutes: updates.defaultDurationMinutes,
+      availableDurations: updates.availableDurations,
+      isActive: updates.isActive,
+      color: updates.color,
+      externalId: updates.externalId,
+      payrollPlanId: updates.payrollPlanId || null,
+      provenance: updates.provenance,
+    },
+  });
+  return {
+    id: subject.id, name: subject.name, code: subject.code, category: subject.category,
+    description: subject.description || '', defaultDurationMinutes: subject.defaultDurationMinutes,
+    availableDurations: subject.availableDurations, isActive: subject.isActive, color: subject.color,
+    externalId: subject.externalId || undefined, payrollPlanId: subject.payrollPlanId || undefined,
+    provenance: subject.provenance, createdAt: subject.createdAt.toISOString(), updatedAt: subject.updatedAt.toISOString(),
+  };
+}
+
+export async function deleteSubjectRecord(id: string): Promise<void> {
+  await prisma.subject.delete({ where: { id } });
 }
 
 export async function listPackages(): Promise<Package[]> {
@@ -457,6 +488,37 @@ export async function listStudents(branchId?: string): Promise<Student[]> {
     createdAt: student.createdAt.toISOString(),
     updatedAt: student.updatedAt.toISOString(),
   }));
+}
+
+export async function updateStudentRecord(id: string, updates: Partial<Student>): Promise<Student> {
+  const student = await prisma.student.update({
+    where: { id },
+    data: {
+      branchId: updates.branchId,
+      firstName: updates.firstName,
+      lastName: updates.lastName,
+      email: updates.email,
+      phone: updates.phone,
+      guardianName: updates.guardianName,
+      guardianEmail: updates.guardianEmail,
+      externalId: updates.externalId,
+      status: updates.status,
+      customFields: updates.customFields,
+      provenance: updates.provenance,
+    },
+  });
+  return {
+    id: student.id, firstName: student.firstName, lastName: student.lastName, email: student.email,
+    phone: student.phone || '', branchId: student.branchId, dateOfBirth: student.dateOfBirth?.toISOString(),
+    guardianName: student.guardianName || undefined, guardianEmail: student.guardianEmail || undefined,
+    enrolledPackageIds: [], status: student.status as Student['status'], externalId: student.externalId || undefined,
+    provenance: student.provenance, customFields: (student.customFields as Record<string, string> | null) || undefined,
+    createdAt: student.createdAt.toISOString(), updatedAt: student.updatedAt.toISOString(),
+  };
+}
+
+export async function deleteStudentRecord(id: string): Promise<void> {
+  await prisma.student.delete({ where: { id } });
 }
 
 export async function listClasses(filters: {
@@ -920,6 +982,38 @@ export async function createSyncJobRecord(input: {
   });
 }
 
+export async function listClasscardEventRecords(mentorId?: string) {
+  return prisma.classcardEvent.findMany({
+    where: mentorId ? { mentorId } : undefined,
+    orderBy: { startTime: 'desc' },
+    take: 500,
+    select: {
+      id: true, externalId: true, mentorId: true, classcardStaffId: true,
+      subjectName: true, subjectExternalId: true, locationName: true,
+      startTime: true, endTime: true, attendanceStatus: true, rawPayload: true,
+    },
+  });
+}
+
+export async function upsertClasscardEventRecord(input: {
+  externalId: string;
+  mentorId?: string;
+  classcardStaffId: string;
+  subjectName?: string;
+  subjectExternalId?: string;
+  locationName?: string;
+  startTime: Date;
+  endTime: Date;
+  attendanceStatus?: string;
+  rawPayload: Prisma.InputJsonValue;
+}) {
+  return prisma.classcardEvent.upsert({
+    where: { externalId: input.externalId },
+    create: input,
+    update: input,
+  });
+}
+
 export async function listDashboardFinance() {
   const [batches, payslips, invoices, payments, syncJobs, auditLogs] = await Promise.all([
     prisma.payrollBatch.findMany({ orderBy: { createdAt: 'desc' }, include: { lineItems: { include: { mentor: true } } } }),
@@ -1214,8 +1308,8 @@ export async function saveNormalizedRecord(
     const subject = record as Subject;
     await prisma.subject.upsert({
       where: { id: subject.id },
-      create: { id: subject.id, name: subject.name, code: subject.code, category: subject.category, description: subject.description, defaultDurationMinutes: subject.defaultDurationMinutes, availableDurations: subject.availableDurations, isActive: subject.isActive, color: subject.color, provenance: subject.provenance },
-      update: { name: subject.name, code: subject.code, category: subject.category, description: subject.description, defaultDurationMinutes: subject.defaultDurationMinutes, availableDurations: subject.availableDurations, isActive: subject.isActive, color: subject.color, provenance: subject.provenance },
+      create: { id: subject.id, name: subject.name, code: subject.code, category: subject.category, description: subject.description, defaultDurationMinutes: subject.defaultDurationMinutes, availableDurations: subject.availableDurations, isActive: subject.isActive, color: subject.color, externalId: subject.externalId, payrollPlanId: subject.payrollPlanId, provenance: subject.provenance },
+      update: { name: subject.name, code: subject.code, category: subject.category, description: subject.description, defaultDurationMinutes: subject.defaultDurationMinutes, availableDurations: subject.availableDurations, isActive: subject.isActive, color: subject.color, externalId: subject.externalId, payrollPlanId: subject.payrollPlanId || null, provenance: subject.provenance },
     });
   } else if (type === 'package') {
     const pkg = record as Package;
@@ -1230,8 +1324,8 @@ export async function saveNormalizedRecord(
     await ensureBranch(organizationId, student.branchId, state);
     await prisma.student.upsert({
       where: { id: student.id },
-      create: { id: student.id, branchId: student.branchId, firstName: student.firstName, lastName: student.lastName, email: student.email, phone: student.phone, dateOfBirth: student.dateOfBirth ? new Date(student.dateOfBirth) : undefined, guardianName: student.guardianName, guardianEmail: student.guardianEmail, status: student.status, customFields: student.customFields, provenance: student.provenance },
-      update: { branchId: student.branchId, firstName: student.firstName, lastName: student.lastName, email: student.email, phone: student.phone, status: student.status, customFields: student.customFields, provenance: student.provenance },
+      create: { id: student.id, branchId: student.branchId, firstName: student.firstName, lastName: student.lastName, email: student.email, phone: student.phone, dateOfBirth: student.dateOfBirth ? new Date(student.dateOfBirth) : undefined, guardianName: student.guardianName, guardianEmail: student.guardianEmail, externalId: student.externalId, status: student.status, customFields: student.customFields, provenance: student.provenance },
+      update: { branchId: student.branchId, firstName: student.firstName, lastName: student.lastName, email: student.email, phone: student.phone, externalId: student.externalId, status: student.status, customFields: student.customFields, provenance: student.provenance },
     });
   } else {
     const mentor = record as Mentor;

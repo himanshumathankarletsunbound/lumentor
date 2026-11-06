@@ -61,6 +61,7 @@ export default function StudentsPage() {
           phone: values.phone?.trim() || '',
           guardianName: values.guardianName?.trim() || '',
           guardianEmail: values.guardianEmail?.trim() || '',
+          externalId: values.externalId?.trim() || undefined,
           branchId: values.branchId || branches[0]?.id || '',
           enrolledPackageIds: [],
           status: 'ACTIVE',
@@ -91,6 +92,7 @@ export default function StudentsPage() {
           guardianName: values.guardianName?.trim() || '',
           guardianEmail: values.guardianEmail?.trim() || '',
           branchId: values.branchId || editingStudent.branchId,
+          externalId: values.externalId?.trim() || undefined,
         },
       }),
     });
@@ -316,6 +318,7 @@ export default function StudentsPage() {
             { name: 'phone', label: 'Phone', required: false, placeholder: '+1 (555) 000-0000' },
             { name: 'guardianName', label: 'Guardian name', required: false, placeholder: 'Parent or Guardian' },
             { name: 'guardianEmail', label: 'Guardian email', type: 'email', required: false, placeholder: 'guardian@example.com' },
+            { name: 'externalId', label: 'Classcard student ID', required: false, placeholder: 'Classcard student ID' },
           ]}
           onSave={handleCreateStudent}
         />
@@ -335,6 +338,7 @@ export default function StudentsPage() {
               guardianName: editingStudent.guardianName || '',
               guardianEmail: editingStudent.guardianEmail || '',
               branchId: editingStudent.branchId || '',
+              externalId: editingStudent.externalId || '',
             }}
             fields={[
               { name: 'firstName', label: 'First name' },
@@ -343,6 +347,7 @@ export default function StudentsPage() {
               { name: 'phone', label: 'Phone', required: false },
               { name: 'guardianName', label: 'Guardian name', required: false },
               { name: 'guardianEmail', label: 'Guardian email', type: 'email', required: false },
+              { name: 'externalId', label: 'Classcard student ID', required: false },
             ]}
             onSave={handleUpdateStudent}
           />

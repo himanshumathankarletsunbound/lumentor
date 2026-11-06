@@ -25,6 +25,13 @@ export default function MentorsPage() {
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const [userDetails, setUserDetails] = useState<{ user: { id: string; name: string; email: string; status: string; lastLoginAt?: string | null } | null; activity: Array<{ id: string; action: string; details: string; timestamp: string }> } | null>(null);
   const [copiedClasscardId, setCopiedClasscardId] = useState<string | null>(null);
+  const [classcardEvents, setClasscardEvents] = useState<Array<{ externalId: string; subjectName?: string | null; startTime: string; endTime: string; attendanceStatus?: string | null }>>([]);
+  const [classcardSyncMode, setClasscardSyncMode] = useState<'staff' | 'filters'>('staff');
+  const [classcardSyncStart, setClasscardSyncStart] = useState('');
+  const [classcardSyncEnd, setClasscardSyncEnd] = useState('');
+  const [classcardSyncSubject, setClasscardSyncSubject] = useState('');
+  const [classcardSyncLocation, setClasscardSyncLocation] = useState('');
+  const [classcardSyncMessage, setClasscardSyncMessage] = useState<string | null>(null);
 
   const plans = db.getPayrollPlans();
   const canViewPayroll = hasPermission('payroll_dashboard', 'view_sensitive_payroll');
@@ -37,6 +44,15 @@ export default function MentorsPage() {
     }
     setMentors(result.mentors);
   };
+
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const today = new Date().toISOString().slice(0, 10);
+      setClasscardSyncStart((current) => current || today);
+      setClasscardSyncEnd((current) => current || today);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   React.useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -142,9 +158,18 @@ export default function MentorsPage() {
       .catch(() => setUserDetails(null));
   }, [selectedMentor]);
 
+  React.useEffect(() => {
+    if (!selectedMentor) return;
+    void fetch(`/api/classcard/integration?mode=events&mentorId=${encodeURIComponent(selectedMentor.id)}`)
+      .then(async (response) => response.json())
+      .then((payload) => setClasscardEvents(payload.success ? payload.events || [] : []))
+      .catch(() => setClasscardEvents([]));
+  }, [selectedMentor]);
+
   const drawerTabs = [
     { id: 'overview', label: 'Overview' },
     { id: 'classes', label: `Classes (${mentorClasses.length})` },
+    { id: 'sync', label: 'Sync' },
     { id: 'user', label: 'User' },
     ...(canViewPayroll
       ? [
@@ -432,6 +457,31 @@ export default function MentorsPage() {
                       </p>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {activeTab === 'sync' && (
+                <div className="space-y-4 text-xs">
+                  <div className="flex gap-2">
+                    <Button size="sm" variant={classcardSyncMode === 'staff' ? 'primary' : 'outline'} onClick={() => setClasscardSyncMode('staff')}>By staff ID</Button>
+                    <Button size="sm" variant={classcardSyncMode === 'filters' ? 'primary' : 'outline'} onClick={() => setClasscardSyncMode('filters')}>Subject, staff ID & location</Button>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="font-semibold text-slate-700">Start date<input type="date" value={classcardSyncStart} onChange={(event) => setClasscardSyncStart(event.target.value)} className="mt-1 w-full rounded-lg border p-2 font-normal" /></label>
+                    <label className="font-semibold text-slate-700">End date<input type="date" value={classcardSyncEnd} onChange={(event) => setClasscardSyncEnd(event.target.value)} className="mt-1 w-full rounded-lg border p-2 font-normal" /></label>
+                    {classcardSyncMode === 'filters' && <><label className="font-semibold text-slate-700">Subject<input value={classcardSyncSubject} onChange={(event) => setClasscardSyncSubject(event.target.value)} className="mt-1 w-full rounded-lg border p-2 font-normal" /></label><label className="font-semibold text-slate-700">Location<input value={classcardSyncLocation} onChange={(event) => setClasscardSyncLocation(event.target.value)} className="mt-1 w-full rounded-lg border p-2 font-normal" /></label></>}
+                  </div>
+                  <Button onClick={async () => {
+                    if (!selectedMentor.externalId) { setClasscardSyncMessage('This mentor has no Classcard staff ID.'); return; }
+                    const response = await fetch('/api/classcard/integration', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sync-events', start: classcardSyncStart, end: classcardSyncEnd, staff: selectedMentor.externalId, subject: classcardSyncSubject, location: classcardSyncLocation }) });
+                    const payload = await response.json();
+                    if (!response.ok || !payload.success) { setClasscardSyncMessage(payload.error || 'Classcard sync failed.'); return; }
+                    setClasscardSyncMessage(`Fetched ${payload.fetched} sessions and saved ${payload.saved}.`);
+                    const events = await fetch(`/api/classcard/integration?mode=events&mentorId=${encodeURIComponent(selectedMentor.id)}`).then((result) => result.json());
+                    setClasscardEvents(events.events || []);
+                  }}>Fetch Classcard sessions</Button>
+                  {classcardSyncMessage && <p className="rounded-lg bg-indigo-50 p-3 text-indigo-700">{classcardSyncMessage}</p>}
+                  <div className="space-y-2">{classcardEvents.map((event) => <div key={event.externalId} className="rounded-lg border border-slate-200 p-3"><p className="font-semibold text-slate-900">{event.subjectName || 'Classcard session'}</p><p className="mt-1 text-slate-500">{new Date(event.startTime).toLocaleString()} – {new Date(event.endTime).toLocaleTimeString()} · {event.attendanceStatus || 'Attendance pending'}</p></div>)}{classcardEvents.length === 0 && <p className="text-slate-500">No Classcard sessions saved for this mentor yet.</p>}</div>
                 </div>
               )}
 

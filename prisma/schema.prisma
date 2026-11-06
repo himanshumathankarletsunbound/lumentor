@@ -137,6 +137,28 @@ model Branch {
   penalties   Penalty[]
 }
 
+model ClasscardEvent {
+  id              String   @id @default(uuid())
+  externalId      String   @unique
+  mentorId        String?
+  mentor          Mentor?  @relation(fields: [mentorId], references: [id], onDelete: SetNull)
+  classEventId    String?
+  classEvent      ClassEvent? @relation(fields: [classEventId], references: [id], onDelete: SetNull)
+  classcardStaffId String
+  subjectName     String?
+  subjectExternalId String?
+  locationName    String?
+  startTime       DateTime
+  endTime         DateTime
+  attendanceStatus String?
+  rawPayload      Json
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([mentorId, startTime])
+  @@index([classcardStaffId, startTime])
+}
+
 model User {
   id           String     @id @default(uuid())
   organizationId String
@@ -191,6 +213,8 @@ model Subject {
   isActive               Boolean        @default(true)
   color                  String         @default("#4f46e5")
   externalId             String?        @unique
+  payrollPlanId          String?
+  payrollPlan            PayrollPlan?   @relation(fields: [payrollPlanId], references: [id], onDelete: SetNull)
   provenance             DataProvenance @default(LOCALLY_CREATED)
   createdAt              DateTime       @default(now())
   updatedAt              DateTime       @updatedAt
@@ -271,6 +295,7 @@ model Mentor {
   sheetPayrollLineItems SheetPayrollLineItem[]
   payslips             Payslip[]
   reviews      MentorReview[]
+  classcardEvents ClasscardEvent[]
 }
 
 model MentorPayrollPlan {
@@ -338,6 +363,7 @@ model ClassEvent {
 
   attendances ClassAttendance[]
   penalties   Penalty[]
+  classcardRecords ClasscardEvent[]
 }
 
 model ClassAttendance {
@@ -465,6 +491,7 @@ model PayrollPlan {
 
   mentors Mentor[]
   mentorAssignments MentorPayrollPlan[]
+  subjects Subject[]
   payrollLineItems PayrollLineItem[]
 }
 

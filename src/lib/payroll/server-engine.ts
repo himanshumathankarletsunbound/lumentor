@@ -27,17 +27,55 @@ export async function generateBatchFromPostgres(options: CalculatePayrollOptions
   };
   const warnings: string[] = [];
   const lineItems = selectedMentors.flatMap((mentor) => {
+    const mentorClasses = allClasses.filter((item) => item.mentorId === mentor.id);
     const requestedPlanId = options.payrollPlanId ?? mentor.payrollPlanId;
-    if (!requestedPlanId) {
+    const groups = new Map<string, typeof allClasses>();
+    for (const classEvent of mentorClasses) {
+      const planId = options.payrollPlanId
+        ?? classEvent.subjectPayrollPlanId
+        ?? mentor.payrollPlanId;
+      if (!planId) continue;
+      const group = groups.get(planId) || [];
+      group.push(classEvent);
+      groups.set(planId, group);
+    }
+    if (groups.size === 0) {
       warnings.push(`No payroll plan is assigned to ${mentor.firstName} ${mentor.lastName}; mentor was skipped.`);
       return [];
     }
-    const plan = plans.find((item) => item.id === requestedPlanId);
-    if (!plan) {
-      warnings.push(`Payroll plan ${requestedPlanId} is not available for ${mentor.firstName} ${mentor.lastName}; mentor was skipped.`);
-      return [];
-    }
-    return [engine.calculateMentorPayroll(mentor, plan, allClasses, options.startDate, options.endDate, batchId, context)];
+
+    return Array.from(groups.entries()).flatMap(([planId, classesForPlan], groupIndex) => {
+      const plan = plans.find((item) => item.id === planId);
+      if (!plan) {
+        warnings.push(`Payroll plan ${planId} is not available for ${mentor.firstName} ${mentor.lastName}; sessions were skipped.`);
+        return [];
+      }
+      const calculationPlan = groupIndex === 0
+        ? plan
+        : { ...plan, baseSalary: 0 };
+      const calculationContext = groupIndex === 0
+        ? context
+        : { ...context, adjustments: [], initiatives: [], penalties: [] };
+      const lineItem = engine.calculateMentorPayroll(
+        mentor,
+        calculationPlan,
+        classesForPlan,
+        options.startDate,
+        options.endDate,
+        `${batchId}-${mentor.id}-${planId}`,
+        calculationContext,
+      );
+      return [{
+        ...lineItem,
+        id: `item-${batchId}-${mentor.id}-${planId}`,
+        calculationDetails: {
+          ...lineItem.calculationDetails,
+          subjectPlanMapping: requestedPlanId
+            ? 'payroll-plan-override'
+            : 'subject-payroll-plan-with-mentor-fallback',
+        },
+      }];
+    });
   });
   const batch: PayrollBatch = {
     id: batchId, batchNumber: `PAY-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(100 + Math.random() * 900)}`,
@@ -73,7 +111,7 @@ export async function finalizeBatchAndGeneratePayslipsFromPostgres(batchId: stri
       await transaction.penalty.updateMany({ where: { id: { in: item.appliedPenaltyIds } }, data: { status: 'APPLIED', appliedPayrollBatchId: batch.id, appliedAt: lockedAt } });
       generated.push(await transaction.payslip.create({
         data: {
-          id: `slip-${batch.id}-${item.mentorId}`, payslipNumber: `PS-${batch.startDate.toISOString().slice(0, 10).replace(/-/g, '').slice(0, 6)}-${Math.floor(1000 + Math.random() * 9000)}`,
+          id: `slip-${batch.id}-${item.id}`, payslipNumber: `PS-${batch.startDate.toISOString().slice(0, 10).replace(/-/g, '').slice(0, 6)}-${Math.floor(1000 + Math.random() * 9000)}`,
           batchId: batch.id, mentorId: item.mentorId, periodName: batch.periodName, startDate: batch.startDate, endDate: batch.endDate,
           planName: item.planName, compensationModel: item.compensationModel, planVersion: item.planVersion, eligibleClassesCount: item.eligibleClassesCount,
           eligibleDurationMinutes: item.eligibleDurationMinutes, earningsItems: [{ description: 'Payroll earnings', amount: Number(item.grossEarnings) }],

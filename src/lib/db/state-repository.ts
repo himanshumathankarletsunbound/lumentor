@@ -560,6 +560,7 @@ export async function listClasses(filters: {
       id: item.id,
       title: item.title,
       subjectId: item.subjectId,
+      subjectPayrollPlanId: item.subject.payrollPlanId || undefined,
       subjectName: item.subject.name,
       mentorId: item.mentorId,
       mentorName: `${item.mentor.firstName} ${item.mentor.lastName}`,

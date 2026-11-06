@@ -477,7 +477,7 @@ export default function MentorsPage() {
                     const payload = await response.json();
                     if (!response.ok || !payload.success) { setClasscardSyncMessage(payload.error || 'Classcard sync failed.'); return; }
                     setClasscardSyncMessage(`Fetched ${payload.fetched} sessions and saved ${payload.saved}.`);
-                    const events = await fetch(`/api/classcard/integration?mode=events&mentorId=${encodeURIComponent(selectedMentor.id)}`).then((result) => result.json());
+                    const events = await fetch(`/api/classcard/integration?mode=events&mentorId=${encodeURIComponent(selectedMentor.id)}&start=${encodeURIComponent(classcardSyncStart)}&end=${encodeURIComponent(classcardSyncEnd)}`).then((result) => result.json());
                     setClasscardEvents(events.events || []);
                   }}>Fetch Classcard sessions</Button>
                   {classcardSyncMessage && <p className="rounded-lg bg-indigo-50 p-3 text-indigo-700">{classcardSyncMessage}</p>}

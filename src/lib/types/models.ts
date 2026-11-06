@@ -144,6 +144,7 @@ export interface ClassEvent {
   id: string;
   title: string;
   subjectId: string;
+  subjectPayrollPlanId?: string;
   subjectName: string;
   mentorId: string;
   mentorName: string;

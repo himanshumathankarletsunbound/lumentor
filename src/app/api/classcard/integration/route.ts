@@ -50,6 +50,13 @@ function attendanceRows(data: unknown): Record<string, unknown>[] {
   return eventRows(data).filter((row) => row.event_id !== undefined || row.event !== undefined);
 }
 
+function isDateInRange(value: unknown, start: string, end: string): boolean {
+  const date = new Date(String(value || ''));
+  if (Number.isNaN(date.getTime())) return false;
+  const datePart = date.toISOString().slice(0, 10);
+  return datePart >= start && datePart <= end;
+}
+
 export async function GET(req: NextRequest) {
   await ensureServerPersistence();
   const denied = await authorizationErrorAsync(req, 'classcard_integration', 'view');
@@ -58,7 +65,13 @@ export async function GET(req: NextRequest) {
   if (mode === 'events') {
     const user = await getSessionUserAsync(req);
     const mentorId = user?.role === 'MENTOR' ? user.mentorId || undefined : new URL(req.url).searchParams.get('mentorId') || undefined;
-    return NextResponse.json({ success: true, events: await listClasscardEventRecords(mentorId) });
+    const start = new URL(req.url).searchParams.get('start');
+    const end = new URL(req.url).searchParams.get('end');
+    const events = await listClasscardEventRecords(mentorId);
+    return NextResponse.json({
+      success: true,
+      events: start && end ? events.filter((event) => isDateInRange(event.startTime, start, end)) : events,
+    });
   }
   if (mode === 'logs') {
     return NextResponse.json({ success: true, logs: await prisma.syncJob.findMany({ orderBy: { startedAt: 'desc' }, take: 100 }) });
@@ -99,7 +112,7 @@ export async function POST(req: NextRequest) {
       if (subject) query.set('subject', subject);
       if (location) query.set('location', location);
       const data = await classcardFetch(`${path}?${query.toString()}`, 'GET');
-      const rows = eventRows(data);
+      const rows = eventRows(data).filter((event) => isDateInRange(event.start, start, end));
       let saved = 0;
       let materialized = 0;
       for (const event of rows) {
@@ -136,7 +149,10 @@ export async function POST(req: NextRequest) {
       const end = String(body.end || '').trim();
       if (!start || !end) throw new Error('Start and end dates are required.');
       const data = await classcardFetch(`attendance?start_date=${encodeURIComponent(start)}&end_date=${encodeURIComponent(end)}`, 'GET');
-      const rows = attendanceRows(data);
+      const rows = attendanceRows(data).filter((row) => {
+        const event = row.event && typeof row.event === 'object' ? row.event as Record<string, unknown> : {};
+        return isDateInRange(row.date || event.start, start, end);
+      });
       const grouped = new Map<string, Set<string>>();
       for (const row of rows) {
         const event = row.event && typeof row.event === 'object' ? row.event as Record<string, unknown> : {};

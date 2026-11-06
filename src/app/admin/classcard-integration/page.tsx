@@ -41,6 +41,8 @@ export default function ClasscardIntegrationPage() {
   const [mentors, setMentors] = useState<RecordOption[]>([]);
   const [students, setStudents] = useState<RecordOption[]>([]);
   const [subjects, setSubjects] = useState<RecordOption[]>([]);
+  const [reconcileLoading, setReconcileLoading] = useState(false);
+  const [reconcileResult, setReconcileResult] = useState<{ fetchedEvents: number; fetchedAttendance: number; sessionsMapped: number; attendanceMapped: number; unmatched: { mentors: Array<Record<string, string>>; subjects: Array<Record<string, string>>; students: Array<Record<string, string>> } } | null>(null);
 
   const load = async () => {
     const [settingsResponse, logsResponse] = await Promise.all([
@@ -128,12 +130,26 @@ export default function ClasscardIntegrationPage() {
     setMessage('Classcard settings saved securely.');
   };
 
+  const reconcileOctober = async () => {
+    setError(null); setMessage(null); setReconcileLoading(true);
+    try {
+      const response = await fetch('/api/classcard/integration', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'reconcile-month', start: '2026-10-01', end: '2026-10-31' }) });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'October reconciliation failed.');
+      setReconcileResult(data);
+      setMessage(`October reconciliation mapped ${data.sessionsMapped} sessions and ${data.attendanceMapped} attendance records.`);
+    } catch (reconcileError) {
+      setError(reconcileError instanceof Error ? reconcileError.message : 'October reconciliation failed.');
+    } finally { setReconcileLoading(false); }
+  };
+
   return <AppShell><div className="space-y-6">
     <div><h1 className="text-2xl font-bold text-slate-900">Classcard Integration</h1><p className="mt-1 text-sm text-slate-500">Fetch and store Classcard sessions and attendance using the configured production API.</p></div>
     {error && <Alert type="error" title="Classcard integration error" message={error} />}
     {message && <Alert type="success" title="Classcard integration" message={message} />}
     <Tabs tabs={[{ id: 'sync', label: 'Sync data' }, { id: 'apis', label: 'Public APIs' }, { id: 'logs', label: 'Sync logs' }, { id: 'single', label: 'Single sync' }, { id: 'settings', label: 'Settings' }]} activeTab={tab} onChange={(value) => setTab(value as Tab)} />
     {tab === 'sync' && <Card><CardHeader title="Sync Classcard sessions" subtitle="Use a date range and optionally a Classcard staff ID." /><CardContent className="space-y-4"><div className="grid gap-4 md:grid-cols-3"><label className="text-sm font-medium">Start date<input type="date" value={start} onChange={(event) => setStart(event.target.value)} className="mt-1 w-full rounded-lg border p-2" /></label><label className="text-sm font-medium">End date<input type="date" value={end} onChange={(event) => setEnd(event.target.value)} className="mt-1 w-full rounded-lg border p-2" /></label><label className="text-sm font-medium">Staff ID (optional)<input value={staff} onChange={(event) => setStaff(event.target.value)} placeholder="Classcard staff ID" className="mt-1 w-full rounded-lg border p-2" /></label></div><Button onClick={() => void sync().catch((syncError: unknown) => setError(syncError instanceof Error ? syncError.message : 'Classcard sync failed.'))}>Fetch and save sessions</Button></CardContent></Card>}
+    {tab === 'sync' && <Card><CardHeader title="October attendance reconciliation" subtitle="Fetches October 1–31, 2026 events and attendance, maps Classcard IDs to production subjects, students, mentors, and sessions, and reports unmatched records." /><CardContent className="space-y-4"><Button onClick={() => void reconcileOctober()} disabled={reconcileLoading}>{reconcileLoading ? 'Reconciling…' : 'Reconcile October 2026'}</Button>{reconcileResult && <div className="space-y-4 text-sm"><div className="grid gap-3 sm:grid-cols-4">{[['Events', reconcileResult.fetchedEvents], ['Attendance rows', reconcileResult.fetchedAttendance], ['Sessions mapped', reconcileResult.sessionsMapped], ['Attendance mapped', reconcileResult.attendanceMapped]].map(([label, value]) => <div key={String(label)} className="rounded-lg border bg-slate-50 p-3"><div className="text-xs text-slate-500">{label}</div><div className="text-xl font-bold text-slate-900">{value}</div></div>)}</div><div className="grid gap-4 md:grid-cols-3">{(['mentors', 'subjects', 'students'] as const).map((kind) => <div key={kind} className="rounded-lg border p-3"><h3 className="font-semibold capitalize text-slate-900">Unmatched {kind}</h3>{reconcileResult.unmatched[kind].length === 0 ? <p className="mt-2 text-xs text-emerald-700">None</p> : <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap text-xs text-rose-700">{JSON.stringify(reconcileResult.unmatched[kind], null, 2)}</pre>}</div>)}</div></div>}</CardContent></Card>}
     {tab === 'single' && <Card><CardHeader title="Single sync" subtitle="Run one staff/date-range request without changing automatic settings." /><CardContent><p className="text-sm text-slate-600">Enter a staff ID above in Sync data and use the same event endpoint for a targeted sync.</p></CardContent></Card>}
     {tab === 'apis' && <Card><CardHeader title="Classcard public APIs" subtitle="Choose an API, provide its parameters, and run a live request. API credentials remain server-side." /><CardContent className="space-y-4">
       <label className="block text-sm font-medium">API endpoint<select value={api} onChange={(event) => { setApi(event.target.value as ApiKey); setApiParams({}); setApiResult(null); }} className="mt-1 w-full rounded-lg border p-2">{apiDefinitions.map((definition) => <option key={definition.id} value={definition.id}>{definition.label}</option>)}</select></label>

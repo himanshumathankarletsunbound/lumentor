@@ -76,6 +76,24 @@ function isDateInRange(value: unknown, start: string, end: string): boolean {
   return datePart >= start && datePart <= end;
 }
 
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function classcardStudentRows(event: Record<string, unknown>): Record<string, unknown>[] {
+  const rows = event.studentDetails ?? event.student_details;
+  return Array.isArray(rows) ? rows.map(objectValue).filter((row) => Object.keys(row).length > 0) : [];
+}
+
+function attendanceStatus(value: unknown): 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED' | 'UNMARKED' {
+  const status = String(value || '').trim().toLowerCase();
+  if (status.includes('present')) return 'PRESENT';
+  if (status.includes('late')) return 'LATE';
+  if (status.includes('excused')) return 'EXCUSED';
+  if (status.includes('absent')) return 'ABSENT';
+  return 'UNMARKED';
+}
+
 export async function GET(req: NextRequest) {
   await ensureServerPersistence();
   const denied = await authorizationErrorAsync(req, 'classcard_integration', 'view');
@@ -117,6 +135,71 @@ export async function POST(req: NextRequest) {
       if (!next.apiKey) throw new Error('Classcard API key is required.');
       await setEncryptedSecret('classcard.config', JSON.stringify(next));
       return NextResponse.json({ success: true, settings: { ...next, apiKey: `${next.apiKey.slice(0, 4)}••••${next.apiKey.slice(-4)}`, isConfigured: true } });
+    }
+    if (body.action === 'reconcile-month') {
+      const start = String(body.start || '2026-10-01').trim();
+      const end = String(body.end || '2026-10-31').trim();
+      const eventData = await classcardFetch(`events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, 'GET');
+      const attendanceData = await classcardFetch(`attendance?start_date=${encodeURIComponent(start)}&end_date=${encodeURIComponent(end)}`, 'GET');
+      const eventRowsForMonth = eventRows(eventData).filter((event) => isDateInRange(event.start, start, end));
+      const attendanceForMonth = attendanceRows(attendanceData).filter((row) => {
+        const event = objectValue(row.event);
+        return isDateInRange(row.date || event.start, start, end);
+      });
+      const attendanceByEventStudent = new Map<string, unknown>();
+      for (const row of attendanceForMonth) {
+        const event = objectValue(row.event);
+        const eventId = String(row.event_id ?? event.id ?? '').trim();
+        const studentId = String(row.user_detail_id ?? row.student_id ?? row.user_id ?? '').trim();
+        if (eventId && studentId) attendanceByEventStudent.set(`${eventId}:${studentId}`, row.type || row.attendance_status);
+      }
+      const unmatched = { mentors: [] as Array<Record<string, string>>, subjects: [] as Array<Record<string, string>>, students: [] as Array<Record<string, string>> };
+      const seen = { mentors: new Set<string>(), subjects: new Set<string>(), students: new Set<string>() };
+      let sessionsMapped = 0;
+      let attendanceMapped = 0;
+      for (const event of eventRowsForMonth) {
+        const externalId = String(event.id || '').trim();
+        const startTime = new Date(String(event.start || ''));
+        const endTime = new Date(String(event.end || ''));
+        if (!externalId || Number.isNaN(startTime.getTime()) || Number.isNaN(endTime.getTime())) continue;
+        const subjectData = objectValue(event.subject);
+        const subjectExternalId = String(event.subject_id || subjectData.id || '').trim();
+        const staffId = String(event.organizer || (Array.isArray(event.resourceIds) ? event.resourceIds[0] : '') || '').replace(/^0+/, '');
+        const mentor = staffId ? await prisma.mentor.findFirst({ where: { externalId: staffId } }) : null;
+        const subject = subjectExternalId ? await prisma.subject.findFirst({ where: { externalId: subjectExternalId } }) : null;
+        if (!mentor && !seen.mentors.has(staffId)) { seen.mentors.add(staffId); unmatched.mentors.push({ classcardId: staffId, eventId: externalId }); }
+        if (!subject && !seen.subjects.has(subjectExternalId)) { seen.subjects.add(subjectExternalId); unmatched.subjects.push({ classcardId: subjectExternalId, name: String(event.subjectName || subjectData.name || ''), eventId: externalId }); }
+        await upsertClasscardEventRecord({
+          externalId, mentorId: mentor?.id, classcardStaffId: staffId,
+          subjectName: String(event.subjectName || subjectData.name || ''), subjectExternalId,
+          locationName: String(event.locationName || event.location || ''), startTime, endTime,
+          attendanceStatus: String(event.attendance_status || ''), rawPayload: JSON.parse(JSON.stringify(event)) as Prisma.InputJsonValue,
+        });
+        if (!mentor || !subject) continue;
+        const classEvent = await prisma.classEvent.upsert({
+          where: { externalId },
+          create: { id: `classcard-${externalId}`, branchId: mentor.branchId, subjectId: subject.id, mentorId: mentor.id, title: String(event.subjectName || subject.name), startTime, endTime, durationMinutes: Math.max(1, Math.round((endTime.getTime() - startTime.getTime()) / 60000)), status: 'COMPLETED', externalId, provenance: 'CLASSCARD_SOURCED' },
+          update: { branchId: mentor.branchId, subjectId: subject.id, mentorId: mentor.id, title: String(event.subjectName || subject.name), startTime, endTime, status: 'COMPLETED', provenance: 'CLASSCARD_SOURCED' },
+        });
+        sessionsMapped++;
+        for (const studentRow of classcardStudentRows(event)) {
+          const studentExternalId = String(studentRow.user_detail_id ?? studentRow.student_id ?? studentRow.user_id ?? '').trim();
+          const student = studentExternalId ? await prisma.student.findFirst({ where: { externalId: studentExternalId } }) : null;
+          if (!student) {
+            const key = studentExternalId || String(studentRow.name || 'unknown');
+            if (!seen.students.has(key)) { seen.students.add(key); unmatched.students.push({ classcardId: studentExternalId, name: String(studentRow.name || ''), eventId: externalId }); }
+            continue;
+          }
+          const row = attendanceByEventStudent.get(`${externalId}:${studentExternalId}`);
+          await prisma.classAttendance.upsert({
+            where: { classEventId_studentId: { classEventId: classEvent.id, studentId: student.id } },
+            create: { id: crypto.randomUUID(), classEventId: classEvent.id, studentId: student.id, status: attendanceStatus(row), markedAt: row ? new Date() : null, provenance: 'CLASSCARD_SOURCED', externalId: `${externalId}:${studentExternalId}` },
+            update: { status: attendanceStatus(row), markedAt: row ? new Date() : null, provenance: 'CLASSCARD_SOURCED', externalId: `${externalId}:${studentExternalId}` },
+          });
+          attendanceMapped++;
+        }
+      }
+      return NextResponse.json({ success: true, start, end, fetchedEvents: eventRowsForMonth.length, fetchedAttendance: attendanceForMonth.length, sessionsMapped, attendanceMapped, unmatched });
     }
     if (body.action === 'sync-events') {
       const start = String(body.start || '').trim();

@@ -19,6 +19,7 @@
 
 # production
 /build
+/scripts/classcard_export/output/
 
 # misc
 .DS_Store

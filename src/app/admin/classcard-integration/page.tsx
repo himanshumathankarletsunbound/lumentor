@@ -8,7 +8,7 @@ import { Button } from '../../../components/ui/Button';
 import { Alert } from '../../../components/ui/Alert';
 
 type Settings = { baseUrl: string; apiKey: string; apiKeyHint?: string; syncIntervalMinutes: number; enabled: boolean; isConfigured: boolean };
-type Tab = 'sync' | 'logs' | 'single' | 'apis' | 'settings';
+type Tab = 'sync' | 'attendance' | 'logs' | 'single' | 'apis' | 'settings';
 type ApiKey = 'staffOneOnOneServices' | 'staffEvents' | 'staffServices' | 'inventoryProducts' | 'students' | 'studentEvents' | 'studentDetails' | 'studentInvoices' | 'events' | 'attendance' | 'invoices';
 type RecordOption = { id: string; label: string; externalId?: string };
 const apiDefinitions: Array<{ id: ApiKey; label: string; description: string; fields: Array<{ name: string; label: string; type?: string; required?: boolean; hint?: string; source?: 'subject' }> }> = [
@@ -42,6 +42,9 @@ export default function ClasscardIntegrationPage() {
   const [students, setStudents] = useState<RecordOption[]>([]);
   const [subjects, setSubjects] = useState<RecordOption[]>([]);
   const [reconcileLoading, setReconcileLoading] = useState(false);
+  const [attendanceImportId, setAttendanceImportId] = useState('');
+  const [attendanceStage, setAttendanceStage] = useState(0);
+  const [attendanceCsv, setAttendanceCsv] = useState('');
   const [reconcileResult, setReconcileResult] = useState<{ fetchedEvents: number; fetchedAttendance: number; sessionsMapped: number; attendanceMapped: number; unmatched: { mentors: Array<Record<string, string>>; subjects: Array<Record<string, string>>; students: Array<Record<string, string>> } } | null>(null);
 
   const load = async () => {
@@ -130,10 +133,10 @@ export default function ClasscardIntegrationPage() {
     setMessage('Classcard settings saved securely.');
   };
 
-  const reconcileOctober = async () => {
+  const reconcileOctober = async (importId?: string) => {
     setError(null); setMessage(null); setReconcileLoading(true);
     try {
-      const response = await fetch('/api/classcard/integration', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'reconcile-month', start: '2026-10-01', end: '2026-10-31' }) });
+      const response = await fetch('/api/classcard/integration', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'reconcile-month', start: '2026-10-01', end: '2026-10-31', ...(importId ? { importId } : {}) }) });
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || 'October reconciliation failed.');
       setReconcileResult(data);
@@ -143,13 +146,41 @@ export default function ClasscardIntegrationPage() {
     } finally { setReconcileLoading(false); }
   };
 
+  const runAttendanceStage = async (action: string) => {
+    setError(null); setMessage(null); setReconcileLoading(true);
+    try {
+      const body: Record<string, string> = { action, start: '2026-10-01', end: '2026-10-31' };
+      if (attendanceImportId) body.importId = attendanceImportId;
+      const response = await fetch('/api/classcard/integration', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Attendance staging failed.');
+      if (data.importId) setAttendanceImportId(data.importId);
+      if (data.csvText) setAttendanceCsv(data.csvText);
+      setAttendanceStage((current) => Math.max(current, action === 'stage-attendance' ? 1 : action === 'convert-staged-attendance' ? 2 : 3));
+      setMessage(action === 'stage-attendance' ? `Fetched and staged ${data.fetchedRows} attendance rows.` : action === 'convert-staged-attendance' ? `Converted ${data.rows} rows to the required CSV format.` : `Fetched ${data.events} Classcard events.`);
+    } catch (stageError) {
+      setError(stageError instanceof Error ? stageError.message : 'Attendance staging failed.');
+    } finally { setReconcileLoading(false); }
+  };
+
+  const mapStagedAttendance = async () => {
+    await reconcileOctober(attendanceImportId);
+    setAttendanceStage(5);
+  };
+
+  const prepareMapping = () => {
+    setError(null);
+    setMessage('Attendance and event data are ready. The next step will map Classcard IDs to production records.');
+    setAttendanceStage(4);
+  };
+
   return <AppShell><div className="space-y-6">
     <div><h1 className="text-2xl font-bold text-slate-900">Classcard Integration</h1><p className="mt-1 text-sm text-slate-500">Fetch and store Classcard sessions and attendance using the configured production API.</p></div>
     {error && <Alert type="error" title="Classcard integration error" message={error} />}
     {message && <Alert type="success" title="Classcard integration" message={message} />}
-    <Tabs tabs={[{ id: 'sync', label: 'Sync data' }, { id: 'apis', label: 'Public APIs' }, { id: 'logs', label: 'Sync logs' }, { id: 'single', label: 'Single sync' }, { id: 'settings', label: 'Settings' }]} activeTab={tab} onChange={(value) => setTab(value as Tab)} />
+    <Tabs tabs={[{ id: 'sync', label: 'Sync data' }, { id: 'attendance', label: 'October attendance' }, { id: 'apis', label: 'Public APIs' }, { id: 'logs', label: 'Sync logs' }, { id: 'single', label: 'Single sync' }, { id: 'settings', label: 'Settings' }]} activeTab={tab} onChange={(value) => setTab(value as Tab)} />
     {tab === 'sync' && <Card><CardHeader title="Sync Classcard sessions" subtitle="Use a date range and optionally a Classcard staff ID." /><CardContent className="space-y-4"><div className="grid gap-4 md:grid-cols-3"><label className="text-sm font-medium">Start date<input type="date" value={start} onChange={(event) => setStart(event.target.value)} className="mt-1 w-full rounded-lg border p-2" /></label><label className="text-sm font-medium">End date<input type="date" value={end} onChange={(event) => setEnd(event.target.value)} className="mt-1 w-full rounded-lg border p-2" /></label><label className="text-sm font-medium">Staff ID (optional)<input value={staff} onChange={(event) => setStaff(event.target.value)} placeholder="Classcard staff ID" className="mt-1 w-full rounded-lg border p-2" /></label></div><Button onClick={() => void sync().catch((syncError: unknown) => setError(syncError instanceof Error ? syncError.message : 'Classcard sync failed.'))}>Fetch and save sessions</Button></CardContent></Card>}
-    {tab === 'sync' && <Card><CardHeader title="October attendance reconciliation" subtitle="Fetches October 1–31, 2026 events and attendance, maps Classcard IDs to production subjects, students, mentors, and sessions, and reports unmatched records." /><CardContent className="space-y-4"><Button onClick={() => void reconcileOctober()} disabled={reconcileLoading}>{reconcileLoading ? 'Reconciling…' : 'Reconcile October 2026'}</Button>{reconcileResult && <div className="space-y-4 text-sm"><div className="grid gap-3 sm:grid-cols-4">{[['Events', reconcileResult.fetchedEvents], ['Attendance rows', reconcileResult.fetchedAttendance], ['Sessions mapped', reconcileResult.sessionsMapped], ['Attendance mapped', reconcileResult.attendanceMapped]].map(([label, value]) => <div key={String(label)} className="rounded-lg border bg-slate-50 p-3"><div className="text-xs text-slate-500">{label}</div><div className="text-xl font-bold text-slate-900">{value}</div></div>)}</div><div className="grid gap-4 md:grid-cols-3">{(['mentors', 'subjects', 'students'] as const).map((kind) => <div key={kind} className="rounded-lg border p-3"><h3 className="font-semibold capitalize text-slate-900">Unmatched {kind}</h3>{reconcileResult.unmatched[kind].length === 0 ? <p className="mt-2 text-xs text-emerald-700">None</p> : <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap text-xs text-rose-700">{JSON.stringify(reconcileResult.unmatched[kind], null, 2)}</pre>}</div>)}</div></div>}</CardContent></Card>}
+    {tab === 'attendance' && <Card><CardHeader title="October attendance import" subtitle="Five controlled stages: fetch JSON, convert the sample CSV format, fetch events, map Classcard IDs, and save payroll-ready records." /><CardContent className="space-y-5"><div className="grid gap-3 md:grid-cols-5">{['Fetch attendance JSON', 'Convert to CSV', 'Fetch events', 'Map IDs', 'Save records'].map((label, index) => <div key={label} className={`rounded-lg border p-3 ${attendanceStage >= index + 1 ? 'border-emerald-400 bg-emerald-50' : 'bg-slate-50'}`}><div className="text-xs font-semibold">Step {index + 1}</div><div className="mt-1 text-sm">{label}</div></div>)}</div><div className="flex flex-wrap gap-3"><Button onClick={() => void runAttendanceStage('stage-attendance')} disabled={reconcileLoading}>{reconcileLoading ? 'Working…' : '1. Fetch attendance'}</Button><Button onClick={() => void runAttendanceStage('convert-staged-attendance')} disabled={!attendanceImportId || reconcileLoading}>2. Convert CSV</Button><Button onClick={() => void runAttendanceStage('stage-events')} disabled={!attendanceImportId || reconcileLoading}>3. Fetch events</Button><Button onClick={prepareMapping} disabled={!attendanceImportId || attendanceStage < 3 || reconcileLoading}>4. Map IDs</Button><Button onClick={() => void mapStagedAttendance()} disabled={!attendanceImportId || attendanceStage < 4 || reconcileLoading}>5. Save records</Button></div>{attendanceImportId && <p className="text-xs text-slate-500">Staged import: {attendanceImportId}</p>}{attendanceCsv && <div><div className="mb-2 flex items-center justify-between"><h3 className="font-semibold">CSV preview</h3><a className="text-sm text-indigo-600 underline" download="attendencedata.csv" href={`data:text/csv;charset=utf-8,${encodeURIComponent(attendanceCsv)}`}>Download attendencedata.csv</a></div><pre className="max-h-64 overflow-auto rounded-lg bg-slate-950 p-3 text-xs text-emerald-300">{attendanceCsv.split('\n').slice(0, 6).join('\n')}{attendanceCsv.split('\n').length > 6 ? '\n…' : ''}</pre></div>}{reconcileResult && <div className="grid gap-3 sm:grid-cols-4 text-sm">{[['Events', reconcileResult.fetchedEvents], ['Attendance rows', reconcileResult.fetchedAttendance], ['Sessions mapped', reconcileResult.sessionsMapped], ['Attendance mapped', reconcileResult.attendanceMapped]].map(([label, value]) => <div key={String(label)} className="rounded-lg border bg-slate-50 p-3"><div className="text-xs text-slate-500"> {label}</div><div className="text-xl font-bold text-slate-900">{value}</div></div>)}</div>}</CardContent></Card>}
     {tab === 'single' && <Card><CardHeader title="Single sync" subtitle="Run one staff/date-range request without changing automatic settings." /><CardContent><p className="text-sm text-slate-600">Enter a staff ID above in Sync data and use the same event endpoint for a targeted sync.</p></CardContent></Card>}
     {tab === 'apis' && <Card><CardHeader title="Classcard public APIs" subtitle="Choose an API, provide its parameters, and run a live request. API credentials remain server-side." /><CardContent className="space-y-4">
       <label className="block text-sm font-medium">API endpoint<select value={api} onChange={(event) => { setApi(event.target.value as ApiKey); setApiParams({}); setApiResult(null); }} className="mt-1 w-full rounded-lg border p-2">{apiDefinitions.map((definition) => <option key={definition.id} value={definition.id}>{definition.label}</option>)}</select></label>

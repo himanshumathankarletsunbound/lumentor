@@ -172,6 +172,20 @@ function attendanceStatus(value: unknown): 'PRESENT' | 'ABSENT' | 'ABSENT_BILLAB
   return 'UNMARKED';
 }
 
+function csvCell(value: unknown): string {
+  const text = value === null || value === undefined ? '' : String(value);
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function attendanceCsv(rows: Record<string, unknown>[]): string {
+  const columns = ['user_detail_id', 'event_id', 'attendanceCode', 'date', 'type', 'class.subject_id', 'event.title', 'event.start', 'event.end', 'user.firstName', 'user.surname'];
+  const valueAt = (row: Record<string, unknown>, path: string): unknown => {
+    const [root, child] = path.split('.');
+    return child ? objectValue(row[root])[child] : row[path];
+  };
+  return [columns.join(','), ...rows.map((row) => columns.map((column) => csvCell(valueAt(row, column))).join(','))].join('\n');
+}
+
 export async function GET(req: NextRequest) {
   await ensureServerPersistence();
   const denied = await authorizationErrorAsync(req, 'classcard_integration', 'view');
@@ -217,9 +231,58 @@ export async function POST(req: NextRequest) {
       await setEncryptedSecret('classcard.config', JSON.stringify(next));
       return NextResponse.json({ success: true, settings: { ...next, apiKey: '', apiKeyHint: `${next.apiKey.slice(0, 4)}••••${next.apiKey.slice(-4)}`, isConfigured: true } });
     }
+    if (body.action === 'stage-attendance') {
+      const start = String(body.start || '2026-10-01').trim();
+      const end = String(body.end || '2026-10-31').trim();
+      const payload = await classcardFetch(`attendance?start_date=${encodeURIComponent(start)}&end_date=${encodeURIComponent(end)}`, 'GET');
+      const rows = attendanceRows(payload).filter((row) => {
+        const value = eventStart(row);
+        return !value || isDateInRange(value, start, end);
+      });
+      const staged = await prisma.classcardAttendanceImport.create({
+        data: {
+          startDate: new Date(`${start}T00:00:00.000Z`),
+          endDate: new Date(`${end}T23:59:59.999Z`),
+          status: 'FETCHED',
+          rawPayload: JSON.parse(JSON.stringify(rows)) as Prisma.InputJsonValue,
+          fetchedRows: rows.length,
+        },
+      });
+      return NextResponse.json({ success: true, importId: staged.id, fetchedRows: rows.length, status: staged.status });
+    }
+    if (body.action === 'convert-staged-attendance') {
+      const importId = String(body.importId || '').trim();
+      if (!importId) throw new Error('An attendance import must be fetched before conversion.');
+      const staged = await prisma.classcardAttendanceImport.findUnique({ where: { id: importId } });
+      if (!staged) throw new Error('The staged attendance import was not found.');
+      const rows = attendanceRows(staged.rawPayload);
+      const csvText = attendanceCsv(rows);
+      await prisma.classcardAttendanceImport.update({ where: { id: importId }, data: { csvText, status: 'CSV_READY' } });
+      return NextResponse.json({ success: true, importId, status: 'CSV_READY', rows: rows.length, csvText });
+    }
+    if (body.action === 'stage-events') {
+      const importId = String(body.importId || '').trim();
+      const staged = await prisma.classcardAttendanceImport.findUnique({ where: { id: importId } });
+      if (!staged) throw new Error('The staged attendance import was not found.');
+      const mentorsWithClasscardIds = await prisma.mentor.findMany({ where: { externalId: { not: '' } }, select: { externalId: true } });
+      const start = staged.startDate.toISOString().slice(0, 10);
+      const end = staged.endDate.toISOString().slice(0, 10);
+      const responses = await Promise.all(mentorsWithClasscardIds.map(async ({ externalId }) => ({
+        externalId,
+        data: await classcardFetch(`staff/events/?start=${start}&end=${end}&staff=${encodeURIComponent(externalId)}`, 'GET'),
+      })));
+      const events = responses.flatMap(({ externalId, data }) => eventRows(data).map((event) => ({ ...event, organizer: event.organizer ?? externalId })));
+      await prisma.classcardAttendanceImport.update({ where: { id: importId }, data: { eventPayload: JSON.parse(JSON.stringify(events)) as Prisma.InputJsonValue, status: 'EVENTS_READY' } });
+      return NextResponse.json({ success: true, importId, status: 'EVENTS_READY', events: events.length });
+    }
     if (body.action === 'reconcile-month') {
       const start = String(body.start || '2026-10-01').trim();
       const end = String(body.end || '2026-10-31').trim();
+      const stagedImportId = String(body.importId || '').trim();
+      const stagedImport = stagedImportId
+        ? await prisma.classcardAttendanceImport.findUnique({ where: { id: stagedImportId } })
+        : null;
+      if (stagedImportId && !stagedImport) throw new Error('The staged attendance import was not found.');
       const mentorsWithClasscardIds = await prisma.mentor.findMany({
         where: { externalId: { not: '' } },
         select: { externalId: true },
@@ -227,11 +290,13 @@ export async function POST(req: NextRequest) {
       if (mentorsWithClasscardIds.length === 0) {
         throw new Error('No mentors with Classcard IDs are configured, so Classcard events cannot be fetched.');
       }
-      const eventResponses = await Promise.all(mentorsWithClasscardIds.map(async ({ externalId }) => ({
-        externalId,
-        data: await classcardFetch(`staff/events/?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&staff=${encodeURIComponent(externalId)}`, 'GET'),
-      })));
-      const attendanceData = await classcardFetch(`attendance?start_date=${encodeURIComponent(start)}&end_date=${encodeURIComponent(end)}`, 'GET');
+      const eventResponses = stagedImport?.eventPayload
+        ? [{ externalId: '', data: stagedImport.eventPayload }]
+        : await Promise.all(mentorsWithClasscardIds.map(async ({ externalId }) => ({
+          externalId,
+          data: await classcardFetch(`staff/events/?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&staff=${encodeURIComponent(externalId)}`, 'GET'),
+        })));
+      const attendanceData = stagedImport?.rawPayload || await classcardFetch(`attendance?start_date=${encodeURIComponent(start)}&end_date=${encodeURIComponent(end)}`, 'GET');
       const eventRowsForMonth = eventResponses.flatMap(({ externalId, data }) => eventRows(data).map((event): Record<string, unknown> => ({
         ...event,
         organizer: event.organizer ?? externalId,
@@ -305,7 +370,10 @@ export async function POST(req: NextRequest) {
           attendanceMapped++;
         }
       }
-      return NextResponse.json({ success: true, start, end, fetchedEvents: eventRowsForMonth.length, fetchedAttendance: attendanceForMonth.length, sessionsMapped, attendanceMapped, unmatched });
+      if (stagedImport) {
+        await prisma.classcardAttendanceImport.update({ where: { id: stagedImport.id }, data: { status: 'IMPORTED', mappedRows: attendanceMapped } });
+      }
+      return NextResponse.json({ success: true, start, end, importId: stagedImport?.id, fetchedEvents: eventRowsForMonth.length, fetchedAttendance: attendanceForMonth.length, sessionsMapped, attendanceMapped, unmatched });
     }
     if (body.action === 'sync-events') {
       const start = String(body.start || '').trim();

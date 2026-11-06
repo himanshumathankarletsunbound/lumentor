@@ -32,9 +32,8 @@ export async function GET(req: NextRequest) {
   const configText = await getEncryptedSecret('classcard.config');
   if (!configText) return NextResponse.json({ success: true, skipped: true, reason: 'Classcard integration is not configured.' });
   const settings = JSON.parse(configText) as { baseUrl: string; apiKey: string; enabled?: boolean; syncIntervalMinutes?: number; lastAutomaticSyncAt?: string };
-  if (settings.apiKey.includes('••••') || settings.apiKey === '[configured]') {
-    settings.apiKey = process.env.CLASSCARD_API_KEY?.trim() || '';
-  }
+  settings.apiKey = process.env.CLASSCARD_API_KEY?.trim() ||
+    (settings.apiKey.includes('••••') || settings.apiKey === '[configured]' ? '' : settings.apiKey);
   if (!settings.apiKey) return NextResponse.json({ success: false, error: 'Classcard API key is not configured for the hourly job.' }, { status: 503 });
   if (!settings.enabled) return NextResponse.json({ success: true, skipped: true, reason: 'Automatic sync is disabled.' });
   if (settings.lastAutomaticSyncAt && Date.now() - new Date(settings.lastAutomaticSyncAt).getTime() < (settings.syncIntervalMinutes || 60) * 60_000) {

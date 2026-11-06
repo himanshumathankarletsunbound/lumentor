@@ -1014,6 +1014,51 @@ export async function upsertClasscardEventRecord(input: {
   });
 }
 
+export async function materializeClasscardEventForPayroll(externalId: string): Promise<{ materialized: boolean; reason?: string }> {
+  const record = await prisma.classcardEvent.findUnique({ where: { externalId } });
+  if (!record) return { materialized: false, reason: 'Classcard event was not found.' };
+  if (record.attendanceStatus?.toLowerCase() !== 'present') {
+    return { materialized: false, reason: `Attendance status is ${record.attendanceStatus || 'unknown'}.` };
+  }
+  if (!record.mentorId) return { materialized: false, reason: 'No local mentor matches the Classcard staff ID.' };
+  const subject = record.subjectExternalId
+    ? await prisma.subject.findFirst({ where: { externalId: record.subjectExternalId } })
+    : null;
+  if (!subject) return { materialized: false, reason: 'No local subject matches the Classcard subject ID.' };
+  const mentor = await prisma.mentor.findUnique({ where: { id: record.mentorId }, select: { branchId: true } });
+  if (!mentor) return { materialized: false, reason: 'The linked mentor was not found.' };
+
+  await prisma.classEvent.upsert({
+    where: { externalId: record.externalId },
+    create: {
+      id: `classcard-${record.externalId}`,
+      branchId: mentor.branchId,
+      subjectId: subject.id,
+      mentorId: record.mentorId,
+      title: record.subjectName || subject.name,
+      startTime: record.startTime,
+      endTime: record.endTime,
+      durationMinutes: Math.max(1, Math.round((record.endTime.getTime() - record.startTime.getTime()) / 60000)),
+      capacity: 1,
+      status: 'COMPLETED',
+      externalId: record.externalId,
+      provenance: 'CLASSCARD_SOURCED',
+    },
+    update: {
+      branchId: mentor.branchId,
+      subjectId: subject.id,
+      mentorId: record.mentorId,
+      title: record.subjectName || subject.name,
+      startTime: record.startTime,
+      endTime: record.endTime,
+      durationMinutes: Math.max(1, Math.round((record.endTime.getTime() - record.startTime.getTime()) / 60000)),
+      status: 'COMPLETED',
+      provenance: 'CLASSCARD_SOURCED',
+    },
+  });
+  return { materialized: true };
+}
+
 export async function listDashboardFinance() {
   const [batches, payslips, invoices, payments, syncJobs, auditLogs] = await Promise.all([
     prisma.payrollBatch.findMany({ orderBy: { createdAt: 'desc' }, include: { lineItems: { include: { mentor: true } } } }),

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authorizationErrorAsync, getSessionUserAsync } from '../../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../../lib/db/server-initialization';
 import { getEncryptedSecret, setEncryptedSecret } from '../../../../lib/db/secure-storage';
-import { listClasscardEventRecords, upsertClasscardEventRecord } from '../../../../lib/db/state-repository';
+import { listClasscardEventRecords, materializeClasscardEventForPayroll, upsertClasscardEventRecord } from '../../../../lib/db/state-repository';
 import { prisma } from '../../../../lib/db/prisma';
 import type { Prisma } from '@prisma/client';
 
@@ -94,11 +94,14 @@ export async function POST(req: NextRequest) {
       const subject = String(body.subject || '').trim();
       const location = String(body.location || '').trim();
       const path = staff ? 'staff/events/' : 'events';
-      const data = staff
-        ? await classcardFetch(path, 'POST', { start, end, staff, ...(subject ? { subject } : {}), ...(location ? { location } : {}) })
-        : await classcardFetch(`${path}?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, 'GET');
+      const query = new URLSearchParams({ start, end });
+      if (staff) query.set('staff', staff);
+      if (subject) query.set('subject', subject);
+      if (location) query.set('location', location);
+      const data = await classcardFetch(`${path}?${query.toString()}`, 'GET');
       const rows = eventRows(data);
       let saved = 0;
+      let materialized = 0;
       for (const event of rows) {
         const externalId = String(event.id || '').trim();
         const startTime = new Date(String(event.start || ''));
@@ -119,10 +122,14 @@ export async function POST(req: NextRequest) {
           attendanceStatus: String(event.attendance_status || ''),
           rawPayload: JSON.parse(JSON.stringify(event)) as Prisma.InputJsonValue,
         });
+        if (String(event.attendance_status || '').toLowerCase() === 'present') {
+          const payrollEvent = await materializeClasscardEventForPayroll(externalId);
+          if (payrollEvent.materialized) materialized++;
+        }
         saved++;
       }
       await prisma.syncJob.create({ data: { id: crypto.randomUUID(), jobType: 'EVENTS', status: 'COMPLETED', startedAt: new Date(), completedAt: new Date(), recordsProcessed: rows.length, recordsCreated: saved, recordsUpdated: 0, recordsFailed: rows.length - saved, logSummary: [`Fetched ${rows.length} event records and saved ${saved}.`] } });
-      return NextResponse.json({ success: true, fetched: rows.length, saved });
+      return NextResponse.json({ success: true, fetched: rows.length, saved, materialized });
     }
     if (body.action === 'sync-attendance') {
       const start = String(body.start || '').trim();
@@ -148,6 +155,7 @@ export async function POST(req: NextRequest) {
             : Array.from(statuses).find(Boolean) || 'Unknown';
         const result = await prisma.classcardEvent.updateMany({ where: { externalId }, data: { attendanceStatus } });
         updated += result.count;
+        if (attendanceStatus === 'Present') await materializeClasscardEventForPayroll(externalId);
       }
       await prisma.syncJob.create({
         data: {

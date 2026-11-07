@@ -24,6 +24,8 @@ export default function FetchDataPage() {
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [progressLabel, setProgressLabel] = useState('');
   const [notice, setNotice] = useState<Notice | null>(null);
   const [events, setEvents] = useState<EventRow[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRow[]>([]);
@@ -57,15 +59,25 @@ export default function FetchDataPage() {
     if (!start || !end || start > end) { setNotice({ type: 'error', message: 'Choose a valid start and end date.' }); return; }
     if (mode === 'selected' && selected.length === 0) { setNotice({ type: 'error', message: 'Select at least one mentor, or choose All Mentors.' }); return; }
     setLoading(true); setNotice(null); setSummary(null);
+    setProgress(10);
+    setProgressLabel(action === 'fetch-events' ? 'Preparing event fetch…' : 'Preparing attendance fetch…');
     try {
+      setProgress(25);
+      setProgressLabel(action === 'fetch-events' ? 'Requesting events from Classcard…' : 'Requesting attendance from Classcard…');
       const response = await fetch('/api/classcard/integration', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, start, end, mentorIds }) });
+      setProgress(75);
+      setProgressLabel('Classcard responded. Processing and matching records…');
       const payload = await response.json();
       if (!response.ok || !payload.success) throw new Error(payload.error || 'Classcard fetch failed.');
       setSummary(payload.summary || null);
       if (action === 'fetch-events') setEvents(payload.events || []);
       else setAttendance(payload.attendance || []);
+      setProgress(100);
+      setProgressLabel(action === 'fetch-events' ? 'Events fetched and matched.' : 'Attendance fetched and matched.');
       setNotice({ type: 'success', message: action === 'fetch-events' ? `Fetched ${payload.summary?.uniqueEvents || 0} unique events.` : `Fetched ${payload.summary?.fetched || 0} attendance records.` });
     } catch (error) {
+      setProgress(0);
+      setProgressLabel('');
       setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Classcard fetch failed.' });
     } finally { setLoading(false); }
   };
@@ -78,6 +90,7 @@ export default function FetchDataPage() {
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h1 className="text-2xl font-bold text-slate-900">Fetch Data</h1><p className="mt-1 text-sm text-slate-500">Fetch Classcard events and attendance securely, then match them to existing records.</p></div><Button variant="outline" leftIcon={<RefreshCw className="h-4 w-4" />} onClick={() => void loadMentors().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to refresh mentors.' }))}>Refresh mentors</Button></div>
     {notice && <Alert type={notice.type} title={notice.type === 'error' ? 'Fetch failed' : 'Fetch complete'} message={notice.message} />}
     <Tabs tabs={[{ id: 'events', label: 'Fetch Events', icon: <CalendarClock className="h-4 w-4" /> }, { id: 'attendance', label: 'Fetch Attendance', icon: <Users className="h-4 w-4" /> }]} activeTab={tab} onChange={(value) => setTab(value as 'events' | 'attendance')} />
+    {(loading || progress > 0) && <Card><CardContent className="space-y-2 p-4"><div className="flex items-center justify-between text-sm font-medium text-slate-700"><span>{progressLabel || 'Ready'}</span><span>{progress}%</span></div><div className="h-3 overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} aria-label={`${tab === 'events' ? 'Events' : 'Attendance'} fetch progress`}><div className={`h-full rounded-full transition-all duration-500 ${loading ? 'animate-pulse bg-indigo-600' : 'bg-emerald-600'}`} style={{ width: `${progress}%` }} /></div><p className="text-xs text-slate-500">{loading ? 'The server is contacting Classcard and matching the response. Keep this page open.' : 'Fetch complete.'}</p></CardContent></Card>}
     <Card><CardHeader title={tab === 'events' ? 'Event fetch parameters' : 'Attendance fetch parameters'} subtitle={tab === 'events' ? 'Classcard staff events are requested per selected mentor. Subject IDs are never required.' : 'Classcard attendance is fetched by date range and optionally filtered through already-fetched mentor events.'} /><CardContent className="space-y-5">
       <div className="grid gap-4 md:grid-cols-2"><label className="text-sm font-medium text-slate-700">Start date<input className="mt-1 w-full rounded-lg border border-slate-200 p-2" type="date" value={start} onChange={(event) => setStart(event.target.value)} /></label><label className="text-sm font-medium text-slate-700">End date<input className="mt-1 w-full rounded-lg border border-slate-200 p-2" type="date" value={end} onChange={(event) => setEnd(event.target.value)} /></label></div>
       <div className="rounded-xl border border-slate-200 p-4"><p className="text-sm font-semibold text-slate-800">Staff selection</p><div className="mt-3 flex flex-wrap gap-4 text-sm"><label className="flex items-center gap-2"><input type="radio" checked={mode === 'all'} onChange={() => setMode('all')} /> All Mentors <span className="text-slate-500">({eligible.length} with Classcard IDs)</span></label><label className="flex items-center gap-2"><input type="radio" checked={mode === 'selected'} onChange={() => setMode('selected')} /> Select Mentors</label></div>

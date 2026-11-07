@@ -15,16 +15,14 @@ type EventRow = { externalId: string; title: string; mentorNames: string[]; stud
 type AttendanceRow = { eventId: string; studentExternalId: string; status: string; mapped: boolean; reason?: string };
 type Notice = { type: 'success' | 'error'; message: string };
 
-const today = () => new Date().toISOString().slice(0, 10);
-
 export default function FetchDataPage() {
   const [tab, setTab] = useState<'events' | 'attendance'>('events');
   const [mentors, setMentors] = useState<Mentor[]>([]);
   const [mode, setMode] = useState<'all' | 'selected'>('all');
   const [selected, setSelected] = useState<string[]>([]);
   const [query, setQuery] = useState('');
-  const [start, setStart] = useState(today());
-  const [end, setEnd] = useState(today());
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [events, setEvents] = useState<EventRow[]>([]);
@@ -45,7 +43,12 @@ export default function FetchDataPage() {
   };
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void loadMentors().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to load mentors.' })), 0);
+    const timer = window.setTimeout(() => {
+      const currentDate = new Date().toISOString().slice(0, 10);
+      setStart(currentDate);
+      setEnd(currentDate);
+      void loadMentors().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to load mentors.' }));
+    }, 0);
     return () => window.clearTimeout(timer);
   }, []);
 

@@ -108,6 +108,11 @@ function classcardId(value: unknown): string {
   return id.replace(/^0+(?=\d)/, '');
 }
 
+function gibbonCourseClassId(row: Record<string, unknown>): string {
+  const classRecord = objectValue(row.class);
+  return classcardId(firstValue(row, ['gibbonCourseClassID', 'gibbonCourseClassId']) ?? firstValue(classRecord, ['gibbonCourseClassID', 'gibbonCourseClassId']));
+}
+
 function eventId(row: Record<string, unknown>): string {
   const event = objectValue(row.event);
   const direct = firstValue(row, ['event_id', 'class_event_id']);
@@ -173,7 +178,7 @@ function eventResult(row: Record<string, unknown>, mentorNames: Map<string, stri
     endTime: String(eventEnd(row) || ''),
     subjectName: String(firstValue(row, ['subjectName']) || subject.name || ''),
     subjectExternalId: subjectId(row) || undefined,
-    classId: String(firstValue(row, ['gibbonCourseClassID', 'class_id']) || ''),
+    classId: gibbonCourseClassId(row),
     attendanceStatus: String(firstValue(row, ['attendance_status', 'status']) || ''),
     locationName: String(firstValue(row, ['locationName', 'location']) || ''),
     timezoneName: String(firstValue(row, ['timezoneName', 'timezone']) || ''),
@@ -372,6 +377,7 @@ export async function POST(req: NextRequest) {
         await upsertClasscardEventRecord({
           externalId, mentorId: mentor?.id, classcardStaffId: currentStaffId,
           subjectName: String(event.subjectName || subjectData.name || ''), subjectExternalId,
+          gibbonCourseClassId: gibbonCourseClassId(event),
           locationName: String(event.locationName || event.location || ''), startTime, endTime,
           attendanceStatus: String(event.attendance_status || ''), rawPayload: JSON.parse(JSON.stringify(event)) as Prisma.InputJsonValue,
         });
@@ -466,6 +472,7 @@ export async function POST(req: NextRequest) {
           classcardStaffId: primaryStaffId,
           subjectName: String(firstValue(event, ['subjectName']) || subjectData.name || ''),
           subjectExternalId,
+          gibbonCourseClassId: gibbonCourseClassId(event),
           locationName: String(firstValue(event, ['locationName', 'location']) || ''),
           startTime,
           endTime,
@@ -515,10 +522,14 @@ export async function POST(req: NextRequest) {
         if (allowedStaffIds.size && !sourceStaffIds.some((id) => allowedStaffIds.has(id))) { unmatched.filteredOut++; continue; }
         const studentExternalId = studentId(row);
         const localStudentId = studentByExternalId.get(studentExternalId);
+        const attendanceClassId = gibbonCourseClassId(row);
         const status = attendanceStatus(firstValue(row, ['type', 'attendance_status', 'attendanceCode', 'status']));
         const mapped = Boolean(source?.classEventId && localStudentId);
         if (!source) unmatched.events++;
         if (!localStudentId) unmatched.students++;
+        if (source && attendanceClassId && !source.gibbonCourseClassId) {
+          await prisma.classcardEvent.update({ where: { externalId }, data: { gibbonCourseClassId: attendanceClassId } });
+        }
         if (source?.classEventId && localStudentId) {
           await prisma.classAttendance.upsert({
             where: { classEventId_studentId: { classEventId: source.classEventId, studentId: localStudentId } },
@@ -562,6 +573,7 @@ export async function POST(req: NextRequest) {
           classcardStaffId: staffId,
           subjectName: String(event.subjectName || subject.name || ''),
           subjectExternalId: String(event.subject_id || subject.id || ''),
+          gibbonCourseClassId: gibbonCourseClassId(event),
           locationName: String(event.locationName || event.location || ''),
           startTime,
           endTime,

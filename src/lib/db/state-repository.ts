@@ -990,7 +990,7 @@ export async function listClasscardEventRecords(mentorId?: string) {
     take: 500,
     select: {
       id: true, externalId: true, mentorId: true, classcardStaffId: true,
-      subjectName: true, subjectExternalId: true, locationName: true,
+      subjectName: true, subjectExternalId: true, gibbonCourseClassId: true, locationName: true,
       startTime: true, endTime: true, attendanceStatus: true, rawPayload: true,
     },
   });
@@ -1002,6 +1002,7 @@ export async function upsertClasscardEventRecord(input: {
   classcardStaffId: string;
   subjectName?: string;
   subjectExternalId?: string;
+  gibbonCourseClassId?: string;
   locationName?: string;
   startTime: Date;
   endTime: Date;

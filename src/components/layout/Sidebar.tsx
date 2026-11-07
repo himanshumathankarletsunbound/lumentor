@@ -415,6 +415,12 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
             module: 'payroll_processing',
           },
           {
+            name: 'Title Mapper',
+            href: '/finance/title-mapper',
+            icon: <Sliders className="w-4 h-4" />,
+            module: 'payroll_rules',
+          },
+          {
             name: 'Single Payout',
             href: '/finance/single-payout',
             icon: <CreditCard className="w-4 h-4" />,

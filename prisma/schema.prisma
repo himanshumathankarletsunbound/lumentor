@@ -92,6 +92,12 @@ enum PaymentStatus {
   PAID
 }
 
+enum ClasscardClassMappingStatus {
+  MAPPED
+  UNMAPPED
+  NEEDS_REVIEW
+}
+
 model Organization {
   id        String   @id @default(uuid())
   name      String
@@ -147,6 +153,7 @@ model ClasscardEvent {
   classcardStaffId String
   subjectName     String?
   subjectExternalId String?
+  gibbonCourseClassId String?
   locationName    String?
   startTime       DateTime
   endTime         DateTime
@@ -157,6 +164,24 @@ model ClasscardEvent {
 
   @@index([mentorId, startTime])
   @@index([classcardStaffId, startTime])
+  @@index([gibbonCourseClassId, startTime])
+}
+
+model ClasscardClassMapping {
+  id                   String                       @id @default(uuid())
+  gibbonCourseClassId  String                       @unique
+  displayTitle         String?
+  payrollPlanId        String?
+  payrollPlan          PayrollPlan?                 @relation(fields: [payrollPlanId], references: [id], onDelete: SetNull)
+  status               ClasscardClassMappingStatus  @default(UNMAPPED)
+  mappedById           String?
+  mappedBy             User?                        @relation("ClasscardClassMappings", fields: [mappedById], references: [id], onDelete: SetNull)
+  mappedAt             DateTime?
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
+
+  @@index([payrollPlanId])
+  @@index([status])
 }
 
 model User {
@@ -188,6 +213,7 @@ model User {
   auditEvents  AuditEvent[]
   auditReviews     MentorReview[] @relation("AuditReviews")
   operationReviews MentorReview[] @relation("OperationReviews")
+  classcardClassMappings ClasscardClassMapping[] @relation("ClasscardClassMappings")
 }
 
 model Role {
@@ -493,6 +519,7 @@ model PayrollPlan {
   mentorAssignments MentorPayrollPlan[]
   subjects Subject[]
   payrollLineItems PayrollLineItem[]
+  classcardClassMappings ClasscardClassMapping[]
 }
 
 model Penalty {

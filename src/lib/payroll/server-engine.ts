@@ -9,7 +9,7 @@ export async function generateBatchFromPostgres(options: CalculatePayrollOptions
   const batchId = `batch-${Date.now()}`;
   const [allMentors, allClasses, plans, penalties, adjustments, initiatives, orgSettings] = await Promise.all([
     listMentors(options.branchId),
-    listClasses({ branchId: options.branchId }),
+    listClasses({ branchId: options.branchId, startDate: options.startDate, endDate: options.endDate }),
     listPayrollPlans(),
     listPenalties(),
     prisma.adjustment.findMany({ select: { mentorId: true, amount: true, appliedPayrollBatchId: true } }),
@@ -28,19 +28,40 @@ export async function generateBatchFromPostgres(options: CalculatePayrollOptions
   const warnings: string[] = [];
   const lineItems = selectedMentors.flatMap((mentor) => {
     const mentorClasses = allClasses.filter((item) => item.mentorId === mentor.id);
-    const requestedPlanId = options.payrollPlanId ?? mentor.payrollPlanId;
     const groups = new Map<string, typeof allClasses>();
     for (const classEvent of mentorClasses) {
-      const planId = options.payrollPlanId
-        ?? classEvent.subjectPayrollPlanId
-        ?? mentor.payrollPlanId;
-      if (!planId) continue;
+      const hasUnmarkedAttendance = classEvent.students.length === 0
+        || classEvent.students.some((student) => student.attendanceStatus === 'UNMARKED');
+      const hasBillableAbsence = classEvent.students.some((student) => student.attendanceStatus === 'ABSENT_BILLABLE');
+      const hasPresentAttendance = classEvent.students.some(
+        (student) => student.attendanceStatus === 'PRESENT' || student.attendanceStatus === 'LATE',
+      );
+      // A partially marked roster remains unmarked for payroll. This prevents
+      // a submitted present record from paying an otherwise incomplete class.
+      const planId = hasUnmarkedAttendance
+        ? undefined
+        : hasBillableAbsence
+        ? options.classPayrollPlanOverrides?.[classEvent.id]
+        : hasPresentAttendance
+          ? classEvent.mappedPayrollPlanId
+          : undefined;
+      if (!planId) {
+        if (hasUnmarkedAttendance) {
+          continue;
+        }
+        if (hasBillableAbsence) {
+          warnings.push(`Class ${classEvent.title} has billable absence attendance but no session payroll plan was selected.`);
+        } else if (hasPresentAttendance) {
+          warnings.push(`Class ${classEvent.title} has present attendance but no Title Mapper payroll plan.`);
+        }
+        continue;
+      }
       const group = groups.get(planId) || [];
       group.push(classEvent);
       groups.set(planId, group);
     }
     if (groups.size === 0) {
-      warnings.push(`No payroll plan is assigned to ${mentor.firstName} ${mentor.lastName}; mentor was skipped.`);
+      warnings.push(`No payable sessions were found for ${mentor.firstName} ${mentor.lastName}.`);
       return [];
     }
 
@@ -70,9 +91,7 @@ export async function generateBatchFromPostgres(options: CalculatePayrollOptions
         id: `item-${batchId}-${mentor.id}-${planId}`,
         calculationDetails: {
           ...lineItem.calculationDetails,
-          subjectPlanMapping: requestedPlanId
-            ? 'payroll-plan-override'
-            : 'subject-payroll-plan-with-mentor-fallback',
+          subjectPlanMapping: 'title-mapper-with-billable-absence-session-overrides',
         },
       }];
     });

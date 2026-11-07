@@ -555,7 +555,29 @@ export async function listClasses(filters: {
     },
     orderBy: { startTime: 'desc' },
   });
+  const classEventIds = classes.map((item) => item.id);
+  const classcardEvents = classEventIds.length
+    ? await prisma.classcardEvent.findMany({
+        where: { classEventId: { in: classEventIds } },
+        select: { classEventId: true, gibbonCourseClassId: true },
+      })
+    : [];
+  const classcardByEventId = new Map(
+    classcardEvents
+      .filter((item): item is typeof item & { classEventId: string; gibbonCourseClassId: string } => Boolean(item.classEventId && item.gibbonCourseClassId))
+      .map((item) => [item.classEventId, item.gibbonCourseClassId]),
+  );
+  const classcardClassIds = Array.from(new Set(classcardEvents.flatMap((item) => item.gibbonCourseClassId ? [item.gibbonCourseClassId] : [])));
+  const mappings = classcardClassIds.length
+    ? await prisma.classcardClassMapping.findMany({
+        where: { gibbonCourseClassId: { in: classcardClassIds }, status: 'MAPPED' },
+        include: { payrollPlan: { select: { id: true, name: true } } },
+      })
+    : [];
+  const mappingByClassId = new Map(mappings.map((item) => [item.gibbonCourseClassId, item]));
   return classes.map((item) => {
+    const classcardClassId = classcardByEventId.get(item.id) || undefined;
+    const mapping = classcardClassId ? mappingByClassId.get(classcardClassId) : undefined;
     const statuses = item.attendances.map((attendance) => attendance.status);
     const summary: ClassEvent['attendanceStatusSummary'] =
       statuses.length === 0 || statuses.some((status) => status === 'UNMARKED')
@@ -570,6 +592,9 @@ export async function listClasses(filters: {
       title: item.title,
       subjectId: item.subjectId,
       subjectPayrollPlanId: item.subject.payrollPlanId || undefined,
+      classcardClassId,
+      mappedPayrollPlanId: mapping?.payrollPlanId || undefined,
+      mappedPayrollPlanName: mapping?.payrollPlan?.name || undefined,
       subjectName: item.subject.name,
       mentorId: item.mentorId,
       mentorName: `${item.mentor.firstName} ${item.mentor.lastName}`,

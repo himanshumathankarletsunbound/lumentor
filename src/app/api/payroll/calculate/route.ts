@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { periodId, startDate, endDate, branchId, mentorIds, payrollPlanId } = body;
+    const { periodId, startDate, endDate, branchId, mentorIds, payrollPlanId, classPayrollPlanOverrides } = body;
 
     const parsedStart = new Date(startDate);
     const parsedEnd = new Date(endDate);
@@ -23,6 +23,14 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+    if (classPayrollPlanOverrides !== undefined && (
+      typeof classPayrollPlanOverrides !== 'object'
+      || classPayrollPlanOverrides === null
+      || Array.isArray(classPayrollPlanOverrides)
+      || Object.values(classPayrollPlanOverrides).some((planId) => typeof planId !== 'string' || !planId)
+    )) {
+      return NextResponse.json({ error: 'classPayrollPlanOverrides must be a map of class IDs to payroll plan IDs.' }, { status: 400 });
+    }
 
     const batch = await generateBatchFromPostgres({
       periodId,
@@ -31,6 +39,7 @@ export async function POST(req: NextRequest) {
       branchId,
       mentorIds,
       payrollPlanId,
+      classPayrollPlanOverrides,
     });
 
     return NextResponse.json(batch);

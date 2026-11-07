@@ -11,7 +11,7 @@ import { formatCurrency, formatDateTime } from '../../../lib/utils/formatters';
 import { ClassEvent, Mentor, Branch, Subject } from '../../../lib/types/models';
 import { PayrollBatch, PayrollPlan } from '../../../lib/types/payroll';
 import { PenaltyModal } from '../../../components/payroll/PenaltyModal';
-import { Plus, RefreshCw, AlertTriangle, Sparkles } from 'lucide-react';
+import { Plus, RefreshCw } from 'lucide-react';
 
 function monthBounds(month: string) {
   const [year, monthNumber] = month.split('-').map(Number);
@@ -19,6 +19,26 @@ function monthBounds(month: string) {
     startDate: new Date(Date.UTC(year, monthNumber - 1, 1)).toISOString(),
     endDate: new Date(Date.UTC(year, monthNumber, 0, 23, 59, 59, 999)).toISOString(),
   };
+}
+
+function attendanceBadges(classEvent: ClassEvent) {
+  const counts = new Map<string, number>();
+  for (const student of classEvent.students) {
+    const label = student.attendanceStatus === 'ABSENT_BILLABLE'
+      ? 'Absent billable'
+      : student.attendanceStatus === 'UNMARKED'
+        ? 'Unmarked'
+        : student.attendanceStatus === 'LATE'
+          ? 'Present'
+          : student.attendanceStatus.charAt(0) + student.attendanceStatus.slice(1).toLowerCase();
+    counts.set(label, (counts.get(label) || 0) + 1);
+  }
+  if (counts.size === 0) counts.set('Unmarked', 1);
+  return Array.from(counts.entries()).map(([label, count]) => ({ label, count }));
+}
+
+function hasBillableAbsence(classEvent: ClassEvent) {
+  return classEvent.students.some((student) => student.attendanceStatus === 'ABSENT_BILLABLE');
 }
 
 export default function SinglePayoutPage() {
@@ -33,7 +53,7 @@ export default function SinglePayoutPage() {
   const [classes, setClasses] = useState<ClassEvent[]>([]);
   const [batch, setBatch] = useState<PayrollBatch | null>(null);
   const [plans, setPlans] = useState<PayrollPlan[]>([]);
-  const [planId, setPlanId] = useState('');
+  const [classPayrollPlanOverrides, setClassPayrollPlanOverrides] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [addingClass, setAddingClass] = useState(false);
   const [classForm, setClassForm] = useState({ title: '', subjectId: '', branchId: '', startTime: `${month}-01T10:00`, durationMinutes: '60' });
@@ -79,14 +99,6 @@ export default function SinglePayoutPage() {
     setPlans(plansResult.plans);
   }, []);
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const selectedMentor = mentors.find((mentor) => mentor.id === mentorId);
-      if (selectedMentor) setPlanId(selectedMentor.payrollPlanId || '');
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [mentorId, mentors]);
-
   const loadClasses = useCallback(async () => {
     if (!mentorId) return;
     const response = await fetch(`/api/classes?mentorId=${encodeURIComponent(mentorId)}&startDate=${encodeURIComponent(bounds.startDate)}&endDate=${encodeURIComponent(bounds.endDate)}`);
@@ -130,25 +142,12 @@ export default function SinglePayoutPage() {
     setNotice({ type: 'success', message: 'Class added to this payout period.' });
   };
 
-  const markAllClassesCompleted = async () => {
-    const unmarked = classes.filter((c) => c.status !== 'COMPLETED' && c.status !== 'LATE_CANCELLED');
-    for (const c of unmarked) {
-      await fetch('/api/classes', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: c.id, status: 'COMPLETED' }),
-      });
-    }
-    await loadClasses();
-    setNotice({ type: 'success', message: `Marked ${unmarked.length} class(es) as COMPLETED.` });
-  };
-
   const calculate = async () => {
-    if (!mentorId || !planId) throw new Error('Select a mentor with an active payout plan before calculating.');
+    if (!mentorId) throw new Error('Select a mentor before calculating.');
     const response = await fetch('/api/payroll/calculate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ periodId: `single-${month}`, ...bounds, mentorIds: [mentorId], payrollPlanId: planId }),
+      body: JSON.stringify({ periodId: `single-${month}`, ...bounds, mentorIds: [mentorId], classPayrollPlanOverrides }),
     });
     const result = await response.json();
     if (!response.ok || result.error) throw new Error(result.error || 'Unable to calculate payout. Configure an active payroll plan first.');
@@ -205,8 +204,8 @@ export default function SinglePayoutPage() {
         </div>
         {notice && <Alert type={notice.type} title={notice.type === 'success' ? 'Success' : 'Error'} message={notice.message} />}
         <Card>
-          <CardHeader title="1. Select mentor, payroll plan, and month" />
-          <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+          <CardHeader title="1. Select mentor and month" />
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
             <div className="relative">
               <label htmlFor="mentor-search" className="font-semibold text-slate-700">Mentor</label>
               <input
@@ -253,42 +252,21 @@ export default function SinglePayoutPage() {
               )}
             </div>
             <label className="font-semibold text-slate-700">Month<input type="month" value={month} onChange={(e) => { setMonth(e.target.value); setBatch(null); }} className="mt-1 w-full p-2 border rounded-lg font-normal" /></label>
-            <label className="font-semibold text-slate-700">Payout plan<select value={planId} onChange={(e) => { setPlanId(e.target.value); setBatch(null); }} className="mt-1 w-full p-2 border rounded-lg font-normal">{plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} (v{plan.version})</option>)}</select></label>
             <div className="flex items-end"><Button variant="outline" size="sm" leftIcon={<RefreshCw className="w-4 h-4" />} onClick={() => void loadClasses()}>Refresh classes</Button></div>
           </CardContent>
         </Card>
-        {plans.find((plan) => plan.id === planId) && (() => {
-          const plan = plans.find((item) => item.id === planId)!;
-          return <Card><CardHeader title="Selected payout plan details" subtitle="Confirm these rules before calculating the payout." /><CardContent className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs text-slate-700"><div><strong>Compensation</strong><br />{plan.compensationModel.replace(/_/g, ' ')}</div><div><strong>Classes in period</strong><br />{classes.length}</div><div><strong>Class rate</strong><br />{formatCurrency(plan.defaultClassRate)}</div><div><strong>Hourly rate</strong><br />{formatCurrency(plan.hourlyRate)}</div><div><strong>Student rate</strong><br />{formatCurrency(plan.perStudentRate)}</div><div><strong>Minimum duration</strong><br />{plan.minEligibleDurationMinutes} minutes</div><div><strong>Late cancellation</strong><br />{plan.lateCancellationPayPercent}% pay</div><div><strong>Base salary</strong><br />{formatCurrency(plan.baseSalary)}</div></CardContent></Card>;
-        })()}
         <Card>
-          <CardHeader title="2. Classes in this payout period" subtitle={classes.length ? `${classes.length} class(es) found` : 'No classes found; administrators can add one below.'} />
+          <CardHeader title="2. Classes in this payout period" subtitle={classes.length ? 'Present sessions use their Title Mapper plan. Choose a plan only for billable absences.' : 'No classes found; administrators can add one below.'} />
           <CardContent>
-            {classes.some((c) => c.status !== 'COMPLETED' && c.status !== 'LATE_CANCELLED') && (
-              <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span className="text-amber-900 font-medium">
-                    Unmarked or scheduled classes detected. These are excluded from compensation until marked COMPLETED.
-                  </span>
-                </div>
-                <Button
-                  size="sm"
-                  variant="primary"
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs shrink-0"
-                  leftIcon={<Sparkles className="w-3.5 h-3.5" />}
-                  onClick={() => void markAllClassesCompleted().catch((e: unknown) => setNotice({ type: 'error', message: e instanceof Error ? e.message : 'Failed to update classes' }))}
-                >
-                  Mark All as Completed
-                </Button>
-              </div>
-            )}
-            <Table><TableHeader><TableRow><TableHead>Class</TableHead><TableHead>Subject</TableHead><TableHead>Date</TableHead><TableHead>Duration</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{classes.map((item) => <TableRow key={item.id}><TableCell className="font-semibold">{item.title}</TableCell><TableCell>{item.subjectName}</TableCell><TableCell>{formatDateTime(item.startTime)}</TableCell><TableCell>{item.durationMinutes} min</TableCell><TableCell><Badge variant="neutral" size="sm">{item.status}</Badge></TableCell></TableRow>)}</TableBody></Table>
+            <Table><TableHeader><TableRow><TableHead>Class</TableHead><TableHead>Subject</TableHead><TableHead>Date</TableHead><TableHead>Attendance</TableHead><TableHead>Payroll plan</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{classes.map((item) => {
+              const billableAbsence = hasBillableAbsence(item);
+              return <TableRow key={item.id}><TableCell className="font-semibold">{item.title}</TableCell><TableCell>{item.subjectName}</TableCell><TableCell>{formatDateTime(item.startTime)}</TableCell><TableCell><div className="flex flex-wrap gap-1">{attendanceBadges(item).map(({ label, count }) => <Badge key={label} variant={label === 'Present' ? 'success' : label === 'Absent billable' ? 'warning' : 'neutral'} size="sm">{label} · {count}</Badge>)}</div></TableCell><TableCell>{billableAbsence ? <select value={classPayrollPlanOverrides[item.id] || ''} onChange={(event) => { setClassPayrollPlanOverrides((current) => ({ ...current, [item.id]: event.target.value })); setBatch(null); }} className="w-44 rounded-lg border p-2 text-xs"><option value="">Select billable plan</option>{plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} (v{plan.version})</option>)}</select> : item.mappedPayrollPlanName ? <span className="text-xs font-medium text-emerald-700">{item.mappedPayrollPlanName}</span> : <span className="text-xs text-slate-500">{item.attendanceStatusSummary === 'UNMARKED' || item.attendanceStatusSummary === 'ALL_ABSENT' ? 'Not payable' : 'Not mapped'}</span>}</TableCell><TableCell><Badge variant="neutral" size="sm">{item.status}</Badge></TableCell></TableRow>;
+            })}</TableBody></Table>
             <Button variant="outline" size="sm" className="mt-3" leftIcon={<Plus className="w-4 h-4" />} onClick={() => setAddingClass(true)}>Add class</Button>
           </CardContent>
         </Card>
         {addingClass && <Card><CardHeader title="Add class to payout" /><CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs"><input placeholder="Class title" value={classForm.title} onChange={(e) => setClassForm({ ...classForm, title: e.target.value })} className="p-2 border rounded-lg" /><select value={classForm.subjectId} onChange={(e) => setClassForm({ ...classForm, subjectId: e.target.value })} className="p-2 border rounded-lg"><option value="">Select subject</option>{subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}</select><select value={classForm.branchId} onChange={(e) => setClassForm({ ...classForm, branchId: e.target.value })} className="p-2 border rounded-lg"><option value="">Select branch</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select><input type="datetime-local" value={classForm.startTime} onChange={(e) => setClassForm({ ...classForm, startTime: e.target.value })} className="p-2 border rounded-lg" /><input type="number" min="1" value={classForm.durationMinutes} onChange={(e) => setClassForm({ ...classForm, durationMinutes: e.target.value })} className="p-2 border rounded-lg" /><div className="flex gap-2"><Button size="sm" variant="primary" onClick={() => void addClass().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to add class.' }))}>Save class</Button><Button size="sm" variant="ghost" onClick={() => setAddingClass(false)}>Cancel</Button></div></CardContent></Card>}
-        <Card><CardHeader title="3. Incentives, penalties, and approval" /><CardContent className="space-y-3 text-xs"><p className="text-slate-600">Add adjustments for the selected mentor before calculating. Approved penalties and incentives are included in the payout.</p><div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" disabled={!mentorId} onClick={() => setIncentiveOpen(true)}>Add incentive</Button><Button variant="outline" size="sm" disabled={!mentorId} onClick={() => setPenaltyOpen(true)}>Add penalty</Button><Button variant="primary" size="sm" disabled={!mentorId || !planId} onClick={() => void calculate().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to calculate payout.' }))}>Calculate payout</Button>{batch && <><span className="px-3 py-2 rounded-lg bg-slate-100">Status: <strong>{batch.status}</strong> · Net: <strong>{formatCurrency(batch.totalNet)}</strong></span>{batch.status === 'DRAFT' && <Button size="sm" variant="outline" onClick={() => void (async () => { const response = await fetch('/api/payroll/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ batchId: batch.id, approverId: 'current-admin', approverName: 'Payroll preparer', action: 'SUBMIT' }) }); const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Unable to submit payout.'); setBatch(result); setNotice({ type: 'success', message: 'Payout submitted for administrator approval.' }); })().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to submit payout.' }))}>Submit for approval</Button>}{batch.status === 'SUBMITTED' && <Button size="sm" variant="success" onClick={() => void approve().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to approve payout.' }))}>Approve payout</Button>}{batch.status === 'APPROVED' && <Button size="sm" variant="success" onClick={() => void lock().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to finalize payout.' }))}>Finalize & generate payslip</Button>}</>}</div>{incentiveOpen && <div className="grid grid-cols-1 sm:grid-cols-3 gap-2"><input value={incentiveReason} onChange={(e) => setIncentiveReason(e.target.value)} placeholder="Incentive reason" className="p-2 border rounded-lg" /><input value={incentiveAmount} onChange={(e) => setIncentiveAmount(e.target.value)} type="number" min="0" step="0.01" placeholder="Amount" className="p-2 border rounded-lg" /><Button size="sm" variant="success" onClick={() => void addIncentive().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to add incentive.' }))}>Save incentive</Button></div>}</CardContent></Card>
+        <Card><CardHeader title="3. Incentives, penalties, and approval" /><CardContent className="space-y-3 text-xs"><p className="text-slate-600">Add adjustments for the selected mentor before calculating. Approved penalties and incentives are included in the payout.</p><div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" disabled={!mentorId} onClick={() => setIncentiveOpen(true)}>Add incentive</Button><Button variant="outline" size="sm" disabled={!mentorId} onClick={() => setPenaltyOpen(true)}>Add penalty</Button><Button variant="primary" size="sm" disabled={!mentorId} onClick={() => void calculate().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to calculate payout.' }))}>Calculate payout</Button>{batch && <><span className="px-3 py-2 rounded-lg bg-slate-100">Status: <strong>{batch.status}</strong> · Net: <strong>{formatCurrency(batch.totalNet)}</strong></span>{batch.status === 'DRAFT' && <Button size="sm" variant="outline" onClick={() => void (async () => { const response = await fetch('/api/payroll/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ batchId: batch.id, approverId: 'current-admin', approverName: 'Payroll preparer', action: 'SUBMIT' }) }); const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Unable to submit payout.'); setBatch(result); setNotice({ type: 'success', message: 'Payout submitted for administrator approval.' }); })().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to submit payout.' }))}>Submit for approval</Button>}{batch.status === 'SUBMITTED' && <Button size="sm" variant="success" onClick={() => void approve().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to approve payout.' }))}>Approve payout</Button>}{batch.status === 'APPROVED' && <Button size="sm" variant="success" onClick={() => void lock().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to finalize payout.' }))}>Finalize & generate payslip</Button>}</>}</div>{incentiveOpen && <div className="grid grid-cols-1 sm:grid-cols-3 gap-2"><input value={incentiveReason} onChange={(e) => setIncentiveReason(e.target.value)} placeholder="Incentive reason" className="p-2 border rounded-lg" /><input value={incentiveAmount} onChange={(e) => setIncentiveAmount(e.target.value)} type="number" min="0" step="0.01" placeholder="Amount" className="p-2 border rounded-lg" /><Button size="sm" variant="success" onClick={() => void addIncentive().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to add incentive.' }))}>Save incentive</Button></div>}</CardContent></Card>
         <PenaltyModal initialMentorId={mentorId} isOpen={penaltyOpen} onClose={() => setPenaltyOpen(false)} onSaved={() => setNotice({ type: 'success', message: 'Penalty added. Recalculate the payout to include it.' })} />
       </div>
     </AppShell>

@@ -17,6 +17,8 @@ export interface CalculatePayrollOptions {
   branchId?: string; // undefined or 'ALL'
   mentorIds?: string[];
   payrollPlanId?: string;
+  /** A plan selected specifically for a billable-absence session. */
+  classPayrollPlanOverrides?: Record<string, string>;
 }
 
 export interface PayrollContext {

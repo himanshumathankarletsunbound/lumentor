@@ -145,6 +145,10 @@ export interface ClassEvent {
   title: string;
   subjectId: string;
   subjectPayrollPlanId?: string;
+  /** Classcard class identifier and its payroll mapping, when this session was synced from Classcard. */
+  classcardClassId?: string;
+  mappedPayrollPlanId?: string;
+  mappedPayrollPlanName?: string;
   subjectName: string;
   mentorId: string;
   mentorName: string;

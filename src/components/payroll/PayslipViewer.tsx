@@ -5,7 +5,7 @@ import { Payslip } from '../../lib/types/payroll';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
-import { Printer, Download, CheckCircle, Clock } from 'lucide-react';
+import { Printer } from 'lucide-react';
 import { formatCurrency, formatDuration, formatDate } from '../../lib/utils/formatters';
 
 export function PayslipViewer({
@@ -88,8 +88,13 @@ export function PayslipViewer({
               Period: {formatDate(payslip.startDate)} - {formatDate(payslip.endDate)}
             </p>
             <p className="text-slate-500 mt-1">
-              Eligible Volume: <strong>{payslip.eligibleClassesCount} classes</strong> ({formatDuration(payslip.eligibleDurationMinutes)})
+              Sessions: <strong>{payslip.eligibleClassesCount} payable</strong> ({formatDuration(payslip.eligibleDurationMinutes)})
             </p>
+            <div className="grid grid-cols-3 gap-2 pt-2 text-[11px]">
+              <span className="rounded bg-emerald-50 px-2 py-1 text-emerald-700">Present: {payslip.presentCount ?? 0}</span>
+              <span className="rounded bg-amber-50 px-2 py-1 text-amber-700">Absent: {payslip.absentCount ?? 0}</span>
+              <span className="rounded bg-rose-50 px-2 py-1 text-rose-700">Billable absent: {payslip.absentBillableCount ?? 0}</span>
+            </div>
           </div>
         </div>
 

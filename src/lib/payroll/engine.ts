@@ -53,6 +53,9 @@ export class PayrollEngine {
     let eligibleClassesCount = 0;
     let eligibleDurationMinutes = 0;
     let lateCancelledCount = 0;
+    let presentCount = 0;
+    let absentCount = 0;
+    let absentBillableCount = 0;
 
     let classEarnings = 0;
     let durationEarnings = 0;
@@ -63,6 +66,15 @@ export class PayrollEngine {
 
     // Evaluate each class against plan eligibility rules
     for (const cls of mentorClasses) {
+      const attendanceStatuses = cls.students.map((student) => student.attendanceStatus);
+      const hasPresentAttendance = attendanceStatuses.some((status) => status === 'PRESENT' || status === 'LATE');
+      if (hasPresentAttendance) {
+        presentCount++;
+      } else if (attendanceStatuses.some((status) => status === 'ABSENT_BILLABLE')) {
+        absentBillableCount++;
+      } else if (attendanceStatuses.some((status) => status === 'ABSENT' || status === 'EXCUSED')) {
+        absentCount++;
+      }
       // Check status eligibility
       const isStatusPayable = plan.payableClassStatuses.includes(cls.status);
       if (!isStatusPayable) {
@@ -204,6 +216,9 @@ export class PayrollEngine {
       calculationDetails: {
         classesEvaluated: mentorClasses.length,
         classesEligible: eligibleClassesCount,
+        presentCount,
+        absentCount,
+        absentBillableCount,
         lateCancelledEligible: lateCancelledCount,
         appliedRateCard: `${plan.name} (v${plan.version}) - ${plan.compensationModel}`,
         notes: calculationNotes,

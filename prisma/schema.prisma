@@ -685,6 +685,9 @@ model Payslip {
   planVersion             Int
   eligibleClassesCount    Int
   eligibleDurationMinutes Int
+  presentCount            Int               @default(0)
+  absentCount             Int               @default(0)
+  absentBillableCount     Int               @default(0)
   earningsItems           Json              // array of { description, amount, rate, count }
   penaltyItems            Json              // array of { category, reason, amount, date }
   grossEarnings           Decimal           @db.Decimal(10, 2)

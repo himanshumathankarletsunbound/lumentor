@@ -125,17 +125,49 @@ export async function finalizeBatchAndGeneratePayslipsFromPostgres(batchId: stri
   const lockedAt = new Date();
   return prisma.$transaction(async (transaction) => {
     const generated = [];
+    const itemsByMentor = new Map<string, typeof batch.lineItems>();
     for (const item of batch.lineItems) {
-      const penalties = item.appliedPenaltyIds.length ? await transaction.penalty.findMany({ where: { id: { in: item.appliedPenaltyIds } } }) : [];
-      await transaction.penalty.updateMany({ where: { id: { in: item.appliedPenaltyIds } }, data: { status: 'APPLIED', appliedPayrollBatchId: batch.id, appliedAt: lockedAt } });
+      const mentorItems = itemsByMentor.get(item.mentorId) || [];
+      mentorItems.push(item);
+      itemsByMentor.set(item.mentorId, mentorItems);
+    }
+
+    for (const [mentorId, items] of itemsByMentor) {
+      const penaltyIds = [...new Set(items.flatMap((item) => item.appliedPenaltyIds))];
+      const penalties = penaltyIds.length ? await transaction.penalty.findMany({ where: { id: { in: penaltyIds } } }) : [];
+      await transaction.penalty.updateMany({ where: { id: { in: penaltyIds } }, data: { status: 'APPLIED', appliedPayrollBatchId: batch.id, appliedAt: lockedAt } });
+      const earningsItems = items.flatMap((item) => {
+        const planAmount = Number(item.baseSalaryAmount) + Number(item.classEarnings) + Number(item.durationEarnings)
+          + Number(item.studentEarnings) + Number(item.revenueShareEarnings);
+        const quantity = item.eligibleClassesCount;
+        return [{
+          description: `Payroll plan: ${item.planName}`,
+          quantity,
+          rate: quantity > 0 ? Number((Number(item.classEarnings) / quantity).toFixed(2)) : 0,
+          amount: Number(planAmount.toFixed(2)),
+        }, ...(Number(item.bonusAmount) > 0 ? [{
+          description: `Approved bonuses & incentives (${item.planName})`,
+          amount: Number(item.bonusAmount),
+        }] : [])];
+      });
+      const presentCount = items.reduce((sum, item) => sum + Number((item.calculationDetails as { presentCount?: number }).presentCount || 0), 0);
+      const absentCount = items.reduce((sum, item) => sum + Number((item.calculationDetails as { absentCount?: number }).absentCount || 0), 0);
+      const absentBillableCount = items.reduce((sum, item) => sum + Number((item.calculationDetails as { absentBillableCount?: number }).absentBillableCount || 0), 0);
+      const grossEarnings = items.reduce((sum, item) => sum + Number(item.grossEarnings), 0);
+      const totalDeductions = items.reduce((sum, item) => sum + Number(item.penaltyDeductions), 0);
+      const netPayable = items.reduce((sum, item) => sum + Number(item.netPayable), 0);
       generated.push(await transaction.payslip.create({
         data: {
-          id: `slip-${batch.id}-${item.id}`, payslipNumber: `PS-${batch.startDate.toISOString().slice(0, 10).replace(/-/g, '').slice(0, 6)}-${Math.floor(1000 + Math.random() * 9000)}`,
-          batchId: batch.id, mentorId: item.mentorId, periodName: batch.periodName, startDate: batch.startDate, endDate: batch.endDate,
-          planName: item.planName, compensationModel: item.compensationModel, planVersion: item.planVersion, eligibleClassesCount: item.eligibleClassesCount,
-          eligibleDurationMinutes: item.eligibleDurationMinutes, earningsItems: [{ description: 'Payroll earnings', amount: Number(item.grossEarnings) }],
+          id: `slip-${batch.id}-${mentorId}`,
+          payslipNumber: `PS-${batch.startDate.toISOString().slice(0, 10).replace(/-/g, '').slice(0, 6)}-${Math.floor(1000 + Math.random() * 9000)}`,
+          batchId: batch.id, mentorId, periodName: batch.periodName, startDate: batch.startDate, endDate: batch.endDate,
+          planName: items.map((item) => item.planName).join(', '), compensationModel: items.length === 1 ? items[0].compensationModel : 'PER_CLASS',
+          planVersion: items.length === 1 ? items[0].planVersion : 1,
+          eligibleClassesCount: items.reduce((sum, item) => sum + item.eligibleClassesCount, 0),
+          eligibleDurationMinutes: items.reduce((sum, item) => sum + item.eligibleDurationMinutes, 0),
+          presentCount, absentCount, absentBillableCount, earningsItems,
           penaltyItems: penalties.map((penalty) => ({ id: penalty.id, category: penalty.category, reason: penalty.reason, amount: Number(penalty.amount), date: penalty.createdAt.toISOString().slice(0, 10) })),
-          grossEarnings: item.grossEarnings, totalDeductions: item.penaltyDeductions, netPayable: item.netPayable, currency: batch.currency,
+          grossEarnings, totalDeductions, netPayable, currency: batch.currency,
         },
       }));
     }

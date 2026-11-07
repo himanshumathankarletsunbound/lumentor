@@ -208,6 +208,9 @@ export interface PayrollLineItem {
   calculationDetails: {
     classesEvaluated: number;
     classesEligible: number;
+    presentCount?: number;
+    absentCount?: number;
+    absentBillableCount?: number;
     lateCancelledEligible: number;
     appliedRateCard: string;
     notes: string[];
@@ -279,6 +282,9 @@ export interface Payslip {
   planVersion: number;
   eligibleClassesCount: number;
   eligibleDurationMinutes: number;
+  presentCount?: number;
+  absentCount?: number;
+  absentBillableCount?: number;
   earningsItems: PayslipItem[];
   penaltyItems: PayslipPenaltyItem[];
   grossEarnings: number;

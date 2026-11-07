@@ -50,7 +50,7 @@ export default function PayslipsPage() {
               <TableHead>Payslip Number</TableHead>
               <TableHead>Mentor</TableHead>
               <TableHead>Cycle & Period</TableHead>
-              <TableHead>Eligible Classes</TableHead>
+              <TableHead>Sessions</TableHead>
               <TableHead>Gross</TableHead>
               <TableHead>Deductions</TableHead>
               <TableHead>Net Payable</TableHead>
@@ -87,7 +87,10 @@ export default function PayslipsPage() {
                     </p>
                   </TableCell>
                   <TableCell className="text-xs font-semibold text-slate-700">
-                    {slip.eligibleClassesCount} classes
+                    <p>{slip.eligibleClassesCount} payable</p>
+                    <p className="text-[11px] font-normal text-slate-400">
+                      {slip.presentCount ?? 0} present · {slip.absentBillableCount ?? 0} billable absent
+                    </p>
                   </TableCell>
                   <TableCell className="text-xs font-mono text-slate-700">
                     {formatCurrency(slip.grossEarnings, slip.currency)}

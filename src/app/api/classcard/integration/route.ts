@@ -145,6 +145,41 @@ function staffId(row: Record<string, unknown>): string {
     firstValue(staff, ['id', 'staff_id', 'user_detail_id']) ?? resources);
 }
 
+/**
+ * Classcard's staff events payload identifies teaching staff in staffList.array.
+ * That list wins over organizer/resourceIds, which are only fallback values.
+ */
+function eventStaffIds(row: Record<string, unknown>): string[] {
+  const staffList = objectValue(row.staffList);
+  const staffRows = Array.isArray(staffList.array) ? staffList.array : [];
+  const ids = staffRows
+    .map(objectValue)
+    .map((staff) => classcardId(firstValue(staff, ['user_detail_id', 'staff_id', 'id'])))
+    .filter(Boolean);
+  return [...new Set(ids.length > 0 ? ids : [staffId(row)].filter(Boolean))];
+}
+
+function eventResult(row: Record<string, unknown>, mentorNames: Map<string, string>) {
+  const staffIds = eventStaffIds(row);
+  const students = classcardStudentRows(row).map(studentId).filter(Boolean);
+  const subject = objectValue(row.subject);
+  return {
+    externalId: eventId(row),
+    title: String(firstValue(row, ['title', 'name']) || objectValue(row.event).title || 'Untitled event'),
+    staffIds,
+    mentorNames: staffIds.map((id) => mentorNames.get(id) || `Unmapped staff (${id})`),
+    studentIds: students,
+    startTime: String(eventStart(row) || ''),
+    endTime: String(eventEnd(row) || ''),
+    subjectName: String(firstValue(row, ['subjectName']) || subject.name || ''),
+    subjectExternalId: subjectId(row) || undefined,
+    classId: String(firstValue(row, ['gibbonCourseClassID', 'class_id']) || ''),
+    attendanceStatus: String(firstValue(row, ['attendance_status', 'status']) || ''),
+    locationName: String(firstValue(row, ['locationName', 'location']) || ''),
+    timezoneName: String(firstValue(row, ['timezoneName', 'timezone']) || ''),
+  };
+}
+
 function subjectId(row: Record<string, unknown>): string {
   const subject = objectValue(row.subject);
   return classcardId(firstValue(row, ['subject_id', 'subjectId', 'service_id']) ?? firstValue(subject, ['id', 'subject_id', 'subjectId']));
@@ -329,7 +364,7 @@ export async function POST(req: NextRequest) {
         if (!externalId || Number.isNaN(startTime.getTime()) || Number.isNaN(endTime.getTime())) continue;
         const subjectData = objectValue(event.subject);
         const subjectExternalId = subjectId(event);
-        const currentStaffId = staffId(event);
+        const currentStaffId = eventStaffIds(event)[0] || '';
         const mentor = currentStaffId ? await prisma.mentor.findFirst({ where: { externalId: { in: idCandidates(currentStaffId) } } }) : null;
         const subject = subjectExternalId ? await prisma.subject.findFirst({ where: { externalId: { in: idCandidates(subjectExternalId) } } }) : null;
         if (!mentor && !seen.mentors.has(currentStaffId)) { seen.mentors.add(currentStaffId); unmatched.mentors.push({ classcardId: currentStaffId, eventId: externalId }); }
@@ -375,6 +410,128 @@ export async function POST(req: NextRequest) {
       }
       return NextResponse.json({ success: true, start, end, importId: stagedImport?.id, fetchedEvents: eventRowsForMonth.length, fetchedAttendance: attendanceForMonth.length, sessionsMapped, attendanceMapped, unmatched });
     }
+    if (body.action === 'fetch-events') {
+      const start = String(body.start || '').trim();
+      const end = String(body.end || '').trim();
+      const requestedMentorIds = Array.isArray(body.mentorIds) ? body.mentorIds.map(String).filter(Boolean) : [];
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || start > end) {
+        throw new Error('Provide a valid start and end date.');
+      }
+      const mentors = await prisma.mentor.findMany({
+        where: requestedMentorIds.length ? { id: { in: requestedMentorIds } } : undefined,
+        select: { id: true, firstName: true, lastName: true, externalId: true, branchId: true },
+      });
+      const eligible = mentors.filter((mentor) => Boolean(classcardId(mentor.externalId)));
+      if (!eligible.length) throw new Error('No selected mentors have a valid Classcard ID.');
+      const uniqueByStaff = new Map<string, typeof eligible[number]>();
+      for (const mentor of eligible) uniqueByStaff.set(classcardId(mentor.externalId), mentor);
+      const mentorNames = new Map([...uniqueByStaff].map(([id, mentor]) => [id, `${mentor.firstName} ${mentor.lastName}`.trim()]));
+      const requests = await Promise.allSettled([...uniqueByStaff.entries()].map(async ([externalId, mentor]) => ({
+        externalId,
+        mentor,
+        data: await classcardFetch(`staff/events/?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&staff=${encodeURIComponent(externalId)}`, 'GET'),
+      })));
+      const failures = requests.flatMap((result, index) => result.status === 'rejected' ? [{
+        mentorId: [...uniqueByStaff.values()][index].id,
+        mentorName: `${[...uniqueByStaff.values()][index].firstName} ${[...uniqueByStaff.values()][index].lastName}`.trim(),
+        error: result.reason instanceof Error ? result.reason.message : 'Classcard request failed.',
+      }] : []);
+      const fetched = requests.flatMap((result) => result.status === 'fulfilled'
+        ? eventRows(result.value.data).map((event) => ({ ...event, organizer: event.organizer ?? result.value.externalId }))
+        : []);
+      const unique = new Map<string, Record<string, unknown>>();
+      for (const event of fetched) {
+        const id = eventId(event);
+        if (id && isDateInRange(eventStart(event), start, end) && !unique.has(id)) unique.set(id, event);
+      }
+      let staged = 0;
+      let materialized = 0;
+      const unresolved = { mentors: 0, subjects: 0 };
+      for (const event of unique.values()) {
+        const externalId = eventId(event);
+        const startTime = new Date(String(eventStart(event) || ''));
+        const endTime = new Date(String(eventEnd(event) || ''));
+        if (!externalId || Number.isNaN(startTime.getTime()) || Number.isNaN(endTime.getTime())) continue;
+        const staffIds = eventStaffIds(event);
+        const primaryStaffId = staffIds[0] || '';
+        const mentor = primaryStaffId ? await prisma.mentor.findFirst({ where: { externalId: { in: idCandidates(primaryStaffId) } } }) : null;
+        const subjectExternalId = subjectId(event);
+        const subject = subjectExternalId ? await prisma.subject.findFirst({ where: { externalId: { in: idCandidates(subjectExternalId) } } }) : null;
+        if (!mentor) unresolved.mentors++;
+        if (!subjectExternalId || !subject) unresolved.subjects++;
+        const subjectData = objectValue(event.subject);
+        await upsertClasscardEventRecord({
+          externalId,
+          mentorId: mentor?.id,
+          classcardStaffId: primaryStaffId,
+          subjectName: String(firstValue(event, ['subjectName']) || subjectData.name || ''),
+          subjectExternalId,
+          locationName: String(firstValue(event, ['locationName', 'location']) || ''),
+          startTime,
+          endTime,
+          attendanceStatus: String(firstValue(event, ['attendance_status', 'status']) || ''),
+          rawPayload: JSON.parse(JSON.stringify(event)) as Prisma.InputJsonValue,
+        });
+        // ClassEvent has a required local subject. Keep subject-less events staged in
+        // ClasscardEvent until Operations maps the subject rather than inventing one.
+        if (mentor && subject) {
+          const classEvent = await prisma.classEvent.upsert({
+            where: { externalId },
+            create: { id: `classcard-${externalId}`, branchId: mentor.branchId, subjectId: subject.id, mentorId: mentor.id, title: String(firstValue(event, ['title', 'subjectName']) || subject.name), startTime, endTime, durationMinutes: Math.max(1, Math.round((endTime.getTime() - startTime.getTime()) / 60000)), status: 'SCHEDULED', externalId, provenance: 'CLASSCARD_SOURCED' },
+            update: { branchId: mentor.branchId, subjectId: subject.id, mentorId: mentor.id, title: String(firstValue(event, ['title', 'subjectName']) || subject.name), startTime, endTime, durationMinutes: Math.max(1, Math.round((endTime.getTime() - startTime.getTime()) / 60000)), provenance: 'CLASSCARD_SOURCED' },
+          });
+          await prisma.classcardEvent.update({ where: { externalId }, data: { classEventId: classEvent.id } });
+          materialized++;
+        }
+        staged++;
+      }
+      await prisma.syncJob.create({ data: { id: crypto.randomUUID(), jobType: 'FETCH_EVENTS', status: failures.length ? 'PARTIAL' : 'COMPLETED', startedAt: new Date(), completedAt: new Date(), recordsProcessed: fetched.length, recordsCreated: staged, recordsUpdated: 0, recordsFailed: failures.length, logSummary: [`Fetched ${fetched.length} records; ${unique.size} unique events; ${failures.length} staff requests failed.`] } });
+      return NextResponse.json({ success: true, summary: { mentorsProcessed: uniqueByStaff.size, fetchedEvents: fetched.length, uniqueEvents: unique.size, duplicatesIgnored: Math.max(0, fetched.length - unique.size), saved: staged, materialized, missingSubject: unresolved.subjects, unmappedMentor: unresolved.mentors, failures }, events: [...unique.values()].map((event) => eventResult(event, mentorNames)) });
+    }
+    if (body.action === 'fetch-attendance') {
+      const start = String(body.start || '').trim();
+      const end = String(body.end || '').trim();
+      const requestedMentorIds = Array.isArray(body.mentorIds) ? body.mentorIds.map(String).filter(Boolean) : [];
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || start > end) throw new Error('Provide a valid start and end date.');
+      const selectedMentors = requestedMentorIds.length ? await prisma.mentor.findMany({ where: { id: { in: requestedMentorIds } }, select: { externalId: true } }) : [];
+      const allowedStaffIds = new Set(selectedMentors.map((mentor) => classcardId(mentor.externalId)).filter(Boolean));
+      const payload = await classcardFetch(`attendance?start_date=${encodeURIComponent(start)}&end_date=${encodeURIComponent(end)}`, 'GET');
+      const fetchedRows = attendanceRows(payload).filter((row) => {
+        const date = firstValue(row, ['date', 'attendance_date']) || eventStart(row);
+        return !date || isDateInRange(date, start, end);
+      });
+      const eventIds = [...new Set(fetchedRows.map(eventId).filter(Boolean))];
+      const sourceEvents = eventIds.length ? await prisma.classcardEvent.findMany({ where: { externalId: { in: eventIds } }, include: { classEvent: true } }) : [];
+      const eventById = new Map(sourceEvents.map((event) => [event.externalId, event]));
+      const students = await prisma.student.findMany({ where: { externalId: { not: null } }, select: { id: true, externalId: true } });
+      const studentByExternalId = new Map(students.flatMap((student) => idCandidates(student.externalId || '').map((id) => [id, student.id] as const)));
+      let updated = 0;
+      const unmatched = { events: 0, students: 0, filteredOut: 0 };
+      const results: Array<Record<string, unknown>> = [];
+      for (const row of fetchedRows) {
+        const externalId = eventId(row);
+        const source = eventById.get(externalId);
+        const sourceStaffIds = source ? eventStaffIds(objectValue(source.rawPayload)) : [];
+        if (allowedStaffIds.size && !sourceStaffIds.some((id) => allowedStaffIds.has(id))) { unmatched.filteredOut++; continue; }
+        const studentExternalId = studentId(row);
+        const localStudentId = studentByExternalId.get(studentExternalId);
+        const status = attendanceStatus(firstValue(row, ['type', 'attendance_status', 'attendanceCode', 'status']));
+        const mapped = Boolean(source?.classEventId && localStudentId);
+        if (!source) unmatched.events++;
+        if (!localStudentId) unmatched.students++;
+        if (source?.classEventId && localStudentId) {
+          await prisma.classAttendance.upsert({
+            where: { classEventId_studentId: { classEventId: source.classEventId, studentId: localStudentId } },
+            create: { id: crypto.randomUUID(), classEventId: source.classEventId, studentId: localStudentId, status, markedAt: new Date(), provenance: 'CLASSCARD_SOURCED', externalId: `${externalId}:${studentExternalId}` },
+            update: { status, markedAt: new Date(), provenance: 'CLASSCARD_SOURCED', externalId: `${externalId}:${studentExternalId}` },
+          });
+          updated++;
+        }
+        results.push({ eventId: externalId, studentExternalId, status: String(firstValue(row, ['type', 'attendance_status', 'attendanceCode', 'status']) || 'Unknown'), mapped, reason: mapped ? undefined : !source ? 'Event has not been fetched yet.' : !source.classEventId ? 'Event is awaiting mentor/subject mapping.' : 'Student is not mapped to a local record.' });
+      }
+      await prisma.syncJob.create({ data: { id: crypto.randomUUID(), jobType: 'FETCH_ATTENDANCE', status: unmatched.events || unmatched.students ? 'PARTIAL' : 'COMPLETED', startedAt: new Date(), completedAt: new Date(), recordsProcessed: fetchedRows.length, recordsCreated: updated, recordsUpdated: 0, recordsFailed: unmatched.events + unmatched.students, logSummary: [`Fetched ${fetchedRows.length} attendance rows; mapped ${updated}; ${unmatched.events} unmatched events; ${unmatched.students} unmatched students.`] } });
+      return NextResponse.json({ success: true, summary: { fetched: fetchedRows.length, mapped: updated, ...unmatched }, attendance: results });
+    }
     if (body.action === 'sync-events') {
       const start = String(body.start || '').trim();
       const end = String(body.end || '').trim();
@@ -396,8 +553,8 @@ export async function POST(req: NextRequest) {
         const startTime = new Date(String(event.start || ''));
         const endTime = new Date(String(event.end || ''));
         if (!externalId || Number.isNaN(startTime.getTime()) || Number.isNaN(endTime.getTime())) continue;
-        const staffId = String(event.organizer || (Array.isArray(event.resourceIds) ? event.resourceIds[0] : '') || '').replace(/^0+/, '');
-        const mentor = staffId ? await prisma.mentor.findFirst({ where: { externalId: staffId } }) : null;
+        const staffId = eventStaffIds(event)[0] || '';
+        const mentor = staffId ? await prisma.mentor.findFirst({ where: { externalId: { in: idCandidates(staffId) } } }) : null;
         const subject = event.subject && typeof event.subject === 'object' ? event.subject as Record<string, unknown> : {};
         await upsertClasscardEventRecord({
           externalId,

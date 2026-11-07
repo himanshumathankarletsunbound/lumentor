@@ -150,8 +150,8 @@ export default function ClassesPage() {
               <TableHead>Mentor</TableHead>
               <TableHead>Date & Time</TableHead>
               <TableHead>Students / Roster</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Provenance</TableHead>
+              <TableHead>Class Status</TableHead>
+              <TableHead>Attendance</TableHead>
               <TableHead className="text-right">Action</TableHead>
             </TableRow>
           </TableHeader>
@@ -210,6 +210,31 @@ export default function ClassesPage() {
                       dot
                     >
                       {cls.status}
+                    </Badge>
+                    {(cls.status === 'CANCELLED' || cls.status === 'LATE_CANCELLED') && cls.cancellationReason && (
+                      <p className="mt-1 max-w-44 text-[11px] text-slate-500">{cls.cancellationReason}</p>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={
+                        cls.attendanceStatusSummary === 'ALL_PRESENT'
+                          ? 'success'
+                          : cls.attendanceStatusSummary === 'UNMARKED'
+                          ? 'warning'
+                          : cls.attendanceStatusSummary === 'ALL_ABSENT'
+                          ? 'danger'
+                          : 'info'
+                      }
+                      size="sm"
+                    >
+                      {cls.attendanceStatusSummary === 'ALL_PRESENT'
+                        ? 'Marked · Present'
+                        : cls.attendanceStatusSummary === 'ALL_ABSENT'
+                        ? 'Marked · Absent'
+                        : cls.attendanceStatusSummary === 'PARTIAL'
+                        ? 'Marked · Partial'
+                        : 'Unmarked'}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">

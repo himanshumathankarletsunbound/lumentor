@@ -528,6 +528,15 @@ export async function listClasses(filters: {
   startDate?: string;
   endDate?: string;
 } = {}): Promise<ClassEvent[]> {
+  // A session which has ended is operationally complete even when attendance
+  // has not been submitted yet. Never rewrite cancellation/exception states.
+  await prisma.classEvent.updateMany({
+    where: {
+      status: { in: ['SCHEDULED', 'IN_PROGRESS'] },
+      endTime: { lte: new Date() },
+    },
+    data: { status: 'COMPLETED' },
+  });
   const classes = await prisma.classEvent.findMany({
     where: {
       mentorId: filters.mentorId,

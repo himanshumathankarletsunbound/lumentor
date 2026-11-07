@@ -9,13 +9,26 @@ import { Button } from '../../../components/ui/Button';
 import { PenaltyModal } from '../../../components/payroll/PenaltyModal';
 import { CalendarEventModal } from '../../../components/calendar/CalendarEventModal';
 import { ClassEvent } from '../../../lib/types/models';
-import { AlertTriangle, Clock, ShieldAlert } from 'lucide-react';
-import { formatDate, formatTime } from '../../../lib/utils/formatters';
+import { ShieldAlert } from 'lucide-react';
+import { formatDate } from '../../../lib/utils/formatters';
 
 export default function ExceptionsPage() {
   const [classes, setClasses] = useState<ClassEvent[]>(db.getClasses());
   const [selectedEvent, setSelectedEvent] = useState<ClassEvent | null>(null);
   const [penaltyModalOpen, setPenaltyModalOpen] = useState(false);
+
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void fetch('/api/dashboard').then(async (response) => {
+        const payload = await response.json();
+        if (response.ok && payload.success && Array.isArray(payload.data?.classes)) {
+          setClasses(payload.data.classes);
+          db.initClient({ ...db.getSnapshot(), classes: payload.data.classes });
+        }
+      }).catch(() => undefined);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const exceptions = classes.filter(
     (c) => c.status === 'CANCELLED' || c.status === 'LATE_CANCELLED' || c.attendanceStatusSummary === 'ALL_ABSENT'
@@ -76,15 +89,21 @@ export default function ExceptionsPage() {
                   <TableCell className="font-medium text-slate-800">{cls.mentorName}</TableCell>
                   <TableCell>
                     <Badge
-                      variant={cls.status === 'LATE_CANCELLED' ? 'danger' : 'neutral'}
+                      variant={cls.status === 'LATE_CANCELLED' ? 'danger' : cls.status === 'CANCELLED' ? 'neutral' : 'warning'}
                       size="sm"
                       dot
                     >
-                      {cls.status === 'LATE_CANCELLED' ? 'Late Cancellation' : 'Standard Cancel'}
+                      {cls.status === 'LATE_CANCELLED'
+                        ? 'Late Cancellation'
+                        : cls.status === 'CANCELLED'
+                        ? 'Cancellation'
+                        : cls.attendanceStatusSummary === 'ALL_ABSENT'
+                        ? 'Attendance Exception · All Absent'
+                        : 'Attendance Exception'}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-xs text-slate-600 max-w-xs truncate">
-                    {cls.cancellationReason || 'No reason recorded'}
+                    {cls.cancellationReason || (cls.attendanceStatusSummary === 'ALL_ABSENT' ? 'Attendance marked absent for all rostered students.' : 'No reason recorded')}
                   </TableCell>
                   <TableCell className="text-xs text-slate-500">
                     {cls.cancelledBy ? `${cls.cancelledBy} on ${formatDate(cls.cancelledAt)}` : '-'}

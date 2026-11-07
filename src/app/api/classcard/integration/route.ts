@@ -212,6 +212,16 @@ function attendanceStatus(value: unknown): 'PRESENT' | 'ABSENT' | 'ABSENT_BILLAB
   return 'UNMARKED';
 }
 
+function classStatusFromSource(event: Record<string, unknown>, startTime: Date, endTime: Date): 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'LATE_CANCELLED' {
+  const classData = objectValue(event.class);
+  const sourceStatus = String(firstValue(event, ['event_status', 'status', 'class_status', 'cancellation_status']) ?? firstValue(classData, ['status', 'event_status']) ?? '').toLowerCase();
+  if (sourceStatus.includes('late') && sourceStatus.includes('cancel')) return 'LATE_CANCELLED';
+  if (sourceStatus.includes('cancel')) return 'CANCELLED';
+  if (endTime.getTime() <= Date.now()) return 'COMPLETED';
+  if (startTime.getTime() <= Date.now()) return 'IN_PROGRESS';
+  return 'SCHEDULED';
+}
+
 function csvCell(value: unknown): string {
   const text = value === null || value === undefined ? '' : String(value);
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
@@ -382,10 +392,11 @@ export async function POST(req: NextRequest) {
           attendanceStatus: String(event.attendance_status || ''), rawPayload: JSON.parse(JSON.stringify(event)) as Prisma.InputJsonValue,
         });
         if (!mentor || !subject) continue;
+        const classStatus = classStatusFromSource(event, startTime, endTime);
         const classEvent = await prisma.classEvent.upsert({
           where: { externalId },
-          create: { id: `classcard-${externalId}`, branchId: mentor.branchId, subjectId: subject.id, mentorId: mentor.id, title: String(event.subjectName || subject.name), startTime, endTime, durationMinutes: Math.max(1, Math.round((endTime.getTime() - startTime.getTime()) / 60000)), status: 'COMPLETED', externalId, provenance: 'CLASSCARD_SOURCED' },
-          update: { branchId: mentor.branchId, subjectId: subject.id, mentorId: mentor.id, title: String(event.subjectName || subject.name), startTime, endTime, status: 'COMPLETED', provenance: 'CLASSCARD_SOURCED' },
+          create: { id: `classcard-${externalId}`, branchId: mentor.branchId, subjectId: subject.id, mentorId: mentor.id, title: String(event.subjectName || subject.name), startTime, endTime, durationMinutes: Math.max(1, Math.round((endTime.getTime() - startTime.getTime()) / 60000)), status: classStatus, externalId, provenance: 'CLASSCARD_SOURCED' },
+          update: { branchId: mentor.branchId, subjectId: subject.id, mentorId: mentor.id, title: String(event.subjectName || subject.name), startTime, endTime, status: classStatus, provenance: 'CLASSCARD_SOURCED' },
         });
         await prisma.classcardEvent.update({ where: { externalId }, data: { classEventId: classEvent.id } });
         sessionsMapped++;
@@ -482,10 +493,11 @@ export async function POST(req: NextRequest) {
         // ClassEvent has a required local subject. Keep subject-less events staged in
         // ClasscardEvent until Operations maps the subject rather than inventing one.
         if (mentor && subject) {
+          const classStatus = classStatusFromSource(event, startTime, endTime);
           const classEvent = await prisma.classEvent.upsert({
             where: { externalId },
-            create: { id: `classcard-${externalId}`, branchId: mentor.branchId, subjectId: subject.id, mentorId: mentor.id, title: String(firstValue(event, ['title', 'subjectName']) || subject.name), startTime, endTime, durationMinutes: Math.max(1, Math.round((endTime.getTime() - startTime.getTime()) / 60000)), status: 'SCHEDULED', externalId, provenance: 'CLASSCARD_SOURCED' },
-            update: { branchId: mentor.branchId, subjectId: subject.id, mentorId: mentor.id, title: String(firstValue(event, ['title', 'subjectName']) || subject.name), startTime, endTime, durationMinutes: Math.max(1, Math.round((endTime.getTime() - startTime.getTime()) / 60000)), provenance: 'CLASSCARD_SOURCED' },
+            create: { id: `classcard-${externalId}`, branchId: mentor.branchId, subjectId: subject.id, mentorId: mentor.id, title: String(firstValue(event, ['title', 'subjectName']) || subject.name), startTime, endTime, durationMinutes: Math.max(1, Math.round((endTime.getTime() - startTime.getTime()) / 60000)), status: classStatus, externalId, provenance: 'CLASSCARD_SOURCED' },
+            update: { branchId: mentor.branchId, subjectId: subject.id, mentorId: mentor.id, title: String(firstValue(event, ['title', 'subjectName']) || subject.name), startTime, endTime, durationMinutes: Math.max(1, Math.round((endTime.getTime() - startTime.getTime()) / 60000)), status: classStatus, provenance: 'CLASSCARD_SOURCED' },
           });
           await prisma.classcardEvent.update({ where: { externalId }, data: { classEventId: classEvent.id } });
           materialized++;

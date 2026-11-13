@@ -25,8 +25,9 @@ export async function POST(req: NextRequest) {
   const email = String(body.email || '').trim().toLowerCase();
   if (!firstName || !lastName || !email.includes('@')) return NextResponse.json({ success: false, error: 'First name, last name, and a valid email are required.' }, { status: 400 });
   try {
+    const employeeCode = `LU-EMP-${new Date().getUTCFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
     const employee = await prisma.employee.create({ data: {
-      firstName, lastName, email, phone: String(body.phone || '').trim() || null,
+      employeeCode, firstName, lastName, email, phone: String(body.phone || '').trim() || null,
       department: String(body.department || '').trim() || null, jobTitle: String(body.jobTitle || '').trim() || null,
       branchId: body.branchId || null, startDate: body.startDate ? new Date(body.startDate) : null,
       fixedPay: Number(body.fixedPay || 0), variablePay: Number(body.variablePay || 0),

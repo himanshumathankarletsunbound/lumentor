@@ -1,0 +1,3 @@
+CREATE TABLE "EmployeeMonthlyAttendance" ("id" TEXT NOT NULL, "employeeId" TEXT NOT NULL, "month" TEXT NOT NULL, "totalWorkingDays" INTEGER NOT NULL, "daysWorked" INTEGER NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL, CONSTRAINT "EmployeeMonthlyAttendance_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX "EmployeeMonthlyAttendance_employeeId_month_key" ON "EmployeeMonthlyAttendance"("employeeId", "month");
+ALTER TABLE "EmployeeMonthlyAttendance" ADD CONSTRAINT "EmployeeMonthlyAttendance_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE CASCADE ON UPDATE CASCADE;

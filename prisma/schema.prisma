@@ -233,6 +233,7 @@ model User {
 
 model Employee {
   id          String         @id @default(uuid())
+  employeeCode String        @unique
   userId      String?        @unique
   user        User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
   branchId    String?
@@ -253,6 +254,19 @@ model Employee {
   updatedAt   DateTime       @updatedAt
   leaveRequests LeaveRequest[]
   payrollLines EmployeePayrollLine[]
+  monthlyAttendance EmployeeMonthlyAttendance[]
+}
+
+model EmployeeMonthlyAttendance {
+  id String @id @default(uuid())
+  employeeId String
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  month String
+  totalWorkingDays Int
+  daysWorked Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([employeeId, month])
 }
 
 model EmployeePayrollBatch {

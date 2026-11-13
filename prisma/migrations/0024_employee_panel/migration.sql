@@ -1,7 +1,8 @@
 ALTER TYPE "SystemRole" ADD VALUE IF NOT EXISTS 'EMPLOYEE';
 CREATE TYPE "EmployeeStatus" AS ENUM ('ACTIVE', 'INACTIVE');
 CREATE TYPE "LeaveRequestStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED');
-CREATE TABLE "Employee" ("id" TEXT NOT NULL, "userId" TEXT, "branchId" TEXT, "firstName" TEXT NOT NULL, "lastName" TEXT NOT NULL, "email" TEXT NOT NULL, "phone" TEXT, "department" TEXT, "jobTitle" TEXT, "startDate" TIMESTAMP(3), "status" "EmployeeStatus" NOT NULL DEFAULT 'ACTIVE', "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL, CONSTRAINT "Employee_pkey" PRIMARY KEY ("id"));
+CREATE TABLE "Employee" ("id" TEXT NOT NULL, "employeeCode" TEXT NOT NULL, "userId" TEXT, "branchId" TEXT, "firstName" TEXT NOT NULL, "lastName" TEXT NOT NULL, "email" TEXT NOT NULL, "phone" TEXT, "department" TEXT, "jobTitle" TEXT, "startDate" TIMESTAMP(3), "status" "EmployeeStatus" NOT NULL DEFAULT 'ACTIVE', "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL, CONSTRAINT "Employee_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX "Employee_employeeCode_key" ON "Employee"("employeeCode");
 CREATE UNIQUE INDEX "Employee_userId_key" ON "Employee"("userId");
 CREATE UNIQUE INDEX "Employee_email_key" ON "Employee"("email");
 ALTER TABLE "Employee" ADD CONSTRAINT "Employee_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;

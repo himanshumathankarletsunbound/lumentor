@@ -280,6 +280,8 @@ model EmployeePayrollLine {
   variablePercent Decimal @db.Decimal(5,2) @default(0)
   variableAmount Decimal @db.Decimal(12,2) @default(0)
   additionalPayment Decimal @db.Decimal(12,2) @default(0)
+  tdsPercent Decimal? @db.Decimal(5,2)
+  tdsAmount Decimal @db.Decimal(12,2) @default(0)
   variablePay Decimal @db.Decimal(12,2)
   totalPayable Decimal @db.Decimal(12,2)
   @@unique([batchId, employeeId])

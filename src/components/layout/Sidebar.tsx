@@ -298,6 +298,15 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
       ];
     }
 
+    if (role === 'EMPLOYEE') {
+      return [{ groupName: 'Employee Panel', items: [
+        { name: 'My Dashboard', href: '/employee/dashboard', icon: <LayoutDashboard className="w-4 h-4" />, module: 'employee_records' },
+        { name: 'Employee Records', href: '/employee/records', icon: <Users className="w-4 h-4" />, module: 'employee_records' },
+        { name: 'Leave Management', href: '/employee/leave-management', icon: <CalendarClock className="w-4 h-4" />, module: 'leave_management' },
+        { name: 'Employee Settings', href: '/employee/settings', icon: <Settings className="w-4 h-4" />, module: 'employee_settings' },
+      ] }];
+    }
+
     // Default: ADMINISTRATOR
     return [
       {
@@ -421,6 +430,9 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
             module: 'payroll_rules',
           },
           {
+            name: 'Employee Payroll', href: '/finance/employee-payroll', icon: <CreditCard className="w-4 h-4" />, module: 'payroll_processing',
+          },
+          {
             name: 'Single Payout',
             href: '/finance/single-payout',
             icon: <CreditCard className="w-4 h-4" />,
@@ -498,6 +510,15 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
             icon: <BarChart3 className="w-4 h-4" />,
             module: 'analytics',
           },
+        ],
+      },
+      {
+        groupName: 'Employee Panel',
+        items: [
+          { name: 'Employee Dashboard', href: '/employee/dashboard', icon: <LayoutDashboard className="w-4 h-4" />, module: 'employee_records' },
+          { name: 'Employee Records', href: '/employee/records', icon: <Users className="w-4 h-4" />, module: 'employee_records' },
+          { name: 'Leave Management', href: '/employee/leave-management', icon: <CalendarClock className="w-4 h-4" />, module: 'leave_management' },
+          { name: 'Employee Settings', href: '/employee/settings', icon: <Settings className="w-4 h-4" />, module: 'employee_settings' },
         ],
       },
       {

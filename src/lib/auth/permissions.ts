@@ -28,6 +28,11 @@ export function hasPermission(
     return true;
   }
 
+  if (user.role === 'EMPLOYEE') {
+    if (!['employee_records', 'leave_management', 'employee_settings'].includes(module)) return false;
+    return action === 'view' || action === 'create' || action === 'edit';
+  }
+
   if (user.role === 'AUDIT') {
     if (module !== 'mentor_reviews' && module !== 'overview') return false;
     if (module === 'overview') return action === 'view' || action === 'export';

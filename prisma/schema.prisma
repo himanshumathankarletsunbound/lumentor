@@ -14,7 +14,20 @@ enum SystemRole {
   OPERATIONS
   AUDIT
   MENTOR
+  EMPLOYEE
   CUSTOM
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum LeaveRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
 }
 
 enum DataProvenance {
@@ -138,6 +151,7 @@ model Branch {
 
   students    Student[]
   mentors     Mentor[]
+  employees   Employee[]
   classes     ClassEvent[]
   invoices    Invoice[]
   penalties   Penalty[]
@@ -206,6 +220,7 @@ model User {
   roleDef      Role?      @relation(fields: [roleId], references: [id])
   mentorId     String?    @unique
   mentor       Mentor?    @relation(fields: [mentorId], references: [id])
+  employee     Employee?
   isActive     Boolean    @default(true)
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
@@ -214,6 +229,77 @@ model User {
   auditReviews     MentorReview[] @relation("AuditReviews")
   operationReviews MentorReview[] @relation("OperationReviews")
   classcardClassMappings ClasscardClassMapping[] @relation("ClasscardClassMappings")
+}
+
+model Employee {
+  id          String         @id @default(uuid())
+  userId      String?        @unique
+  user        User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  branchId    String?
+  branch      Branch?        @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  firstName   String
+  lastName    String
+  email       String         @unique
+  phone       String?
+  department  String?
+  jobTitle    String?
+  startDate   DateTime?
+  fixedPay    Decimal        @default(0) @db.Decimal(12, 2)
+  variablePay Decimal        @default(0) @db.Decimal(12, 2)
+  tdsEnabled  Boolean        @default(false)
+  tdsPercent  Decimal?       @db.Decimal(5, 2)
+  status      EmployeeStatus @default(ACTIVE)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  leaveRequests LeaveRequest[]
+  payrollLines EmployeePayrollLine[]
+}
+
+model EmployeePayrollBatch {
+  id String @id @default(uuid())
+  month String @unique
+  status PayrollBatchStatus @default(DRAFT)
+  submittedAt DateTime?
+  approvedAt DateTime?
+  approvedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lines EmployeePayrollLine[]
+}
+
+model EmployeePayrollLine {
+  id String @id @default(uuid())
+  batchId String
+  batch EmployeePayrollBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  totalWorkingDays Int
+  daysWorked Int
+  leaveDays Int
+  fixedSalary Decimal @db.Decimal(12,2)
+  variablePercent Decimal @db.Decimal(5,2) @default(0)
+  variableAmount Decimal @db.Decimal(12,2) @default(0)
+  additionalPayment Decimal @db.Decimal(12,2) @default(0)
+  variablePay Decimal @db.Decimal(12,2)
+  totalPayable Decimal @db.Decimal(12,2)
+  @@unique([batchId, employeeId])
+}
+
+model LeaveRequest {
+  id          String             @id @default(uuid())
+  employeeId  String
+  employee    Employee           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  startDate   DateTime
+  endDate     DateTime
+  leaveType   String
+  reason      String?
+  status      LeaveRequestStatus @default(PENDING)
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  @@index([employeeId, startDate])
+  @@index([status])
 }
 
 model Role {

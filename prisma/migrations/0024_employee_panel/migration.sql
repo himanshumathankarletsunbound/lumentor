@@ -1,0 +1,12 @@
+ALTER TYPE "SystemRole" ADD VALUE IF NOT EXISTS 'EMPLOYEE';
+CREATE TYPE "EmployeeStatus" AS ENUM ('ACTIVE', 'INACTIVE');
+CREATE TYPE "LeaveRequestStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED');
+CREATE TABLE "Employee" ("id" TEXT NOT NULL, "userId" TEXT, "branchId" TEXT, "firstName" TEXT NOT NULL, "lastName" TEXT NOT NULL, "email" TEXT NOT NULL, "phone" TEXT, "department" TEXT, "jobTitle" TEXT, "startDate" TIMESTAMP(3), "status" "EmployeeStatus" NOT NULL DEFAULT 'ACTIVE', "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL, CONSTRAINT "Employee_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX "Employee_userId_key" ON "Employee"("userId");
+CREATE UNIQUE INDEX "Employee_email_key" ON "Employee"("email");
+ALTER TABLE "Employee" ADD CONSTRAINT "Employee_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Employee" ADD CONSTRAINT "Employee_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES "Branch"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+CREATE TABLE "LeaveRequest" ("id" TEXT NOT NULL, "employeeId" TEXT NOT NULL, "startDate" TIMESTAMP(3) NOT NULL, "endDate" TIMESTAMP(3) NOT NULL, "leaveType" TEXT NOT NULL, "reason" TEXT, "status" "LeaveRequestStatus" NOT NULL DEFAULT 'PENDING', "reviewedBy" TEXT, "reviewedAt" TIMESTAMP(3), "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL, CONSTRAINT "LeaveRequest_pkey" PRIMARY KEY ("id"));
+CREATE INDEX "LeaveRequest_employeeId_startDate_idx" ON "LeaveRequest"("employeeId", "startDate");
+CREATE INDEX "LeaveRequest_status_idx" ON "LeaveRequest"("status");
+ALTER TABLE "LeaveRequest" ADD CONSTRAINT "LeaveRequest_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE CASCADE ON UPDATE CASCADE;

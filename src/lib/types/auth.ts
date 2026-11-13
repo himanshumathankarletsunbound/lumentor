@@ -1,4 +1,4 @@
-export type SystemRole = 'ADMINISTRATOR' | 'OPERATIONS' | 'AUDIT' | 'MENTOR' | 'CUSTOM';
+export type SystemRole = 'ADMINISTRATOR' | 'OPERATIONS' | 'AUDIT' | 'MENTOR' | 'EMPLOYEE' | 'CUSTOM';
 
 export type UserStatus = 'ACTIVE' | 'SENT_PASSWORD_VERIFICATION' | 'SUSPENDED' | 'DISABLED';
 
@@ -24,7 +24,10 @@ export type PermissionModule =
   | 'classcard_integration'
   | 'audit_logs'
   | 'mentor_reviews'
-  | 'settings';
+  | 'settings'
+  | 'employee_records'
+  | 'leave_management'
+  | 'employee_settings';
 
 export type PermissionAction =
   | 'view'

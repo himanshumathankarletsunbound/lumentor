@@ -106,6 +106,16 @@ export const SEED_ROLES: UserRole[] = [
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
   },
+  {
+    id: 'role-employee', name: 'Employee', systemRole: 'EMPLOYEE',
+    description: 'Employee self-service access for personal records, leave, and settings.',
+    permissions: [
+      { module: 'employee_records', actions: ['view', 'edit'] },
+      { module: 'leave_management', actions: ['view', 'create', 'edit'] },
+      { module: 'employee_settings', actions: ['view', 'edit'] },
+    ],
+    createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z',
+  },
 ];
 
 export const SEED_USERS: CurrentUser[] = [

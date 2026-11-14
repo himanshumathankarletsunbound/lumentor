@@ -1303,7 +1303,10 @@ export async function savePersistedEmailConfig(
   config: Partial<EmailConfig>,
 ): Promise<void> {
   const { setEncryptedSecret } = await import("./secure-storage");
-  await setEncryptedSecret("email.config", JSON.stringify(config));
+  // Individual actions (such as recording a test result) must not erase the
+  // sender address and delivery settings saved by the configuration screen.
+  const current = await getPersistedEmailConfig();
+  await setEncryptedSecret("email.config", JSON.stringify({ ...current, ...config }));
 }
 
 export async function getOrganizationSettings() {

@@ -301,8 +301,10 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
     if (role === 'EMPLOYEE') {
       return [{ groupName: 'Employee Panel', items: [
         { name: 'My Dashboard', href: '/employee/dashboard', icon: <LayoutDashboard className="w-4 h-4" />, module: 'employee_records' },
+        { name: 'Attendance', href: '/employee/attendance', icon: <CheckSquare className="w-4 h-4" />, module: 'employee_records' },
         { name: 'Employee Records', href: '/employee/records', icon: <Users className="w-4 h-4" />, module: 'employee_records' },
         { name: 'Leave Management', href: '/employee/leave-management', icon: <CalendarClock className="w-4 h-4" />, module: 'leave_management' },
+        { name: 'Payroll', href: '/finance/employee-payroll', icon: <CreditCard className="w-4 h-4" />, module: 'payroll_processing' },
         { name: 'Employee Settings', href: '/employee/settings', icon: <Settings className="w-4 h-4" />, module: 'employee_settings' },
       ] }];
     }

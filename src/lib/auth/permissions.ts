@@ -29,7 +29,7 @@ export function hasPermission(
   }
 
   if (user.role === 'EMPLOYEE') {
-    if (!['employee_records', 'leave_management', 'employee_settings'].includes(module)) return false;
+    if (!['employee_records', 'leave_management', 'employee_settings', 'payroll_processing'].includes(module)) return false;
     return action === 'view' || action === 'create' || action === 'edit';
   }
 

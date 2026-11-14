@@ -24,6 +24,7 @@ enum EmployeeStatus {
 }
 
 enum LeaveRequestStatus {
+  DRAFT
   PENDING
   APPROVED
   REJECTED
@@ -255,6 +256,7 @@ model Employee {
   leaveRequests LeaveRequest[]
   payrollLines EmployeePayrollLine[]
   monthlyAttendance EmployeeMonthlyAttendance[]
+  attendanceRecords EmployeeAttendance[]
 }
 
 model EmployeeMonthlyAttendance {
@@ -267,6 +269,20 @@ model EmployeeMonthlyAttendance {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@unique([employeeId, month])
+}
+
+model EmployeeAttendance {
+  id String @id @default(uuid())
+  employeeId String
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date DateTime
+  checkIn DateTime?
+  checkOut DateTime?
+  status String @default("PRESENT")
+  missedReason String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([employeeId, date])
 }
 
 model EmployeePayrollBatch {
@@ -312,6 +328,8 @@ model LeaveRequest {
   status      LeaveRequestStatus @default(PENDING)
   reviewedBy  String?
   reviewedAt  DateTime?
+  reviewNotes String?
+  supportingDocumentUrl String?
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
   @@index([employeeId, startDate])

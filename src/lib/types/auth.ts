@@ -9,6 +9,7 @@ export type SystemRole =
 export type UserStatus =
   | "ACTIVE"
   | "SENT_PASSWORD_VERIFICATION"
+  | "PASSWORD_SETUP_DELIVERY_FAILED"
   | "SUSPENDED"
   | "DISABLED";
 

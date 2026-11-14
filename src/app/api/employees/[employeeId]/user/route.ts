@@ -170,6 +170,9 @@ export async function POST(
       setupUrl,
     );
     if (!email.success)
+      {
+        saved.status = "PASSWORD_SETUP_DELIVERY_FAILED";
+        await saveUser(saved);
       return NextResponse.json(
         {
           success: false,
@@ -183,6 +186,7 @@ export async function POST(
         },
         { status: 503 },
       );
+      }
   }
   await prisma.auditEvent.create({
     data: {

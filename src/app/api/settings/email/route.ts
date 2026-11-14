@@ -3,6 +3,7 @@ import { getServerEmailSecrets, googleOAuthConfig } from '../../../../lib/config
 import { authorizationErrorAsync } from '../../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../../lib/db/server-initialization';
 import { getPersistedEmailConfig, savePersistedEmailConfig } from '../../../../lib/db/state-repository';
+import { getAuthorizedWorkspaceEmail } from '../../../../lib/email/service';
 
 function safeEmailConfig(config: Partial<import('../../../../lib/types/email').EmailConfig>) {
   const google = googleOAuthConfig();
@@ -31,7 +32,16 @@ export async function GET(req: NextRequest) {
   if (denied) return denied;
   try {
     const secrets = await getServerEmailSecrets();
-    const config = await getPersistedEmailConfig();
+    let config = await getPersistedEmailConfig();
+    // Older test-result writes could overwrite the non-secret sender profile.
+    // Recover it from the authorized OAuth account when possible.
+    if ((!config.user || !config.fromEmail) && secrets.oauthRefreshToken) {
+      const authorizedEmail = await getAuthorizedWorkspaceEmail();
+      if (authorizedEmail) {
+        config = { ...config, user: config.user || authorizedEmail, fromEmail: config.fromEmail || authorizedEmail };
+        await savePersistedEmailConfig(config);
+      }
+    }
     return NextResponse.json({
       success: true,
       emailConfig: { ...safeEmailConfig(config), oauthConnected: Boolean(secrets.oauthRefreshToken) },

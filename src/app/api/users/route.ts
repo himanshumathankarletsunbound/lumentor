@@ -136,6 +136,8 @@ export async function POST(req: NextRequest) {
     if (resetUrl && sendPasswordSetupEmailFlag) {
       const email = await sendPasswordSetupEmail(newUser.email, newUser.name, resetUrl);
       if (!email.success) {
+        newUser.status = 'PASSWORD_SETUP_DELIVERY_FAILED';
+        await saveUser(newUser);
         return NextResponse.json(
           { success: false, error: `User created, but the welcome email was not sent: ${email.error || 'email service unavailable'}`, user: sanitizeUser(newUser) },
           { status: 503 },
@@ -192,6 +194,8 @@ export async function PATCH(req: NextRequest) {
 
       const email = await sendPasswordSetupEmail(user.email, user.name, resetUrl);
       if (!email.success) {
+        user.status = 'PASSWORD_SETUP_DELIVERY_FAILED';
+        await saveUser(user);
         return NextResponse.json(
           { success: false, error: `Password setup email was not sent: ${email.error || 'email service unavailable'}`, user: sanitizeUser(user) },
           { status: 503 },
@@ -231,7 +235,7 @@ export async function PATCH(req: NextRequest) {
 
     // Action 2: Update status
     if (body.status) {
-      const validStatuses: UserStatus[] = ['ACTIVE', 'SENT_PASSWORD_VERIFICATION', 'SUSPENDED', 'DISABLED'];
+      const validStatuses: UserStatus[] = ['ACTIVE', 'SENT_PASSWORD_VERIFICATION', 'PASSWORD_SETUP_DELIVERY_FAILED', 'SUSPENDED', 'DISABLED'];
       if (!validStatuses.includes(body.status)) {
         return NextResponse.json(
           { success: false, error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` },

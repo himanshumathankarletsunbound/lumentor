@@ -1,7 +1,7 @@
 import nodemailer from 'nodemailer';
 import { EmailConfig } from '../types/email';
 import { db } from '../db/store';
-import { getServerEmailSecrets } from '../config/server';
+import { getServerEmailSecrets, googleOAuthConfig } from '../config/server';
 import { getPersistedEmailConfig } from '../db/state-repository';
 
 async function resolveEmailSecrets(config: EmailConfig): Promise<EmailConfig> {
@@ -61,6 +61,27 @@ export async function verifyGmailConnection(config: EmailConfig): Promise<{ succ
       success: false,
       message: err instanceof Error ? err.message : 'Failed to authenticate with Google Workspace.',
     };
+  }
+}
+
+/** Recover the sender address from an already-authorized Google Workspace
+ * account. This is used only when a historical settings write lost the
+ * non-secret sender profile; it does not enable outbound email. */
+export async function getAuthorizedWorkspaceEmail(): Promise<string | undefined> {
+  try {
+    const [google, secrets] = await Promise.all([googleOAuthConfig(), getServerEmailSecrets()]);
+    if (!google.clientId || !google.clientSecret || !secrets.oauthRefreshToken) return undefined;
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ client_id: google.clientId, client_secret: google.clientSecret, refresh_token: secrets.oauthRefreshToken, grant_type: 'refresh_token' }),
+    });
+    const token = await tokenResponse.json() as { access_token?: string };
+    if (!tokenResponse.ok || !token.access_token) return undefined;
+    const profileResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', { headers: { Authorization: `Bearer ${token.access_token}` } });
+    const profile = await profileResponse.json() as { email?: string };
+    return profileResponse.ok && profile.email?.includes('@') ? profile.email.toLowerCase() : undefined;
+  } catch {
+    return undefined;
   }
 }
 

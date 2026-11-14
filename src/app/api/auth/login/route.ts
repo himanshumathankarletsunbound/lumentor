@@ -50,11 +50,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (status === 'SENT_PASSWORD_VERIFICATION' && (!user.passwordHash || !user.salt)) {
+    if ((status === 'SENT_PASSWORD_VERIFICATION' || status === 'PASSWORD_SETUP_DELIVERY_FAILED') && (!user.passwordHash || !user.salt)) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Password verification pending. Please use the password setup link sent to your email.',
+          error: status === 'PASSWORD_SETUP_DELIVERY_FAILED' ? 'Password setup email could not be delivered. Ask an administrator to resend it after email settings are fixed.' : 'Password verification pending. Please use the password setup link sent to your email.',
         },
         { status: 403 }
       );

@@ -365,6 +365,8 @@ export default function UsersRolesPage() {
     switch (s) {
       case 'SENT_PASSWORD_VERIFICATION':
         return 'Sent Password Verification';
+      case 'PASSWORD_SETUP_DELIVERY_FAILED':
+        return 'Setup Email Failed';
       case 'SUSPENDED':
         return 'Suspended';
       case 'DISABLED':
@@ -381,6 +383,12 @@ export default function UsersRolesPage() {
         return (
           <Badge variant="info" size="sm" dot>
             Sent Password Verification
+          </Badge>
+        );
+      case 'PASSWORD_SETUP_DELIVERY_FAILED':
+        return (
+          <Badge variant="danger" size="sm" dot>
+            Setup Email Failed
           </Badge>
         );
       case 'SUSPENDED':

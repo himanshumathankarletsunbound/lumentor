@@ -28,28 +28,75 @@ type Data = {
   components: Component[];
   totalPayable: number;
   pendingMessage?: string | null;
+  error?: string;
+  linkState?: {
+    accountEmail: string | null;
+    mentorEmail: string | null;
+    reason: string;
+  };
 };
 const money = (value: number) =>
   `₹${value.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
 export default function EmployeeDashboardPage() {
   const [data, setData] = useState<Data | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void fetch("/api/employee-dashboard")
-        .then((response) => response.json())
-        .then(setData);
+        .then(async (response) => {
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok || payload.success === false)
+            throw new Error(
+              payload.error || "Unable to load the Employee Dashboard.",
+            );
+          setData(payload);
+        })
+        .catch((error: unknown) =>
+          setLoadError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load the Employee Dashboard.",
+          ),
+        );
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
-  if (!data?.employee)
+  if (loadError)
+    return (
+      <AppShell>
+        <Card>
+          <CardHeader title="Employee Dashboard unavailable" />
+          <CardContent>{loadError}</CardContent>
+        </Card>
+      </AppShell>
+    );
+  if (!data)
+    return (
+      <AppShell>
+        <Card>
+          <CardHeader title="Loading Employee Dashboard" />
+          <CardContent>
+            Checking your employee and mentor account links…
+          </CardContent>
+        </Card>
+      </AppShell>
+    );
+  if (!data.employee)
     return (
       <AppShell>
         <Card>
           <CardHeader title="Profile pending" />
           <CardContent>
-            Your portal account is not linked to an employee record yet. Ask an
-            administrator to link it.
+            {data.linkState?.reason ||
+              "Your portal account is not linked to an employee record yet."}
+            <span className="mt-2 block text-xs text-slate-500">
+              Signed-in email: {data.linkState?.accountEmail || "not available"}
+              {data.linkState?.mentorEmail &&
+              data.linkState.mentorEmail !== data.linkState.accountEmail
+                ? ` · Mentor record email: ${data.linkState.mentorEmail}`
+                : ""}
+            </span>
           </CardContent>
         </Card>
       </AppShell>

@@ -39,20 +39,45 @@ export async function GET(req: NextRequest) {
   // Recover safely from an interrupted account-creation flow. The work email
   // is unique on Employee and User, so an unlinked employee record with the
   // exact signed-in email can be connected without guessing an identity.
+  const mentorEmail = user?.mentorId
+    ? (
+        await prisma.mentor.findUnique({
+          where: { id: user.mentorId },
+          select: { email: true },
+        })
+      )?.email
+    : undefined;
   if (!employee && user?.email) {
+    const candidateEmails = [
+      ...new Set(
+        [user.email, mentorEmail]
+          .filter((email): email is string => Boolean(email))
+          .map((email) => email.trim().toLowerCase()),
+      ),
+    ];
     const emailMatchedEmployee = await prisma.employee.findUnique({
-      where: { email: user.email.trim().toLowerCase() },
+      where: { email: candidateEmails[0] || user.email.trim().toLowerCase() },
       include: { leaveRequests: { orderBy: { createdAt: "desc" }, take: 5 } },
     });
+    const mentorEmailMatchedEmployee =
+      !emailMatchedEmployee && candidateEmails[1]
+        ? await prisma.employee.findUnique({
+            where: { email: candidateEmails[1] },
+            include: {
+              leaveRequests: { orderBy: { createdAt: "desc" }, take: 5 },
+            },
+          })
+        : null;
+    const matchedEmployee = emailMatchedEmployee || mentorEmailMatchedEmployee;
     if (
-      emailMatchedEmployee &&
-      (!emailMatchedEmployee.userId || emailMatchedEmployee.userId === user.id)
+      matchedEmployee &&
+      (!matchedEmployee.userId || matchedEmployee.userId === user.id)
     ) {
       employee =
-        emailMatchedEmployee.userId === user.id
-          ? emailMatchedEmployee
+        matchedEmployee.userId === user.id
+          ? matchedEmployee
           : await prisma.employee.update({
-              where: { id: emailMatchedEmployee.id },
+              where: { id: matchedEmployee.id },
               data: { userId: user.id },
               include: {
                 leaveRequests: { orderBy: { createdAt: "desc" }, take: 5 },
@@ -66,6 +91,12 @@ export async function GET(req: NextRequest) {
       employee: null,
       components: [],
       totalPayable: 0,
+      linkState: {
+        accountEmail: user?.email || null,
+        mentorEmail: mentorEmail || null,
+        reason:
+          "No unlinked Employee Record was found for this account's work email.",
+      },
     });
 
   const requestedMonth =

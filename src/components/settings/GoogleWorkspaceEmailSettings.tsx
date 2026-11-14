@@ -67,7 +67,7 @@ export function GoogleWorkspaceEmailSettings() {
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || 'Unable to save email settings.');
       setSettings((current) => ({ ...current, ...data.emailConfig }));
-      setMessage('Google Workspace outbound email settings saved.');
+      setMessage(data.emailConfig.isEnabled ? 'Sender details saved. Outbound email is enabled for invitations and password resets.' : 'Sender details saved. Outbound email is still disabled.');
       setIsEditing(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to save email settings.');

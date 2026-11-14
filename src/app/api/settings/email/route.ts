@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
     const current = await getPersistedEmailConfig();
     const user = String(body.user ?? current.user ?? '').trim();
     const fromEmail = String(body.fromEmail ?? user ?? current.fromEmail ?? '').trim();
-    const fromName = String(body.fromName ?? current.fromName ?? 'LUmentor Notifications').trim();
+    const fromName = String(body.fromName ?? current.fromName ?? '').trim() || 'LUmentor Notifications';
     const replyTo = String(body.replyTo ?? current.replyTo ?? '').trim();
     const isEnabled = Boolean(body.isEnabled);
     const google = googleOAuthConfig();

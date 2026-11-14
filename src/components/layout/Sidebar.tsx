@@ -516,10 +516,9 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
       {
         groupName: 'Employee Panel',
         items: [
-          { name: 'Employee Dashboard', href: '/employee/dashboard', icon: <LayoutDashboard className="w-4 h-4" />, module: 'employee_records' },
           { name: 'Employee Records', href: '/employee/records', icon: <Users className="w-4 h-4" />, module: 'employee_records' },
-          { name: 'Leave Management', href: '/employee/leave-management', icon: <CalendarClock className="w-4 h-4" />, module: 'leave_management' },
-          { name: 'Employee Settings', href: '/employee/settings', icon: <Settings className="w-4 h-4" />, module: 'employee_settings' },
+          { name: 'Leave Requests', href: '/admin/employee-leave-requests', icon: <CalendarClock className="w-4 h-4" />, module: 'leave_management' },
+          { name: 'Attendance Misses', href: '/admin/employee-attendance-misses', icon: <AlertTriangle className="w-4 h-4" />, module: 'employee_records' },
         ],
       },
       {

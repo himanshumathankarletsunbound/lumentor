@@ -20,7 +20,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (usernameOrEmail: string, password?: string, rememberMe?: boolean) => Promise<{ success: boolean; user?: CurrentUser; error?: string }>;
   logout: () => Promise<void>;
-  requestPasswordReset: (email: string) => Promise<{ success: boolean; message?: string; error?: string; resetUrl?: string }>;
+  requestPasswordReset: (email: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   resetPassword: (token: string, newPassword: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   selectedBranch: string; // 'ALL' or branchId
   setSelectedBranch: (branchId: string) => void;
@@ -141,16 +141,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const requestPasswordReset = async (
     email: string
-  ): Promise<{ success: boolean; message?: string; error?: string; resetUrl?: string }> => {
+  ): Promise<{ success: boolean; message?: string; error?: string }> => {
     try {
       const res = await fetch('/api/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       });
-      const data = await readApiResponse<{ success?: boolean; message?: string; error?: string; resetUrl?: string }>(res);
+      const data = await readApiResponse<{ success?: boolean; message?: string; error?: string }>(res);
       if (data.success) {
-        return { success: true, message: data.message, resetUrl: data.resetUrl };
+        return { success: true, message: data.message };
       }
       return { success: false, error: data.error || 'Failed to request password reset.' };
     } catch (err) {

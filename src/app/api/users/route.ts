@@ -134,9 +134,13 @@ export async function POST(req: NextRequest) {
 
     // Send setup email through the configured Google Workspace OAuth account.
     if (resetUrl && sendPasswordSetupEmailFlag) {
-      sendPasswordSetupEmail(newUser.email, newUser.name, resetUrl).catch((err) => {
-        console.warn('Failed to dispatch password setup email:', err);
-      });
+      const email = await sendPasswordSetupEmail(newUser.email, newUser.name, resetUrl);
+      if (!email.success) {
+        return NextResponse.json(
+          { success: false, error: `User created, but the welcome email was not sent: ${email.error || 'email service unavailable'}`, user: sanitizeUser(newUser) },
+          { status: 503 },
+        );
+      }
     }
 
     return NextResponse.json({
@@ -186,10 +190,13 @@ export async function PATCH(req: NextRequest) {
 
       await auditUserAction(req, 'PASSWORD_RESET_RESENT', user.id, `Resent password setup link to ${user.email}`);
 
-      // Dispatch email
-      sendPasswordSetupEmail(user.email, user.name, resetUrl).catch((err) => {
-        console.warn('Failed to dispatch password setup email on resend:', err);
-      });
+      const email = await sendPasswordSetupEmail(user.email, user.name, resetUrl);
+      if (!email.success) {
+        return NextResponse.json(
+          { success: false, error: `Password setup email was not sent: ${email.error || 'email service unavailable'}`, user: sanitizeUser(user) },
+          { status: 503 },
+        );
+      }
 
       return NextResponse.json({
         success: true,

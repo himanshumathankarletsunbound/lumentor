@@ -6,13 +6,11 @@ import { useAuth } from '../../lib/auth/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { Alert } from '../../components/ui/Alert';
 import {
-  ShieldCheck,
   Mail,
   ArrowRight,
   ArrowLeft,
   CheckCircle2,
   KeyRound,
-  ExternalLink,
 } from 'lucide-react';
 
 export default function ForgotPasswordPage() {
@@ -21,7 +19,6 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('himanshu.m@letsunbound.com');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [resetUrl, setResetUrl] = useState<string | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -39,9 +36,6 @@ export default function ForgotPasswordPage() {
 
     if (res.success) {
       setIsSubmitted(true);
-      if (res.resetUrl) {
-        setResetUrl(res.resetUrl);
-      }
     } else {
       setError(res.error || 'Unable to generate password reset request.');
     }
@@ -93,31 +87,13 @@ export default function ForgotPasswordPage() {
               </div>
               <div>
                 <h3 className="text-base font-bold text-white">
-                  Reset Token Generated
+                  Check Your Email
                 </h3>
                 <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">
-                  A password reset authorization token has been generated for{' '}
-                  <span className="font-semibold text-white">{email}</span>. The token is valid for 60 minutes.
+                  Password reset instructions were sent to{' '}
+                  <span className="font-semibold text-white">{email}</span>. The link is valid for 60 minutes.
                 </p>
               </div>
-
-              {resetUrl && (
-                <div className="p-3.5 rounded-xl bg-slate-800/80 border border-slate-700 text-left space-y-2">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                    Direct Reset Link
-                  </span>
-                  <p className="text-xs font-mono text-indigo-300 break-all select-all">
-                    {resetUrl}
-                  </p>
-                  <Link
-                    href={resetUrl}
-                    className="inline-flex items-center justify-center gap-1.5 w-full mt-2 py-2 px-3 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
-                  >
-                    Open Reset Password Form
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </Link>
-                </div>
-              )}
 
               <div className="pt-3 border-t border-slate-800">
                 <Link

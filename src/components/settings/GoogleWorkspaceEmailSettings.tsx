@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { RefreshCw, Send, ShieldCheck } from 'lucide-react';
+import { Pencil, RefreshCw, Send, ShieldCheck } from 'lucide-react';
 import { Alert } from '../ui/Alert';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardFooter, CardHeader } from '../ui/Card';
@@ -34,6 +34,7 @@ export function GoogleWorkspaceEmailSettings() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   const load = async () => {
     try {
@@ -65,6 +66,7 @@ export function GoogleWorkspaceEmailSettings() {
       if (!response.ok || !data.success) throw new Error(data.error || 'Unable to save email settings.');
       setSettings((current) => ({ ...current, ...data.emailConfig }));
       setMessage('Google Workspace outbound email settings saved.');
+      setIsEditing(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to save email settings.');
     } finally {
@@ -113,7 +115,7 @@ export function GoogleWorkspaceEmailSettings() {
             </p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          {!isEditing ? <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="grid flex-1 gap-3 text-xs sm:grid-cols-2"><div><p className="font-semibold text-slate-500">Google Workspace email</p><p className="mt-1 font-medium text-slate-900">{settings.user || 'Not configured'}</p></div><div><p className="font-semibold text-slate-500">From email</p><p className="mt-1 font-medium text-slate-900">{settings.fromEmail || 'Not configured'}</p></div><div><p className="font-semibold text-slate-500">Sender name</p><p className="mt-1 font-medium text-slate-900">{settings.fromName || 'Not configured'}</p></div><div><p className="font-semibold text-slate-500">Reply-to</p><p className="mt-1 font-medium text-slate-900">{settings.replyTo || 'Not configured'}</p></div></div><Button type="button" variant="outline" size="sm" leftIcon={<Pencil className="h-4 w-4" />} onClick={() => setIsEditing(true)}>{settings.user ? 'Edit sender details' : 'Configure sender details'}</Button></div></div> : <div className="grid gap-3 sm:grid-cols-2">
             <label className="font-semibold text-slate-700">
               Google Workspace email
               <input
@@ -152,7 +154,7 @@ export function GoogleWorkspaceEmailSettings() {
                 className="mt-1 w-full rounded-lg border border-slate-300 p-2 font-normal text-slate-900"
               />
             </label>
-          </div>
+          </div>}
 
           <div className={`rounded-lg border p-3 ${settings.oauthConnected ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
             <strong>{settings.oauthConnected ? 'Google Workspace connected' : 'Google Workspace not connected'}</strong>
@@ -161,15 +163,13 @@ export function GoogleWorkspaceEmailSettings() {
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          {isEditing && <><div className="flex flex-wrap gap-2">
             <a href="/api/settings/email/oauth/authorize">
               <Button type="button" variant="primary" leftIcon={<ShieldCheck className="h-4 w-4" />}>
                 {settings.oauthConnected ? 'Reconnect Google Workspace' : 'Connect Google Workspace'}
               </Button>
             </a>
-            <Button type="button" variant="outline" isLoading={saving} onClick={() => void save()} leftIcon={<RefreshCw className="h-4 w-4" />}>
-              Save settings
-            </Button>
+            <Button type="button" variant="outline" onClick={() => { setIsEditing(false); void load(); }}>Cancel</Button>
           </div>
 
           <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 font-semibold text-slate-700">
@@ -179,6 +179,7 @@ export function GoogleWorkspaceEmailSettings() {
               <span className="mt-1 block font-normal text-slate-500">Used for invitations, password resets, and operational notifications. No incoming mail is accessed.</span>
             </span>
           </label>
+          <Button type="button" variant="outline" isLoading={saving} onClick={() => void save()} leftIcon={<RefreshCw className="h-4 w-4" />}>Save sender details</Button></>}
         </CardContent>
         <CardFooter className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
           <label className="flex-1 font-semibold text-slate-700">

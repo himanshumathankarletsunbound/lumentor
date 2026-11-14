@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer';
 import { EmailConfig } from '../types/email';
 import { db } from '../db/store';
 import { getServerEmailSecrets } from '../config/server';
+import { getPersistedEmailConfig } from '../db/state-repository';
 
 async function resolveEmailSecrets(config: EmailConfig): Promise<EmailConfig> {
   const secrets = await getServerEmailSecrets();
@@ -10,6 +11,18 @@ async function resolveEmailSecrets(config: EmailConfig): Promise<EmailConfig> {
     oauthClientSecret: secrets.oauthClientSecret || config.oauthClientSecret,
     oauthRefreshToken: secrets.oauthRefreshToken || config.oauthRefreshToken,
   };
+}
+
+async function deliveryConfig(customConfig?: EmailConfig): Promise<EmailConfig> {
+  // Email Settings are encrypted in PostgreSQL. The client-side/store default
+  // is useful for local UI state only and must never be the source of truth for
+  // a real server-side send.
+  const stored = customConfig ? {} : await getPersistedEmailConfig();
+  return resolveEmailSecrets({
+    ...db.getEmailConfig(),
+    ...stored,
+    ...(customConfig || {}),
+  });
 }
 
 export function createTransporter(config: EmailConfig) {
@@ -31,7 +44,7 @@ export function createTransporter(config: EmailConfig) {
 }
 
 export async function verifyGmailConnection(config: EmailConfig): Promise<{ success: boolean; message: string }> {
-  config = await resolveEmailSecrets(config);
+  config = await deliveryConfig(config);
   if (!config.oauthClientId || !config.oauthClientSecret || !config.oauthRefreshToken || !config.user) {
     return { success: false, message: 'Connect a Google Workspace account and provide its email address.' };
   }
@@ -61,9 +74,12 @@ export async function sendEmail(
   },
   customConfig?: EmailConfig
 ): Promise<{ success: boolean; messageId?: string; error?: string; mocked?: boolean }> {
-  const config = await resolveEmailSecrets(customConfig || db.getEmailConfig());
+  const config = await deliveryConfig(customConfig);
 
-  const hasValidAuth = Boolean(config.user && config.oauthClientId && config.oauthClientSecret && config.oauthRefreshToken);
+  const hasValidAuth = Boolean(
+    config.user && config.fromEmail && config.oauthClientId &&
+    config.oauthClientSecret && config.oauthRefreshToken,
+  );
 
   const allowSimulation = process.env.DEMO_MODE === 'true' || process.env.NODE_ENV === 'development';
   if (!config.isEnabled || !hasValidAuth) {

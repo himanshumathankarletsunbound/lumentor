@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import Link from 'next/link';
-import Image from 'next/image';
-import { usePathname, useSearchParams } from 'next/navigation';
-import { useAuth } from '../../lib/auth/AuthContext';
-import { PermissionModule, SystemRole } from '../../lib/types/auth';
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import Link from "next/link";
+import Image from "next/image";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useAuth } from "../../lib/auth/AuthContext";
+import { PermissionModule, SystemRole } from "../../lib/types/auth";
 import {
   LayoutDashboard,
   Calendar,
@@ -36,8 +36,8 @@ import {
   Shield,
   Briefcase,
   Award,
-} from 'lucide-react';
-import { cn } from '../../lib/utils/cn';
+} from "lucide-react";
+import { cn } from "../../lib/utils/cn";
 
 interface NavItem {
   name: string;
@@ -54,17 +54,25 @@ interface NavGroup {
 
 let globalSidebarScrollTop = 0;
 
-export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+export function Sidebar({
+  isOpen,
+  onClose,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+}) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { currentUser } = useAuth();
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Persist collapsed groups state across page navigation
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() => {
-    if (typeof window !== 'undefined') {
+  const [collapsedGroups, setCollapsedGroups] = useState<
+    Record<string, boolean>
+  >(() => {
+    if (typeof window !== "undefined") {
       try {
-        const saved = localStorage.getItem('lumentor_sidebar_collapsed_groups');
+        const saved = localStorage.getItem("lumentor_sidebar_collapsed_groups");
         if (saved) return JSON.parse(saved);
       } catch {}
     }
@@ -74,9 +82,12 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
   const toggleGroup = (name: string) => {
     setCollapsedGroups((prev) => {
       const updated = { ...prev, [name]: !prev[name] };
-      if (typeof window !== 'undefined') {
+      if (typeof window !== "undefined") {
         try {
-          localStorage.setItem('lumentor_sidebar_collapsed_groups', JSON.stringify(updated));
+          localStorage.setItem(
+            "lumentor_sidebar_collapsed_groups",
+            JSON.stringify(updated),
+          );
         } catch {}
       }
       return updated;
@@ -88,9 +99,9 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
     scrollContainerRef.current = node;
     if (node) {
       let topToRestore = globalSidebarScrollTop;
-      if (topToRestore === 0 && typeof window !== 'undefined') {
+      if (topToRestore === 0 && typeof window !== "undefined") {
         try {
-          const saved = sessionStorage.getItem('lumentor_sidebar_scroll_top');
+          const saved = sessionStorage.getItem("lumentor_sidebar_scroll_top");
           if (saved) topToRestore = Number(saved);
         } catch {}
       }
@@ -106,9 +117,9 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
     if (!container) return;
 
     let targetScroll = globalSidebarScrollTop;
-    if (targetScroll === 0 && typeof window !== 'undefined') {
+    if (targetScroll === 0 && typeof window !== "undefined") {
       try {
-        const saved = sessionStorage.getItem('lumentor_sidebar_scroll_top');
+        const saved = sessionStorage.getItem("lumentor_sidebar_scroll_top");
         if (saved) targetScroll = Number(saved);
       } catch {}
     }
@@ -118,15 +129,23 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
     }
 
     // If active link is outside visible container bounds, scroll it into view
-    const activeLink = container.querySelector<HTMLElement>('[data-active="true"]');
+    const activeLink = container.querySelector<HTMLElement>(
+      '[data-active="true"]',
+    );
     if (activeLink) {
       const linkRect = activeLink.getBoundingClientRect();
       const containerRect = container.getBoundingClientRect();
-      if (linkRect.top < containerRect.top || linkRect.bottom > containerRect.bottom) {
-        activeLink.scrollIntoView({ block: 'nearest' });
+      if (
+        linkRect.top < containerRect.top ||
+        linkRect.bottom > containerRect.bottom
+      ) {
+        activeLink.scrollIntoView({ block: "nearest" });
         globalSidebarScrollTop = container.scrollTop;
         try {
-          sessionStorage.setItem('lumentor_sidebar_scroll_top', String(container.scrollTop));
+          sessionStorage.setItem(
+            "lumentor_sidebar_scroll_top",
+            String(container.scrollTop),
+          );
         } catch {}
       }
     }
@@ -134,425 +153,544 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
 
   // Build role-scoped navigation tree
   const getNavGroupsForRole = (role: SystemRole): NavGroup[] => {
-    if (role === 'MENTOR') {
-      return [
+    if (role === "MENTOR") {
+      const mentorGroups: NavGroup[] = [
         {
-          groupName: 'Faculty Hub',
+          groupName: "Faculty Hub",
           items: [
             {
-              name: 'Mentor Dashboard',
-              href: '/overview/mentor',
+              name: "Mentor Dashboard",
+              href: "/overview/mentor",
               icon: <GraduationCap className="w-4 h-4" />,
             },
             {
-              name: 'My Rating',
-              href: '/overview/mentor/rating',
+              name: "My Rating",
+              href: "/overview/mentor/rating",
               icon: <Award className="w-4 h-4" />,
             },
             {
-              name: 'My Teaching Schedule',
-              href: '/operations/calendar',
+              name: "My Teaching Schedule",
+              href: "/operations/calendar",
               icon: <Calendar className="w-4 h-4" />,
             },
             {
-              name: 'My Classes',
-              href: '/operations/classes',
+              name: "My Classes",
+              href: "/operations/classes",
               icon: <Clock className="w-4 h-4" />,
             },
             {
-              name: 'Record Attendance',
-              href: '/operations/attendance',
+              name: "Record Attendance",
+              href: "/operations/attendance",
               icon: <CheckSquare className="w-4 h-4" />,
             },
           ],
         },
         {
-          groupName: 'Earnings & Records',
+          groupName: "Earnings & Records",
           items: [
             {
-              name: 'My Payslips',
-              href: '/finance/payslips',
+              name: "My Payslips",
+              href: "/finance/payslips",
               icon: <FileText className="w-4 h-4" />,
             },
             {
-              name: 'Deductions & Disputes',
-              href: '/finance/penalties',
+              name: "Deductions & Disputes",
+              href: "/finance/penalties",
               icon: <ShieldAlert className="w-4 h-4" />,
             },
           ],
         },
       ];
-    }
-
-    if (role === 'OPERATIONS') {
-      return [
-        {
-          groupName: 'Operations Desk',
+      if (currentUser.employeeId) {
+        mentorGroups.push({
+          groupName: "Employee Hub",
           items: [
             {
-              name: 'Operations Dashboard',
-              href: '/overview/operations',
+              name: "Employee Dashboard",
+              href: "/employee/dashboard",
+              icon: <Briefcase className="w-4 h-4" />,
+              module: "employee_records",
+            },
+            {
+              name: "Employee Attendance",
+              href: "/employee/attendance",
+              icon: <CheckSquare className="w-4 h-4" />,
+              module: "employee_records",
+            },
+            {
+              name: "Leave Management",
+              href: "/employee/leave-management",
+              icon: <CalendarClock className="w-4 h-4" />,
+              module: "leave_management",
+            },
+            {
+              name: "Combined Earnings",
+              href: "/employee/earnings",
+              icon: <CreditCard className="w-4 h-4" />,
+              module: "payroll_processing",
+            },
+            {
+              name: "Payslips",
+              href: "/employee/payslips",
+              icon: <FileText className="w-4 h-4" />,
+              module: "payroll_processing",
+            },
+          ],
+        });
+      }
+      return mentorGroups;
+    }
+
+    if (role === "OPERATIONS") {
+      return [
+        {
+          groupName: "Operations Desk",
+          items: [
+            {
+              name: "Operations Dashboard",
+              href: "/overview/operations",
               icon: <Clock className="w-4 h-4" />,
             },
             {
-              name: 'Unified Calendar',
-              href: '/operations/calendar',
+              name: "Unified Calendar",
+              href: "/operations/calendar",
               icon: <Calendar className="w-4 h-4" />,
             },
             {
-              name: 'Classes & Sessions',
-              href: '/operations/classes',
+              name: "Classes & Sessions",
+              href: "/operations/classes",
               icon: <Clock className="w-4 h-4" />,
             },
             {
-              name: 'Attendance Console',
-              href: '/operations/attendance',
+              name: "Attendance Console",
+              href: "/operations/attendance",
               icon: <CheckSquare className="w-4 h-4" />,
             },
             {
-              name: 'Exceptions & Incidents',
-              href: '/operations/exceptions',
+              name: "Exceptions & Incidents",
+              href: "/operations/exceptions",
               icon: <AlertTriangle className="w-4 h-4" />,
             },
           ],
         },
         {
-          groupName: 'Directory & Setup',
+          groupName: "Directory & Setup",
           items: [
             {
-              name: 'Mentors & Faculty',
-              href: '/operations/mentors',
+              name: "Mentors & Faculty",
+              href: "/operations/mentors",
               icon: <GraduationCap className="w-4 h-4" />,
             },
             {
-              name: 'Student Roster',
-              href: '/operations/students',
+              name: "Student Roster",
+              href: "/operations/students",
               icon: <Users className="w-4 h-4" />,
             },
             {
-              name: 'Campus Branches',
-              href: '/operations/branches',
+              name: "Campus Branches",
+              href: "/operations/branches",
               icon: <Building2 className="w-4 h-4" />,
             },
             {
-              name: 'Subjects & Courses',
-              href: '/operations/subjects',
+              name: "Subjects & Courses",
+              href: "/operations/subjects",
               icon: <BookOpen className="w-4 h-4" />,
             },
             {
-              name: 'Packages & Enrolments',
-              href: '/operations/packages',
+              name: "Packages & Enrolments",
+              href: "/operations/packages",
               icon: <PackageIcon className="w-4 h-4" />,
             },
           ],
         },
         {
-          groupName: 'Incident Reporting',
+          groupName: "Incident Reporting",
           items: [
             {
-              name: 'Submit Penalty / Note',
-              href: '/finance/penalties',
+              name: "Submit Penalty / Note",
+              href: "/finance/penalties",
               icon: <ShieldAlert className="w-4 h-4" />,
             },
             {
-              name: 'Attendance Reports',
-              href: '/analytics/attendance',
+              name: "Attendance Reports",
+              href: "/analytics/attendance",
               icon: <BarChart3 className="w-4 h-4" />,
             },
             {
-              name: 'Smart Sheet Analytics',
-              href: '/analytics/sheet-report',
+              name: "Smart Sheet Analytics",
+              href: "/analytics/sheet-report",
               icon: <FileSpreadsheet className="w-4 h-4" />,
-              badge: 'New',
+              badge: "New",
             },
           ],
         },
       ];
     }
 
-    if (role === 'AUDIT') {
+    if (role === "AUDIT") {
       return [
         {
-          groupName: 'Audit Workspace',
+          groupName: "Audit Workspace",
           items: [
             {
-              name: 'Audit Dashboard',
-              href: '/audit/dashboard?mode=dashboard',
+              name: "Audit Dashboard",
+              href: "/audit/dashboard?mode=dashboard",
               icon: <LayoutDashboard className="w-4 h-4" />,
-              module: 'mentor_reviews',
+              module: "mentor_reviews",
             },
             {
-              name: 'Post rating',
-              href: '/audit/dashboard?mode=post',
+              name: "Post rating",
+              href: "/audit/dashboard?mode=post",
               icon: <Shield className="w-4 h-4" />,
-              module: 'mentor_reviews',
+              module: "mentor_reviews",
             },
             {
-              name: 'Analyze mentors',
-              href: '/audit/dashboard?mode=analyze',
+              name: "Analyze mentors",
+              href: "/audit/dashboard?mode=analyze",
               icon: <BarChart3 className="w-4 h-4" />,
-              module: 'mentor_reviews',
+              module: "mentor_reviews",
             },
           ],
         },
       ];
     }
 
-    if (role === 'EMPLOYEE') {
-      return [{ groupName: 'Employee Panel', items: [
-        { name: 'My Dashboard', href: '/employee/dashboard', icon: <LayoutDashboard className="w-4 h-4" />, module: 'employee_records' },
-        { name: 'Attendance', href: '/employee/attendance', icon: <CheckSquare className="w-4 h-4" />, module: 'employee_records' },
-        { name: 'Leave Management', href: '/employee/leave-management', icon: <CalendarClock className="w-4 h-4" />, module: 'leave_management' },
-        { name: 'My Earnings', href: '/employee/earnings', icon: <CreditCard className="w-4 h-4" />, module: 'payroll_processing' },
-        { name: 'Payslips', href: '/employee/payslips', icon: <FileText className="w-4 h-4" />, module: 'payroll_processing' },
-      ] }];
+    if (role === "EMPLOYEE") {
+      const employeeGroups: NavGroup[] = [
+        {
+          groupName: "Employee Panel",
+          items: [
+            {
+              name: "My Dashboard",
+              href: "/employee/dashboard",
+              icon: <LayoutDashboard className="w-4 h-4" />,
+              module: "employee_records",
+            },
+            {
+              name: "Attendance",
+              href: "/employee/attendance",
+              icon: <CheckSquare className="w-4 h-4" />,
+              module: "employee_records",
+            },
+            {
+              name: "Leave Management",
+              href: "/employee/leave-management",
+              icon: <CalendarClock className="w-4 h-4" />,
+              module: "leave_management",
+            },
+            {
+              name: "My Earnings",
+              href: "/employee/earnings",
+              icon: <CreditCard className="w-4 h-4" />,
+              module: "payroll_processing",
+            },
+            {
+              name: "Payslips",
+              href: "/employee/payslips",
+              icon: <FileText className="w-4 h-4" />,
+              module: "payroll_processing",
+            },
+          ],
+        },
+      ];
+      if (currentUser.mentorId) {
+        employeeGroups.unshift({
+          groupName: "Faculty Hub",
+          items: [
+            {
+              name: "Mentor Dashboard",
+              href: "/overview/mentor",
+              icon: <GraduationCap className="w-4 h-4" />,
+            },
+            {
+              name: "My Teaching Schedule",
+              href: "/operations/calendar",
+              icon: <Calendar className="w-4 h-4" />,
+            },
+            {
+              name: "My Classes",
+              href: "/operations/classes",
+              icon: <Clock className="w-4 h-4" />,
+            },
+            {
+              name: "Record Class Attendance",
+              href: "/operations/attendance",
+              icon: <CheckSquare className="w-4 h-4" />,
+            },
+            {
+              name: "Mentor Payslips",
+              href: "/finance/payslips",
+              icon: <FileText className="w-4 h-4" />,
+            },
+          ],
+        });
+      }
+      return employeeGroups;
     }
 
     // Default: ADMINISTRATOR
     return [
       {
-        groupName: 'Executive',
+        groupName: "Executive",
         items: [
           {
-            name: 'Executive Dashboard',
-            href: '/overview/executive',
+            name: "Executive Dashboard",
+            href: "/overview/executive",
             icon: <LayoutDashboard className="w-4 h-4" />,
           },
         ],
       },
       {
-        groupName: 'Operations & Academic',
+        groupName: "Operations & Academic",
         items: [
           {
-            name: 'Unified Calendar',
-            href: '/operations/calendar',
+            name: "Unified Calendar",
+            href: "/operations/calendar",
             icon: <Calendar className="w-4 h-4" />,
-            module: 'calendar',
+            module: "calendar",
           },
           {
-            name: 'Classes & Sessions',
-            href: '/operations/classes',
+            name: "Classes & Sessions",
+            href: "/operations/classes",
             icon: <Clock className="w-4 h-4" />,
-            module: 'classes',
+            module: "classes",
           },
           {
-            name: 'Attendance Verification',
-            href: '/operations/attendance',
+            name: "Attendance Verification",
+            href: "/operations/attendance",
             icon: <CheckSquare className="w-4 h-4" />,
-            module: 'attendance',
+            module: "attendance",
           },
           {
-            name: 'Cancellations & Exceptions',
-            href: '/operations/exceptions',
+            name: "Cancellations & Exceptions",
+            href: "/operations/exceptions",
             icon: <AlertTriangle className="w-4 h-4" />,
-            module: 'exceptions',
+            module: "exceptions",
           },
           {
-            name: 'Mentors & Faculty',
-            href: '/operations/mentors',
+            name: "Mentors & Faculty",
+            href: "/operations/mentors",
             icon: <GraduationCap className="w-4 h-4" />,
-            module: 'mentors',
+            module: "mentors",
           },
           {
-            name: 'Student Roster',
-            href: '/operations/students',
+            name: "Student Roster",
+            href: "/operations/students",
             icon: <Users className="w-4 h-4" />,
-            module: 'students',
+            module: "students",
           },
           {
-            name: 'Campus Branches',
-            href: '/operations/branches',
+            name: "Campus Branches",
+            href: "/operations/branches",
             icon: <Building2 className="w-4 h-4" />,
-            module: 'branches',
+            module: "branches",
           },
           {
-            name: 'Subjects',
-            href: '/operations/subjects',
+            name: "Subjects",
+            href: "/operations/subjects",
             icon: <BookOpen className="w-4 h-4" />,
-            module: 'subjects',
+            module: "subjects",
           },
           {
-            name: 'Packages & Enrolments',
-            href: '/operations/packages',
+            name: "Packages & Enrolments",
+            href: "/operations/packages",
             icon: <PackageIcon className="w-4 h-4" />,
-            module: 'packages',
+            module: "packages",
           },
           {
-            name: 'Submit Penalties',
-            href: '/operations/penalties',
+            name: "Submit Penalties",
+            href: "/operations/penalties",
             icon: <ShieldAlert className="w-4 h-4" />,
-            module: 'penalties',
+            module: "penalties",
           },
         ],
       },
       {
-        groupName: 'Finance & Payroll',
+        groupName: "Finance & Payroll",
         items: [
           {
-            name: 'Payroll Dashboard',
-            href: '/finance/payroll-dashboard',
+            name: "Payroll Dashboard",
+            href: "/finance/payroll-dashboard",
             icon: <DollarSign className="w-4 h-4" />,
-            module: 'payroll_dashboard',
+            module: "payroll_dashboard",
           },
           {
-            name: 'Payroll Rules & Plans',
-            href: '/finance/payroll-rules',
+            name: "Payroll Rules & Plans",
+            href: "/finance/payroll-rules",
             icon: <Sliders className="w-4 h-4" />,
-            module: 'payroll_rules',
+            module: "payroll_rules",
           },
           {
-            name: 'Payout Schedules',
-            href: '/finance/payout-schedules',
+            name: "Payout Schedules",
+            href: "/finance/payout-schedules",
             icon: <CalendarClock className="w-4 h-4" />,
-            module: 'payroll_processing',
+            module: "payroll_processing",
           },
           {
-            name: 'Process Payroll Batch',
-            href: '/finance/payroll-processing',
+            name: "Process Payroll Batch",
+            href: "/finance/payroll-processing",
             icon: <Calculator className="w-4 h-4" />,
-            module: 'payroll_processing',
+            module: "payroll_processing",
           },
           {
-            name: 'Sheet-Based Payroll',
-            href: '/finance/sheet-payroll',
+            name: "Sheet-Based Payroll",
+            href: "/finance/sheet-payroll",
             icon: <FileSpreadsheet className="w-4 h-4" />,
-            module: 'payroll_processing',
+            module: "payroll_processing",
           },
           {
-            name: 'Fetch Data',
-            href: '/finance/fetch-data',
+            name: "Fetch Data",
+            href: "/finance/fetch-data",
             icon: <CalendarClock className="w-4 h-4" />,
-            module: 'payroll_processing',
+            module: "payroll_processing",
           },
           {
-            name: 'Title Mapper',
-            href: '/finance/title-mapper',
+            name: "Title Mapper",
+            href: "/finance/title-mapper",
             icon: <Sliders className="w-4 h-4" />,
-            module: 'payroll_rules',
+            module: "payroll_rules",
           },
           {
-            name: 'Employee Payroll', href: '/finance/employee-payroll', icon: <CreditCard className="w-4 h-4" />, module: 'payroll_processing',
-          },
-          {
-            name: 'Single Payout',
-            href: '/finance/single-payout',
+            name: "Employee Payroll",
+            href: "/finance/employee-payroll",
             icon: <CreditCard className="w-4 h-4" />,
-            module: 'payroll_processing',
+            module: "payroll_processing",
           },
           {
-            name: 'Initiatives & Fixed Payouts',
-            href: '/finance/initiatives',
+            name: "Single Payout",
+            href: "/finance/single-payout",
+            icon: <CreditCard className="w-4 h-4" />,
+            module: "payroll_processing",
+          },
+          {
+            name: "Initiatives & Fixed Payouts",
+            href: "/finance/initiatives",
             icon: <Sparkles className="w-4 h-4" />,
-            module: 'payroll_processing',
+            module: "payroll_processing",
           },
           {
-            name: 'Penalties & Policy Deductions',
-            href: '/finance/penalties',
+            name: "Penalties & Policy Deductions",
+            href: "/finance/penalties",
             icon: <ShieldAlert className="w-4 h-4" />,
-            module: 'penalties',
+            module: "penalties",
           },
           {
-            name: 'Official Payslips',
-            href: '/finance/payslips',
+            name: "Official Payslips",
+            href: "/finance/payslips",
             icon: <FileText className="w-4 h-4" />,
-            module: 'payslips',
+            module: "payslips",
           },
           {
-            name: 'Payment History',
-            href: '/finance/payment-history',
+            name: "Payment History",
+            href: "/finance/payment-history",
             icon: <CreditCard className="w-4 h-4" />,
-            module: 'payroll_dashboard',
+            module: "payroll_dashboard",
           },
           {
-            name: 'Payroll Reports',
-            href: '/finance/reports',
+            name: "Payroll Reports",
+            href: "/finance/reports",
             icon: <BarChart3 className="w-4 h-4" />,
-            module: 'reports',
+            module: "reports",
           },
         ],
       },
       {
-        groupName: 'Analytics',
+        groupName: "Analytics",
         items: [
           {
-            name: 'Smart Sheet Analytics',
-            href: '/analytics/sheet-report',
+            name: "Smart Sheet Analytics",
+            href: "/analytics/sheet-report",
             icon: <FileSpreadsheet className="w-4 h-4" />,
-            module: 'analytics',
-            badge: 'Smart',
+            module: "analytics",
+            badge: "Smart",
           },
           {
-            name: 'Attendance Analytics',
-            href: '/analytics/attendance',
+            name: "Attendance Analytics",
+            href: "/analytics/attendance",
             icon: <CheckSquare className="w-4 h-4" />,
-            module: 'analytics',
+            module: "analytics",
           },
           {
-            name: 'Class Utilization',
-            href: '/analytics/class-utilization',
+            name: "Class Utilization",
+            href: "/analytics/class-utilization",
             icon: <TrendingUp className="w-4 h-4" />,
-            module: 'analytics',
+            module: "analytics",
           },
           {
-            name: 'Mentor Performance',
-            href: '/analytics/mentor-performance',
+            name: "Mentor Performance",
+            href: "/analytics/mentor-performance",
             icon: <UserCheck className="w-4 h-4" />,
-            module: 'analytics',
+            module: "analytics",
           },
           {
-            name: 'Branch Performance',
-            href: '/analytics/branch-performance',
+            name: "Branch Performance",
+            href: "/analytics/branch-performance",
             icon: <Building2 className="w-4 h-4" />,
-            module: 'analytics',
+            module: "analytics",
           },
           {
-            name: 'Spend Analytics',
-            href: '/analytics/payroll',
+            name: "Spend Analytics",
+            href: "/analytics/payroll",
             icon: <BarChart3 className="w-4 h-4" />,
-            module: 'analytics',
+            module: "analytics",
           },
         ],
       },
       {
-        groupName: 'Employee Panel',
-        items: [
-          { name: 'Employee Records', href: '/employee/records', icon: <Users className="w-4 h-4" />, module: 'employee_records' },
-          { name: 'Leave Requests', href: '/admin/employee-leave-requests', icon: <CalendarClock className="w-4 h-4" />, module: 'leave_management' },
-          { name: 'Attendance Misses', href: '/admin/employee-attendance-misses', icon: <AlertTriangle className="w-4 h-4" />, module: 'employee_records' },
-        ],
-      },
-      {
-        groupName: 'Administration',
+        groupName: "Employee Panel",
         items: [
           {
-            name: 'Users & Roles',
-            href: '/admin/users-roles',
+            name: "Employee Records",
+            href: "/employee/records",
             icon: <Users className="w-4 h-4" />,
-            module: 'users_roles',
+            module: "employee_records",
           },
           {
-            name: 'Custom Fields & Schema',
-            href: '/admin/custom-fields',
+            name: "Leave Requests",
+            href: "/admin/employee-leave-requests",
+            icon: <CalendarClock className="w-4 h-4" />,
+            module: "leave_management",
+          },
+          {
+            name: "Attendance Misses",
+            href: "/admin/employee-attendance-misses",
+            icon: <AlertTriangle className="w-4 h-4" />,
+            module: "employee_records",
+          },
+        ],
+      },
+      {
+        groupName: "Administration",
+        items: [
+          {
+            name: "Users & Roles",
+            href: "/admin/users-roles",
+            icon: <Users className="w-4 h-4" />,
+            module: "users_roles",
+          },
+          {
+            name: "Custom Fields & Schema",
+            href: "/admin/custom-fields",
             icon: <Sliders className="w-4 h-4" />,
-            module: 'settings',
+            module: "settings",
           },
           {
-            name: 'Audit Trail Logs',
-            href: '/admin/audit-logs',
+            name: "Audit Trail Logs",
+            href: "/admin/audit-logs",
             icon: <History className="w-4 h-4" />,
-            module: 'audit_logs',
+            module: "audit_logs",
           },
           {
-            name: 'System Settings',
-            href: '/admin/settings',
+            name: "System Settings",
+            href: "/admin/settings",
             icon: <Settings className="w-4 h-4" />,
-            module: 'settings',
+            module: "settings",
           },
           {
-            name: 'Classcard Integration',
-            href: '/admin/classcard-integration',
+            name: "Classcard Integration",
+            href: "/admin/classcard-integration",
             icon: <History className="w-4 h-4" />,
-            module: 'classcard_integration',
+            module: "classcard_integration",
           },
         ],
       },
@@ -563,31 +701,31 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
 
   const getRoleBadge = (role: SystemRole) => {
     switch (role) {
-      case 'ADMINISTRATOR':
+      case "ADMINISTRATOR":
         return (
           <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full border border-indigo-500/20">
             <Shield className="w-3 h-3" /> Admin
           </span>
         );
-      case 'OPERATIONS':
+      case "OPERATIONS":
         return (
           <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-full border border-sky-500/20">
             <Briefcase className="w-3 h-3" /> Operations
           </span>
         );
-      case 'AUDIT':
+      case "AUDIT":
         return (
           <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
             <Shield className="w-3 h-3" /> Audit
           </span>
         );
-      case 'MENTOR':
+      case "MENTOR":
         return (
           <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
             <GraduationCap className="w-3 h-3" /> Faculty
           </span>
         );
-      case 'EMPLOYEE':
+      case "EMPLOYEE":
         return (
           <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-violet-300 bg-violet-500/10 px-2 py-0.5 rounded-full border border-violet-500/20">
             <Briefcase className="w-3 h-3" /> Employee
@@ -611,9 +749,9 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
       {/* Persistent Left Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-40 w-64 h-screen max-h-screen bg-slate-950 text-slate-300 flex flex-col transition-transform duration-200 ease-in-out border-r border-slate-800/80 shadow-2xl shrink-0',
-          'lg:static lg:h-screen lg:max-h-screen lg:shrink-0 lg:translate-x-0',
-          isOpen ? 'translate-x-0' : '-translate-x-full'
+          "fixed inset-y-0 left-0 z-40 w-64 h-screen max-h-screen bg-slate-950 text-slate-300 flex flex-col transition-transform duration-200 ease-in-out border-r border-slate-800/80 shadow-2xl shrink-0",
+          "lg:static lg:h-screen lg:max-h-screen lg:shrink-0 lg:translate-x-0",
+          isOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
         {/* Brand Header */}
@@ -654,7 +792,10 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
             const top = e.currentTarget.scrollTop;
             globalSidebarScrollTop = top;
             try {
-              sessionStorage.setItem('lumentor_sidebar_scroll_top', String(top));
+              sessionStorage.setItem(
+                "lumentor_sidebar_scroll_top",
+                String(top),
+              );
             } catch {}
           }}
           className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-4 space-y-6 text-sm"
@@ -679,15 +820,17 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
                 {!isCollapsed && (
                   <div className="space-y-0.5 pt-1">
                     {group.items.map((item) => {
-                      const itemUrl = new URL(item.href, 'http://localhost');
+                      const itemUrl = new URL(item.href, "http://localhost");
                       const isActive =
-                        pathname === itemUrl.pathname &&
-                        (itemUrl.searchParams.get('mode') === null || itemUrl.searchParams.get('mode') === searchParams.get('mode')) ||
-                        (itemUrl.search === '' &&
-                          itemUrl.pathname !== '/' &&
-                          itemUrl.pathname !== '/overview/executive' &&
-                          itemUrl.pathname !== '/overview/operations' &&
-                          itemUrl.pathname !== '/overview/mentor' &&
+                        (pathname === itemUrl.pathname &&
+                          (itemUrl.searchParams.get("mode") === null ||
+                            itemUrl.searchParams.get("mode") ===
+                              searchParams.get("mode"))) ||
+                        (itemUrl.search === "" &&
+                          itemUrl.pathname !== "/" &&
+                          itemUrl.pathname !== "/overview/executive" &&
+                          itemUrl.pathname !== "/overview/operations" &&
+                          itemUrl.pathname !== "/overview/mentor" &&
                           pathname.startsWith(`${itemUrl.pathname}/`));
 
                       return (
@@ -695,27 +838,33 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
                           key={item.href}
                           href={item.href}
                           scroll={false}
-                          data-active={isActive ? 'true' : undefined}
+                          data-active={isActive ? "true" : undefined}
                           onClick={() => {
                             if (scrollContainerRef.current) {
-                              globalSidebarScrollTop = scrollContainerRef.current.scrollTop;
+                              globalSidebarScrollTop =
+                                scrollContainerRef.current.scrollTop;
                               try {
-                                sessionStorage.setItem('lumentor_sidebar_scroll_top', String(globalSidebarScrollTop));
+                                sessionStorage.setItem(
+                                  "lumentor_sidebar_scroll_top",
+                                  String(globalSidebarScrollTop),
+                                );
                               } catch {}
                             }
                             if (window.innerWidth < 1024) onClose();
                           }}
                           className={cn(
-                            'flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all group relative',
+                            "flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all group relative",
                             isActive
-                              ? 'bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-600/30'
-                              : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/80'
+                              ? "bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-600/30"
+                              : "text-slate-400 hover:text-slate-100 hover:bg-slate-900/80",
                           )}
                         >
                           <span
                             className={cn(
-                              'shrink-0 transition-colors',
-                              isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'
+                              "shrink-0 transition-colors",
+                              isActive
+                                ? "text-white"
+                                : "text-slate-400 group-hover:text-slate-200",
                             )}
                           >
                             {item.icon}

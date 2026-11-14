@@ -81,11 +81,52 @@ export async function POST(
       },
       { status: 400 },
     );
-  if (await findUserByEmail(employee.email))
-    return NextResponse.json(
-      { success: false, error: "A user already exists for this work email." },
-      { status: 409 },
-    );
+  const existingUser = await findUserByEmail(employee.email);
+  if (existingUser) {
+    if (existingUser.employeeId && existingUser.employeeId !== employeeId) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "This work email is already linked to another employee record.",
+        },
+        { status: 409 },
+      );
+    }
+    if (!existingUser.mentorId && existingUser.role !== "EMPLOYEE") {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "This work email belongs to a non-employee platform account and cannot be linked automatically.",
+        },
+        { status: 409 },
+      );
+    }
+    await prisma.employee.update({
+      where: { id: employeeId },
+      data: { userId: existingUser.id },
+    });
+    await prisma.auditEvent.create({
+      data: {
+        userId: actor?.id || existingUser.id,
+        action: "EMPLOYEE_USER_LINKED",
+        entityType: "Employee",
+        entityId: employeeId,
+        details: `Linked existing portal user ${existingUser.email} to employee record.`,
+      },
+    });
+    return NextResponse.json({
+      success: true,
+      linkedExistingUser: true,
+      user: {
+        id: existingUser.id,
+        name: existingUser.name,
+        email: existingUser.email,
+        status: existingUser.status,
+      },
+    });
+  }
 
   const role = (await listRoles()).find(
     (item) => item.systemRole === "EMPLOYEE",

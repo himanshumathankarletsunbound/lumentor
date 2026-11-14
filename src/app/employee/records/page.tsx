@@ -168,6 +168,7 @@ export default function EmployeeRecords() {
     }
     setSaving(true);
     setFormError(null);
+    let createdEmployee: Employee | null = null;
     try {
       const response = await fetch("/api/employees", {
         method: "POST",
@@ -177,6 +178,7 @@ export default function EmployeeRecords() {
       const payload = await response.json();
       if (!response.ok)
         throw new Error(payload.error || "Unable to create employee.");
+      createdEmployee = payload.employee as Employee;
       if (form.login) {
         const userResponse = await fetch(
           `/api/employees/${payload.employee.id}/user`,
@@ -190,23 +192,42 @@ export default function EmployeeRecords() {
             }),
           },
         );
-        const userPayload = await userResponse.json();
+        const userPayload = await userResponse.json().catch(() => ({}));
         if (!userResponse.ok)
           throw new Error(
             `Employee record was created, but portal access was not: ${userPayload.error || "open the profile and try again."}`,
           );
       }
-      await loadEmployees();
+      // The record is already durable at this point. A directory refresh is
+      // best-effort and must not turn a successful save into a false failure.
+      setEmployees((current) => [
+        ...current.filter((employee) => employee.id !== createdEmployee!.id),
+        createdEmployee!,
+      ]);
       closeForm();
       setNotice(
         form.login
           ? "Employee record and portal access were created."
           : "Employee record created. You can create portal access later from View profile.",
       );
+      void loadEmployees().catch(() => {
+        // The locally added row remains visible; a later page visit will retry.
+      });
     } catch (error) {
-      setFormError(
-        error instanceof Error ? error.message : "Unable to create employee.",
-      );
+      if (createdEmployee) {
+        setEmployees((current) => [
+          ...current.filter((employee) => employee.id !== createdEmployee!.id),
+          createdEmployee!,
+        ]);
+        closeForm();
+        setNotice(
+          `Employee record for ${createdEmployee.firstName} ${createdEmployee.lastName} was created. We could not confirm portal access (${error instanceof Error ? error.message : "connection issue"}). Open View profile → User to verify it before retrying.`,
+        );
+      } else {
+        setFormError(
+          error instanceof Error ? error.message : "Unable to create employee.",
+        );
+      }
     } finally {
       setSaving(false);
     }

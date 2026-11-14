@@ -5,7 +5,6 @@ import {
 } from "../../../lib/auth/server";
 import { prisma } from "../../../lib/db/prisma";
 import { ensureServerPersistence } from "../../../lib/db/server-initialization";
-import { findUserByEmail } from "../../../lib/db/state-repository";
 
 export async function GET(req: NextRequest) {
   await ensureServerPersistence();
@@ -13,7 +12,11 @@ export async function GET(req: NextRequest) {
   if (denied) return denied;
   const user = await getSessionUserAsync(req);
   const employees = await prisma.employee.findMany({
-    where: user?.role === "EMPLOYEE" ? { userId: user.id } : undefined,
+    where: user?.employeeId
+      ? { id: user.employeeId }
+      : user?.role === "EMPLOYEE"
+        ? { userId: user.id }
+        : undefined,
     include: { branch: { select: { name: true } } },
     orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
   });
@@ -49,16 +52,6 @@ export async function POST(req: NextRequest) {
       {
         success: false,
         error: "An employee record already exists for this work email.",
-      },
-      { status: 409 },
-    );
-  }
-  if (body.login && (await findUserByEmail(email))) {
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          "A platform user already exists for this work email. Create the employee without portal access, then review the existing account.",
       },
       { status: 409 },
     );

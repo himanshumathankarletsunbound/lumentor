@@ -1,42 +1,84 @@
-import { CurrentUser, PermissionModule, PermissionAction } from '../types/auth';
+import { CurrentUser, PermissionModule, PermissionAction } from "../types/auth";
 
 export function hasPermission(
   user: CurrentUser | null | undefined,
   module: PermissionModule,
   action: PermissionAction,
-  branchId?: string
+  branchId?: string,
 ): boolean {
   if (!user) return false;
 
   // Administrators have full permission across all modules
-  if (user.role === 'ADMINISTRATOR') return true;
+  if (user.role === "ADMINISTRATOR") return true;
 
   // Mentors can only access personal modules
-  if (user.role === 'MENTOR') {
+  if (user.role === "MENTOR") {
+    if (
+      user.employeeId &&
+      [
+        "employee_records",
+        "leave_management",
+        "employee_settings",
+        "payroll_processing",
+      ].includes(module)
+    ) {
+      return action === "view" || action === "create" || action === "edit";
+    }
     const mentorPermittedModules: PermissionModule[] = [
-      'overview',
-      'calendar',
-      'classes',
-      'attendance',
-      'penalties',
-      'payslips',
-        'mentor_reviews',
+      "overview",
+      "calendar",
+      "classes",
+      "attendance",
+      "penalties",
+      "payslips",
+      "mentor_reviews",
     ];
     if (!mentorPermittedModules.includes(module)) return false;
     // Mentors can view and export their own items, but cannot edit payroll or approve
-    if (action === 'approve' || action === 'manage_settings' || action === 'delete') return false;
+    if (
+      action === "approve" ||
+      action === "manage_settings" ||
+      action === "delete"
+    )
+      return false;
     return true;
   }
 
-  if (user.role === 'EMPLOYEE') {
-    if (!['employee_records', 'leave_management', 'employee_settings', 'payroll_processing'].includes(module)) return false;
-    return action === 'view' || action === 'create' || action === 'edit';
+  if (user.role === "EMPLOYEE" || user.employeeId) {
+    if (
+      user.mentorId &&
+      [
+        "overview",
+        "calendar",
+        "classes",
+        "attendance",
+        "penalties",
+        "payslips",
+        "mentor_reviews",
+      ].includes(module)
+    ) {
+      return (
+        action !== "approve" &&
+        action !== "manage_settings" &&
+        action !== "delete"
+      );
+    }
+    if (
+      ![
+        "employee_records",
+        "leave_management",
+        "employee_settings",
+        "payroll_processing",
+      ].includes(module)
+    )
+      return false;
+    return action === "view" || action === "create" || action === "edit";
   }
 
-  if (user.role === 'AUDIT') {
-    if (module !== 'mentor_reviews' && module !== 'overview') return false;
-    if (module === 'overview') return action === 'view' || action === 'export';
-    return action === 'view' || action === 'edit' || action === 'export';
+  if (user.role === "AUDIT") {
+    if (module !== "mentor_reviews" && module !== "overview") return false;
+    if (module === "overview") return action === "view" || action === "export";
+    return action === "view" || action === "edit" || action === "export";
   }
 
   // Branch restriction check
@@ -53,6 +95,9 @@ export function hasPermission(
   return perm.actions.includes(action);
 }
 
-export function canAccessModule(user: CurrentUser | null | undefined, module: PermissionModule): boolean {
-  return hasPermission(user, module, 'view');
+export function canAccessModule(
+  user: CurrentUser | null | undefined,
+  module: PermissionModule,
+): boolean {
+  return hasPermission(user, module, "view");
 }

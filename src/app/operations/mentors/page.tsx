@@ -1,46 +1,100 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
-import { AppShell } from '../../../components/layout/AppShell';
-import { db } from '../../../lib/db/store';
-import { useAuth } from '../../../lib/auth/AuthContext';
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell, TableEmptyState } from '../../../components/ui/Table';
-import { Badge } from '../../../components/ui/Badge';
-import { Button } from '../../../components/ui/Button';
-import { Drawer } from '../../../components/ui/Drawer';
-import { Tabs } from '../../../components/ui/Tabs';
-import { Mentor } from '../../../lib/types/models';
-import { Check, Copy, Mail, Phone, MapPin, Plus, Upload, UserRound } from 'lucide-react';
-import { formatCurrency, formatDate } from '../../../lib/utils/formatters';
-import { AddRecordModal } from '../../../components/operations/AddRecordModal';
+import React, { useState } from "react";
+import { AppShell } from "../../../components/layout/AppShell";
+import { db } from "../../../lib/db/store";
+import { useAuth } from "../../../lib/auth/AuthContext";
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+  TableEmptyState,
+} from "../../../components/ui/Table";
+import { Badge } from "../../../components/ui/Badge";
+import { Button } from "../../../components/ui/Button";
+import { Drawer } from "../../../components/ui/Drawer";
+import { Tabs } from "../../../components/ui/Tabs";
+import { Mentor } from "../../../lib/types/models";
+import {
+  Check,
+  Copy,
+  Mail,
+  Phone,
+  MapPin,
+  Plus,
+  Upload,
+  UserRound,
+} from "lucide-react";
+import { formatCurrency, formatDate } from "../../../lib/utils/formatters";
+import { AddRecordModal } from "../../../components/operations/AddRecordModal";
 
 export default function MentorsPage() {
   const { hasPermission } = useAuth();
   const [mentors, setMentors] = useState<Mentor[]>(db.getMentors());
   const [branches, setBranches] = useState(() => db.getBranches());
   const [selectedMentor, setSelectedMentor] = useState<Mentor | null>(null);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState("overview");
   const [showModal, setShowModal] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
-  const [userDetails, setUserDetails] = useState<{ user: { id: string; name: string; email: string; status: string; lastLoginAt?: string | null } | null; activity: Array<{ id: string; action: string; details: string; timestamp: string }> } | null>(null);
-  const [copiedClasscardId, setCopiedClasscardId] = useState<string | null>(null);
-  const [classcardEvents, setClasscardEvents] = useState<Array<{ externalId: string; subjectName?: string | null; startTime: string; endTime: string; attendanceStatus?: string | null }>>([]);
-  const [classcardSyncMode, setClasscardSyncMode] = useState<'staff' | 'filters'>('staff');
-  const [classcardSyncStart, setClasscardSyncStart] = useState('');
-  const [classcardSyncEnd, setClasscardSyncEnd] = useState('');
-  const [classcardSyncSubject, setClasscardSyncSubject] = useState('');
-  const [classcardSyncLocation, setClasscardSyncLocation] = useState('');
-  const [classcardSyncMessage, setClasscardSyncMessage] = useState<string | null>(null);
+  const [userDetails, setUserDetails] = useState<{
+    user: {
+      id: string;
+      name: string;
+      email: string;
+      status: string;
+      lastLoginAt?: string | null;
+    } | null;
+    activity: Array<{
+      id: string;
+      action: string;
+      details: string;
+      timestamp: string;
+    }>;
+    linkableUser?: {
+      id: string;
+      name: string;
+      email: string;
+      employeeCode: string;
+    } | null;
+  } | null>(null);
+  const [copiedClasscardId, setCopiedClasscardId] = useState<string | null>(
+    null,
+  );
+  const [classcardEvents, setClasscardEvents] = useState<
+    Array<{
+      externalId: string;
+      subjectName?: string | null;
+      startTime: string;
+      endTime: string;
+      attendanceStatus?: string | null;
+    }>
+  >([]);
+  const [classcardSyncMode, setClasscardSyncMode] = useState<
+    "staff" | "filters"
+  >("staff");
+  const [classcardSyncStart, setClasscardSyncStart] = useState("");
+  const [classcardSyncEnd, setClasscardSyncEnd] = useState("");
+  const [classcardSyncSubject, setClasscardSyncSubject] = useState("");
+  const [classcardSyncLocation, setClasscardSyncLocation] = useState("");
+  const [classcardSyncMessage, setClasscardSyncMessage] = useState<
+    string | null
+  >(null);
 
   const plans = db.getPayrollPlans();
-  const canViewPayroll = hasPermission('payroll_dashboard', 'view_sensitive_payroll');
+  const canViewPayroll = hasPermission(
+    "payroll_dashboard",
+    "view_sensitive_payroll",
+  );
 
   const refreshMentors = async () => {
-    const response = await fetch('/api/mentors');
+    const response = await fetch("/api/mentors");
     const result = await response.json();
     if (!response.ok || !result.success) {
-      throw new Error(result.error || 'Unable to load mentors.');
+      throw new Error(result.error || "Unable to load mentors.");
     }
     setMentors(result.mentors);
   };
@@ -57,7 +111,9 @@ export default function MentorsPage() {
   React.useEffect(() => {
     const timer = window.setTimeout(() => {
       void refreshMentors().catch((error: unknown) => {
-        setImportMessage(error instanceof Error ? error.message : 'Unable to load mentors.');
+        setImportMessage(
+          error instanceof Error ? error.message : "Unable to load mentors.",
+        );
       });
     }, 0);
     return () => window.clearTimeout(timer);
@@ -65,21 +121,27 @@ export default function MentorsPage() {
 
   React.useEffect(() => {
     const loadBranches = async () => {
-      const response = await fetch('/api/branches');
+      const response = await fetch("/api/branches");
       const result = await response.json();
       if (!response.ok || !result.success) {
-        throw new Error(result.error || 'Unable to load campus branches.');
+        throw new Error(result.error || "Unable to load campus branches.");
       }
       setBranches(result.branches);
     };
     void loadBranches().catch((error: unknown) => {
-      setImportMessage(error instanceof Error ? error.message : 'Unable to load campus branches.');
+      setImportMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to load campus branches.",
+      );
     });
   }, []);
 
-  const handleStaffImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleStaffImport = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const file = event.target.files?.[0];
-    event.target.value = '';
+    event.target.value = "";
     if (!file) return;
     setIsImporting(true);
     setImportMessage(null);
@@ -88,43 +150,51 @@ export default function MentorsPage() {
       const lines = text.split(/\r?\n/).filter((line) => line.trim());
       const parse = (line: string) => {
         const cells: string[] = [];
-        let value = '';
+        let value = "";
         let quoted = false;
         for (const character of line) {
           if (character === '"') quoted = !quoted;
-          else if (character === ',' && !quoted) {
+          else if (character === "," && !quoted) {
             cells.push(value.trim());
-            value = '';
+            value = "";
           } else value += character;
         }
         cells.push(value.trim());
         return cells;
       };
-      const headers = parse(lines.shift() || '').map((header) => header.toLowerCase());
-      const index = (...names: string[]) => headers.findIndex((header) => names.includes(header));
+      const headers = parse(lines.shift() || "").map((header) =>
+        header.toLowerCase(),
+      );
+      const index = (...names: string[]) =>
+        headers.findIndex((header) => names.includes(header));
       const rows = lines.map((line) => {
         const cells = parse(line);
         return {
-          firstName: cells[index('first name')] || '',
-          lastName: cells[index('last name')] || '',
-          name: `${cells[index('first name')] || ''} ${cells[index('last name')] || ''}`.trim(),
-          role: cells[index('role')] || '',
-          phone: cells[index('phone')] || '',
-          email: cells[index('email', 'email id')] || '',
-          externalId: cells[index('classcard id', 'classcard staff id')] || '',
+          firstName: cells[index("first name")] || "",
+          lastName: cells[index("last name")] || "",
+          name: `${cells[index("first name")] || ""} ${cells[index("last name")] || ""}`.trim(),
+          role: cells[index("role")] || "",
+          phone: cells[index("phone")] || "",
+          email: cells[index("email", "email id")] || "",
+          externalId: cells[index("classcard id", "classcard staff id")] || "",
         };
       });
-      const response = await fetch('/api/mentors/import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/mentors/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rows }),
       });
       const result = await response.json();
-      if (!response.ok || !result.success) throw new Error(result.error || 'Staff import failed.');
+      if (!response.ok || !result.success)
+        throw new Error(result.error || "Staff import failed.");
       await refreshMentors();
-      setImportMessage(`Imported ${result.uniqueRows} staff records (${result.created} created, ${result.updated} updated, ${result.duplicatesCollapsed} duplicate rows collapsed).`);
+      setImportMessage(
+        `Imported ${result.uniqueRows} staff records (${result.created} created, ${result.updated} updated, ${result.duplicatesCollapsed} duplicate rows collapsed).`,
+      );
     } catch (error) {
-      setImportMessage(error instanceof Error ? error.message : 'Staff import failed.');
+      setImportMessage(
+        error instanceof Error ? error.message : "Staff import failed.",
+      );
     } finally {
       setIsImporting(false);
     }
@@ -143,7 +213,7 @@ export default function MentorsPage() {
       setCopiedClasscardId(classcardId);
       window.setTimeout(() => setCopiedClasscardId(null), 1500);
     } catch {
-      setImportMessage('Unable to copy the Classcard ID.');
+      setImportMessage("Unable to copy the Classcard ID.");
     }
   };
   const mentorPayslips = selectedMentor
@@ -160,22 +230,26 @@ export default function MentorsPage() {
 
   React.useEffect(() => {
     if (!selectedMentor) return;
-    void fetch(`/api/classcard/integration?mode=events&mentorId=${encodeURIComponent(selectedMentor.id)}`)
+    void fetch(
+      `/api/classcard/integration?mode=events&mentorId=${encodeURIComponent(selectedMentor.id)}`,
+    )
       .then(async (response) => response.json())
-      .then((payload) => setClasscardEvents(payload.success ? payload.events || [] : []))
+      .then((payload) =>
+        setClasscardEvents(payload.success ? payload.events || [] : []),
+      )
       .catch(() => setClasscardEvents([]));
   }, [selectedMentor]);
 
   const drawerTabs = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'classes', label: `Classes (${mentorClasses.length})` },
-    { id: 'sync', label: 'Sync' },
-    { id: 'user', label: 'User' },
+    { id: "overview", label: "Overview" },
+    { id: "classes", label: `Classes (${mentorClasses.length})` },
+    { id: "sync", label: "Sync" },
+    { id: "user", label: "User" },
     ...(canViewPayroll
       ? [
-          { id: 'payroll', label: 'Payroll & Plan' },
-          { id: 'penalties', label: `Penalties (${mentorPenalties.length})` },
-          { id: 'payslips', label: `Payslips (${mentorPayslips.length})` },
+          { id: "payroll", label: "Payroll & Plan" },
+          { id: "penalties", label: `Penalties (${mentorPenalties.length})` },
+          { id: "payslips", label: `Payslips (${mentorPayslips.length})` },
         ]
       : []),
   ];
@@ -186,23 +260,41 @@ export default function MentorsPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Mentors & Instructional Staff</h1>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+              Mentors & Instructional Staff
+            </h1>
             <p className="text-xs text-slate-500 mt-1">
-              Faculty roster, branch assignments, payroll plan mappings, and teaching metrics.
+              Faculty roster, branch assignments, payroll plan mappings, and
+              teaching metrics.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="primary" size="sm" leftIcon={<Plus className="w-3.5 h-3.5" />} onClick={() => setShowModal(true)}>
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Plus className="w-3.5 h-3.5" />}
+              onClick={() => setShowModal(true)}
+            >
               Add record
             </Button>
             <label className="inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-xs">
               <Upload className="w-3.5 h-3.5 text-slate-500" />
-              <span>{isImporting ? 'Importing...' : 'Import staff CSV'}</span>
-              <input type="file" accept=".csv,text/csv" className="hidden" disabled={isImporting} onChange={handleStaffImport} />
+              <span>{isImporting ? "Importing..." : "Import staff CSV"}</span>
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                disabled={isImporting}
+                onChange={handleStaffImport}
+              />
             </label>
           </div>
         </div>
-        {importMessage && <p className="rounded-lg border border-indigo-100 bg-indigo-50 p-3 text-xs text-indigo-800">{importMessage}</p>}
+        {importMessage && (
+          <p className="rounded-lg border border-indigo-100 bg-indigo-50 p-3 text-xs text-indigo-800">
+            {importMessage}
+          </p>
+        )}
 
         {/* Mentors Table or Empty State */}
         {mentors.length === 0 ? (
@@ -213,86 +305,92 @@ export default function MentorsPage() {
             />
           </div>
         ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Mentor</TableHead>
-              <TableHead>Assigned Campus</TableHead>
-              <TableHead>Assigned Payroll Plan</TableHead>
-              <TableHead>Teaching Volume</TableHead>
-              <TableHead>Attendance Rate</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Provenance</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {mentors.map((m) => {
-              const plan = plans.find((p) => p.id === m.payrollPlanId);
-              return (
-                <TableRow
-                  key={m.id}
-                  className="cursor-pointer"
-                  onClick={() => {
-                    setSelectedMentor(m);
-                    setActiveTab('overview');
-                  }}
-                >
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs shrink-0">
-                        {m.firstName[0]}
-                        {m.lastName[0]}
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Mentor</TableHead>
+                <TableHead>Assigned Campus</TableHead>
+                <TableHead>Assigned Payroll Plan</TableHead>
+                <TableHead>Teaching Volume</TableHead>
+                <TableHead>Attendance Rate</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Provenance</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {mentors.map((m) => {
+                const plan = plans.find((p) => p.id === m.payrollPlanId);
+                return (
+                  <TableRow
+                    key={m.id}
+                    className="cursor-pointer"
+                    onClick={() => {
+                      setSelectedMentor(m);
+                      setActiveTab("overview");
+                    }}
+                  >
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs shrink-0">
+                          {m.firstName[0]}
+                          {m.lastName[0]}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-900">
+                            {m.firstName} {m.lastName}
+                          </p>
+                          <p className="text-[11px] text-slate-400">
+                            {m.email}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-semibold text-slate-900">
-                          {m.firstName} {m.lastName}
-                        </p>
-                        <p className="text-[11px] text-slate-400">{m.email}</p>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-xs text-slate-700 font-medium">
-                    {m.branchName || 'Primary Campus'}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="purple" size="sm">
-                      {plan?.name || 'Default Plan'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-xs font-mono text-slate-700">
-                    {m.teachingHoursThisMonth} hrs ({m.completedClassesCount} classes)
-                  </TableCell>
-                  <TableCell className="text-xs font-semibold text-emerald-700">
-                    {m.attendanceRate}%
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={m.status === 'ACTIVE' ? 'success' : 'neutral'} size="sm" dot>
-                      {m.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {m.provenance === 'CLASSCARD_SOURCED' ? (
+                    </TableCell>
+                    <TableCell className="text-xs text-slate-700 font-medium">
+                      {m.branchName || "Primary Campus"}
+                    </TableCell>
+                    <TableCell>
                       <Badge variant="purple" size="sm">
-                        Classcard
+                        {plan?.name || "Default Plan"}
                       </Badge>
-                    ) : (
-                      <Badge variant="neutral" size="sm">
-                        Local
+                    </TableCell>
+                    <TableCell className="text-xs font-mono text-slate-700">
+                      {m.teachingHoursThisMonth} hrs ({m.completedClassesCount}{" "}
+                      classes)
+                    </TableCell>
+                    <TableCell className="text-xs font-semibold text-emerald-700">
+                      {m.attendanceRate}%
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={m.status === "ACTIVE" ? "success" : "neutral"}
+                        size="sm"
+                        dot
+                      >
+                        {m.status}
                       </Badge>
-                    )}
-
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="outline" size="sm">
-                      View Profile
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+                    </TableCell>
+                    <TableCell>
+                      {m.provenance === "CLASSCARD_SOURCED" ? (
+                        <Badge variant="purple" size="sm">
+                          Classcard
+                        </Badge>
+                      ) : (
+                        <Badge variant="neutral" size="sm">
+                          Local
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="outline" size="sm">
+                        View Profile
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         )}
 
         <AddRecordModal
@@ -301,68 +399,152 @@ export default function MentorsPage() {
           isOpen={showModal}
           onClose={() => setShowModal(false)}
           fields={[
-            { name: 'externalId', label: 'Classcard staff ID', placeholder: 'e.g. 974867', section: 'Classcard integration' },
-            { name: 'firstName', label: 'First name', placeholder: 'Priya', section: 'Personal details' },
-            { name: 'lastName', label: 'Last name', placeholder: 'Patel', section: 'Personal details' },
-            { name: 'email', label: 'Email', type: 'email', placeholder: 'mentor@example.com', section: 'Personal details' },
-            { name: 'phone', label: 'Phone', required: false, section: 'Personal details' },
-            { name: 'panNumber', label: 'PAN number', placeholder: 'ABCDE1234F', required: false, section: 'Personal details' },
             {
-              name: 'branchId',
-              label: 'Campus branch',
-              type: 'select',
-              section: 'Assignment',
-              options: branches.map((branch) => ({ label: `${branch.name} (${branch.code})`, value: branch.id })),
-              placeholder: 'Select a campus branch',
+              name: "externalId",
+              label: "Classcard staff ID",
+              placeholder: "e.g. 974867",
+              section: "Classcard integration",
             },
             {
-              name: 'userMode',
-              label: 'Platform login',
-              type: 'select',
-              section: 'Platform access',
+              name: "firstName",
+              label: "First name",
+              placeholder: "Priya",
+              section: "Personal details",
+            },
+            {
+              name: "lastName",
+              label: "Last name",
+              placeholder: "Patel",
+              section: "Personal details",
+            },
+            {
+              name: "email",
+              label: "Email",
+              type: "email",
+              placeholder: "mentor@example.com",
+              section: "Personal details",
+            },
+            {
+              name: "phone",
+              label: "Phone",
+              required: false,
+              section: "Personal details",
+            },
+            {
+              name: "panNumber",
+              label: "PAN number",
+              placeholder: "ABCDE1234F",
+              required: false,
+              section: "Personal details",
+            },
+            {
+              name: "branchId",
+              label: "Campus branch",
+              type: "select",
+              section: "Assignment",
+              options: branches.map((branch) => ({
+                label: `${branch.name} (${branch.code})`,
+                value: branch.id,
+              })),
+              placeholder: "Select a campus branch",
+            },
+            {
+              name: "userMode",
+              label: "Platform login",
+              type: "select",
+              section: "Platform access",
               required: false,
               options: [
-                { label: 'Do not create a user', value: 'none' },
-                { label: 'Create user and send invitation link', value: 'invite' },
-                { label: 'Create user and set password', value: 'password' },
+                { label: "Do not create a user", value: "none" },
+                {
+                  label: "Create user and send invitation link",
+                  value: "invite",
+                },
+                { label: "Create user and set password", value: "password" },
               ],
             },
-            { name: 'password', label: 'Login password', type: 'password', required: false, visibleWhen: (values) => values.userMode === 'password', placeholder: 'At least 8 characters' },
-            { name: 'confirmPassword', label: 'Confirm login password', type: 'password', required: false, visibleWhen: (values) => values.userMode === 'password' },
+            {
+              name: "password",
+              label: "Login password",
+              type: "password",
+              required: false,
+              visibleWhen: (values) => values.userMode === "password",
+              placeholder: "At least 8 characters",
+            },
+            {
+              name: "confirmPassword",
+              label: "Confirm login password",
+              type: "password",
+              required: false,
+              visibleWhen: (values) => values.userMode === "password",
+            },
           ]}
           onSave={async (values) => {
             const branch = branches.find((item) => item.id === values.branchId);
-            if (!branch) throw new Error('Select a campus branch before creating the mentor.');
-            if (!values.externalId?.trim()) throw new Error('Classcard ID is required before creating the mentor.');
-            const userMode = values.userMode || 'none';
-            const password = values.password?.trim() || '';
-            const confirmPassword = values.confirmPassword?.trim() || '';
-            if (userMode === 'password' && (password.length < 8 || password !== confirmPassword)) {
-              throw new Error('Login password must be at least 8 characters and match the confirmation.');
+            if (!branch)
+              throw new Error(
+                "Select a campus branch before creating the mentor.",
+              );
+            if (!values.externalId?.trim())
+              throw new Error(
+                "Classcard ID is required before creating the mentor.",
+              );
+            const userMode = values.userMode || "none";
+            const password = values.password?.trim() || "";
+            const confirmPassword = values.confirmPassword?.trim() || "";
+            if (
+              userMode === "password" &&
+              (password.length < 8 || password !== confirmPassword)
+            ) {
+              throw new Error(
+                "Login password must be at least 8 characters and match the confirmation.",
+              );
             }
-            const response = await fetch('/api/records', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'mentor', record: {
-              firstName: values.firstName.trim(), lastName: values.lastName.trim(),
-              email: values.email.trim(), phone: values.phone?.trim() || '', panNumber: values.panNumber?.trim().toUpperCase() || '', branchId: branch.id,
-              externalId: values.externalId.trim(),
-              branchName: branch.name, subjectIds: [],
-              status: 'ACTIVE', provenance: 'LOCALLY_CREATED', teachingHoursThisMonth: 0,
-              completedClassesCount: 0, attendanceRate: 0,
-            }})});
+            const response = await fetch("/api/records", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                type: "mentor",
+                record: {
+                  firstName: values.firstName.trim(),
+                  lastName: values.lastName.trim(),
+                  email: values.email.trim(),
+                  phone: values.phone?.trim() || "",
+                  panNumber: values.panNumber?.trim().toUpperCase() || "",
+                  branchId: branch.id,
+                  externalId: values.externalId.trim(),
+                  branchName: branch.name,
+                  subjectIds: [],
+                  status: "ACTIVE",
+                  provenance: "LOCALLY_CREATED",
+                  teachingHoursThisMonth: 0,
+                  completedClassesCount: 0,
+                  attendanceRate: 0,
+                },
+              }),
+            });
             const result = await response.json();
-            if (!response.ok) throw new Error(result.error || 'Unable to create mentor.');
-            if (userMode !== 'none') {
-              const userResponse = await fetch(`/api/mentors/${encodeURIComponent(result.record.id)}/user`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  mode: userMode,
-                  password: userMode === 'password' ? password : undefined,
-                  confirmPassword: userMode === 'password' ? confirmPassword : undefined,
-                }),
-              });
+            if (!response.ok)
+              throw new Error(result.error || "Unable to create mentor.");
+            if (userMode !== "none") {
+              const userResponse = await fetch(
+                `/api/mentors/${encodeURIComponent(result.record.id)}/user`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    mode: userMode,
+                    password: userMode === "password" ? password : undefined,
+                    confirmPassword:
+                      userMode === "password" ? confirmPassword : undefined,
+                  }),
+                },
+              );
               const userResult = await userResponse.json();
               if (!userResponse.ok || !userResult.success) {
-                throw new Error(`Mentor created, but the platform user could not be created: ${userResult.error || 'try again from the mentor profile.'}`);
+                throw new Error(
+                  `Mentor created, but the platform user could not be created: ${userResult.error || "try again from the mentor profile."}`,
+                );
               }
             }
             await refreshMentors();
@@ -377,43 +559,64 @@ export default function MentorsPage() {
           title={
             selectedMentor
               ? `${selectedMentor.firstName} ${selectedMentor.lastName}`
-              : 'Mentor Profile'
+              : "Mentor Profile"
           }
-          subtitle={selectedMentor ? `Mentor ID: ${selectedMentor.id}` : ''}
+          subtitle={selectedMentor ? `Mentor ID: ${selectedMentor.id}` : ""}
           width="lg"
         >
           {selectedMentor && (
             <div className="space-y-6">
-              <Tabs tabs={drawerTabs} activeTab={activeTab} onChange={setActiveTab} />
+              <Tabs
+                tabs={drawerTabs}
+                activeTab={activeTab}
+                onChange={setActiveTab}
+              />
 
               {/* OVERVIEW TAB */}
-              {activeTab === 'overview' && (
+              {activeTab === "overview" && (
                 <div className="space-y-4 text-xs">
                   <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/80 space-y-2.5">
                     <div className="flex items-center gap-2">
                       <Mail className="w-4 h-4 text-slate-400" />
-                      <span className="text-slate-800">{selectedMentor.email}</span>
+                      <span className="text-slate-800">
+                        {selectedMentor.email}
+                      </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Phone className="w-4 h-4 text-slate-400" />
-                      <span className="text-slate-800">{selectedMentor.phone || 'No phone recorded'}</span>
+                      <span className="text-slate-800">
+                        {selectedMentor.phone || "No phone recorded"}
+                      </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <MapPin className="w-4 h-4 text-slate-400" />
-                      <span className="text-slate-800">{selectedMentor.branchName}</span>
+                      <span className="text-slate-800">
+                        {selectedMentor.branchName}
+                      </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="w-4 text-center text-[10px] font-bold text-slate-400">CC</span>
-                      <span className="font-mono text-slate-800">{selectedMentor.externalId || 'No Classcard ID recorded'}</span>
+                      <span className="w-4 text-center text-[10px] font-bold text-slate-400">
+                        CC
+                      </span>
+                      <span className="font-mono text-slate-800">
+                        {selectedMentor.externalId ||
+                          "No Classcard ID recorded"}
+                      </span>
                       {selectedMentor.externalId && (
                         <button
                           type="button"
                           title="Copy Classcard ID"
                           aria-label="Copy Classcard ID"
-                          onClick={() => void copyClasscardId(selectedMentor.externalId!)}
+                          onClick={() =>
+                            void copyClasscardId(selectedMentor.externalId!)
+                          }
                           className="ml-auto rounded-md p-1.5 text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600"
                         >
-                          {copiedClasscardId === selectedMentor.externalId ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+                          {copiedClasscardId === selectedMentor.externalId ? (
+                            <Check className="h-4 w-4 text-emerald-600" />
+                          ) : (
+                            <Copy className="h-4 w-4" />
+                          )}
                         </button>
                       )}
                     </div>
@@ -421,7 +624,9 @@ export default function MentorsPage() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div className="p-3 bg-white border border-slate-200 rounded-xl">
-                      <p className="text-slate-400 uppercase font-semibold text-[10px]">Teaching Volume</p>
+                      <p className="text-slate-400 uppercase font-semibold text-[10px]">
+                        Teaching Volume
+                      </p>
                       <p className="text-base font-bold text-slate-900 mt-1">
                         {selectedMentor.teachingHoursThisMonth} hours
                       </p>
@@ -431,167 +636,540 @@ export default function MentorsPage() {
                     </div>
 
                     <div className="p-3 bg-white border border-slate-200 rounded-xl">
-                      <p className="text-slate-400 uppercase font-semibold text-[10px]">Attendance Rate</p>
+                      <p className="text-slate-400 uppercase font-semibold text-[10px]">
+                        Attendance Rate
+                      </p>
                       <p className="text-base font-bold text-emerald-600 mt-1">
                         {selectedMentor.attendanceRate}%
                       </p>
-                      <p className="text-[11px] text-slate-500 mt-0.5">Verified check-in rate</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Verified check-in rate
+                      </p>
                     </div>
                   </div>
                 </div>
               )}
 
               {/* CLASSES TAB */}
-              {activeTab === 'classes' && (
+              {activeTab === "classes" && (
                 <div className="space-y-2 text-xs">
                   {mentorClasses.map((cls) => (
-                    <div key={cls.id} className="p-3 bg-white border border-slate-200 rounded-xl space-y-1">
+                    <div
+                      key={cls.id}
+                      className="p-3 bg-white border border-slate-200 rounded-xl space-y-1"
+                    >
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-900">{cls.title}</span>
-                        <Badge variant={cls.status === 'COMPLETED' ? 'success' : 'info'} size="sm">
+                        <span className="font-bold text-slate-900">
+                          {cls.title}
+                        </span>
+                        <Badge
+                          variant={
+                            cls.status === "COMPLETED" ? "success" : "info"
+                          }
+                          size="sm"
+                        >
                           {cls.status}
                         </Badge>
                       </div>
                       <p className="text-slate-500">
-                        {formatDate(cls.startTime)} • {cls.durationMinutes} mins • {cls.branchName}
+                        {formatDate(cls.startTime)} • {cls.durationMinutes} mins
+                        • {cls.branchName}
                       </p>
                     </div>
                   ))}
                 </div>
               )}
 
-              {activeTab === 'sync' && (
+              {activeTab === "sync" && (
                 <div className="space-y-4 text-xs">
                   <div className="flex gap-2">
-                    <Button size="sm" variant={classcardSyncMode === 'staff' ? 'primary' : 'outline'} onClick={() => setClasscardSyncMode('staff')}>By staff ID</Button>
-                    <Button size="sm" variant={classcardSyncMode === 'filters' ? 'primary' : 'outline'} onClick={() => setClasscardSyncMode('filters')}>Subject, staff ID & location</Button>
+                    <Button
+                      size="sm"
+                      variant={
+                        classcardSyncMode === "staff" ? "primary" : "outline"
+                      }
+                      onClick={() => setClasscardSyncMode("staff")}
+                    >
+                      By staff ID
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={
+                        classcardSyncMode === "filters" ? "primary" : "outline"
+                      }
+                      onClick={() => setClasscardSyncMode("filters")}
+                    >
+                      Subject, staff ID & location
+                    </Button>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="font-semibold text-slate-700">Start date<input type="date" value={classcardSyncStart} onChange={(event) => setClasscardSyncStart(event.target.value)} className="mt-1 w-full rounded-lg border p-2 font-normal" /></label>
-                    <label className="font-semibold text-slate-700">End date<input type="date" value={classcardSyncEnd} onChange={(event) => setClasscardSyncEnd(event.target.value)} className="mt-1 w-full rounded-lg border p-2 font-normal" /></label>
-                    {classcardSyncMode === 'filters' && <><label className="font-semibold text-slate-700">Subject<input value={classcardSyncSubject} onChange={(event) => setClasscardSyncSubject(event.target.value)} className="mt-1 w-full rounded-lg border p-2 font-normal" /></label><label className="font-semibold text-slate-700">Location<input value={classcardSyncLocation} onChange={(event) => setClasscardSyncLocation(event.target.value)} className="mt-1 w-full rounded-lg border p-2 font-normal" /></label></>}
+                    <label className="font-semibold text-slate-700">
+                      Start date
+                      <input
+                        type="date"
+                        value={classcardSyncStart}
+                        onChange={(event) =>
+                          setClasscardSyncStart(event.target.value)
+                        }
+                        className="mt-1 w-full rounded-lg border p-2 font-normal"
+                      />
+                    </label>
+                    <label className="font-semibold text-slate-700">
+                      End date
+                      <input
+                        type="date"
+                        value={classcardSyncEnd}
+                        onChange={(event) =>
+                          setClasscardSyncEnd(event.target.value)
+                        }
+                        className="mt-1 w-full rounded-lg border p-2 font-normal"
+                      />
+                    </label>
+                    {classcardSyncMode === "filters" && (
+                      <>
+                        <label className="font-semibold text-slate-700">
+                          Subject
+                          <input
+                            value={classcardSyncSubject}
+                            onChange={(event) =>
+                              setClasscardSyncSubject(event.target.value)
+                            }
+                            className="mt-1 w-full rounded-lg border p-2 font-normal"
+                          />
+                        </label>
+                        <label className="font-semibold text-slate-700">
+                          Location
+                          <input
+                            value={classcardSyncLocation}
+                            onChange={(event) =>
+                              setClasscardSyncLocation(event.target.value)
+                            }
+                            className="mt-1 w-full rounded-lg border p-2 font-normal"
+                          />
+                        </label>
+                      </>
+                    )}
                   </div>
-                  <Button onClick={async () => {
-                    if (!selectedMentor.externalId) { setClasscardSyncMessage('This mentor has no Classcard staff ID.'); return; }
-                    const response = await fetch('/api/classcard/integration', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sync-events', start: classcardSyncStart, end: classcardSyncEnd, staff: selectedMentor.externalId, subject: classcardSyncSubject, location: classcardSyncLocation }) });
-                    const payload = await response.json();
-                    if (!response.ok || !payload.success) { setClasscardSyncMessage(payload.error || 'Classcard sync failed.'); return; }
-                    setClasscardSyncMessage(`Fetched ${payload.fetched} sessions and saved ${payload.saved}.`);
-                    const events = await fetch(`/api/classcard/integration?mode=events&mentorId=${encodeURIComponent(selectedMentor.id)}&start=${encodeURIComponent(classcardSyncStart)}&end=${encodeURIComponent(classcardSyncEnd)}`).then((result) => result.json());
-                    setClasscardEvents(events.events || []);
-                  }}>Fetch Classcard sessions</Button>
-                  {classcardSyncMessage && <p className="rounded-lg bg-indigo-50 p-3 text-indigo-700">{classcardSyncMessage}</p>}
-                  <div className="space-y-2">{classcardEvents.map((event) => <div key={event.externalId} className="rounded-lg border border-slate-200 p-3"><p className="font-semibold text-slate-900">{event.subjectName || 'Classcard session'}</p><p className="mt-1 text-slate-500">{new Date(event.startTime).toLocaleString()} – {new Date(event.endTime).toLocaleTimeString()} · {event.attendanceStatus || 'Attendance pending'}</p></div>)}{classcardEvents.length === 0 && <p className="text-slate-500">No Classcard sessions saved for this mentor yet.</p>}</div>
+                  <Button
+                    onClick={async () => {
+                      if (!selectedMentor.externalId) {
+                        setClasscardSyncMessage(
+                          "This mentor has no Classcard staff ID.",
+                        );
+                        return;
+                      }
+                      const response = await fetch(
+                        "/api/classcard/integration",
+                        {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            action: "sync-events",
+                            start: classcardSyncStart,
+                            end: classcardSyncEnd,
+                            staff: selectedMentor.externalId,
+                            subject: classcardSyncSubject,
+                            location: classcardSyncLocation,
+                          }),
+                        },
+                      );
+                      const payload = await response.json();
+                      if (!response.ok || !payload.success) {
+                        setClasscardSyncMessage(
+                          payload.error || "Classcard sync failed.",
+                        );
+                        return;
+                      }
+                      setClasscardSyncMessage(
+                        `Fetched ${payload.fetched} sessions and saved ${payload.saved}.`,
+                      );
+                      const events = await fetch(
+                        `/api/classcard/integration?mode=events&mentorId=${encodeURIComponent(selectedMentor.id)}&start=${encodeURIComponent(classcardSyncStart)}&end=${encodeURIComponent(classcardSyncEnd)}`,
+                      ).then((result) => result.json());
+                      setClasscardEvents(events.events || []);
+                    }}
+                  >
+                    Fetch Classcard sessions
+                  </Button>
+                  {classcardSyncMessage && (
+                    <p className="rounded-lg bg-indigo-50 p-3 text-indigo-700">
+                      {classcardSyncMessage}
+                    </p>
+                  )}
+                  <div className="space-y-2">
+                    {classcardEvents.map((event) => (
+                      <div
+                        key={event.externalId}
+                        className="rounded-lg border border-slate-200 p-3"
+                      >
+                        <p className="font-semibold text-slate-900">
+                          {event.subjectName || "Classcard session"}
+                        </p>
+                        <p className="mt-1 text-slate-500">
+                          {new Date(event.startTime).toLocaleString()} –{" "}
+                          {new Date(event.endTime).toLocaleTimeString()} ·{" "}
+                          {event.attendanceStatus || "Attendance pending"}
+                        </p>
+                      </div>
+                    ))}
+                    {classcardEvents.length === 0 && (
+                      <p className="text-slate-500">
+                        No Classcard sessions saved for this mentor yet.
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
 
               {/* USER TAB */}
-              {activeTab === 'user' && (
+              {activeTab === "user" && (
                 <div className="space-y-4 text-xs">
                   {!userDetails?.user ? (
                     <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
                       <p className="font-bold text-amber-900">No user made</p>
-                      <p className="mt-1 text-amber-800">Create the mentor portal user only when you are ready to grant access.</p>
+                      <p className="mt-1 text-amber-800">
+                        Create the mentor portal user only when you are ready to
+                        grant access.
+                      </p>
+                      {userDetails?.linkableUser && (
+                        <div className="mt-3 rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-indigo-900">
+                          <p className="font-semibold">
+                            Existing Employee Portal account found
+                          </p>
+                          <p className="mt-1 text-indigo-800">
+                            {userDetails.linkableUser.name} ·{" "}
+                            {userDetails.linkableUser.email} ·{" "}
+                            {userDetails.linkableUser.employeeCode}
+                          </p>
+                          <Button
+                            size="sm"
+                            className="mt-3"
+                            onClick={async () => {
+                              try {
+                                const response = await fetch(
+                                  `/api/mentors/${selectedMentor.id}/user`,
+                                  {
+                                    method: "POST",
+                                    headers: {
+                                      "Content-Type": "application/json",
+                                    },
+                                    body: JSON.stringify({ mode: "link" }),
+                                  },
+                                );
+                                const payload = await response.json();
+                                if (!response.ok || !payload.success)
+                                  throw new Error(
+                                    payload.error ||
+                                      "Unable to link the account.",
+                                  );
+                                setUserDetails({
+                                  user: payload.user,
+                                  activity: [],
+                                });
+                                setImportMessage(
+                                  "Existing Employee Portal account linked to this mentor.",
+                                );
+                              } catch (error) {
+                                setImportMessage(
+                                  error instanceof Error
+                                    ? error.message
+                                    : "Unable to link the account.",
+                                );
+                              }
+                            }}
+                          >
+                            Link existing employee account
+                          </Button>
+                        </div>
+                      )}
                       <div className="mt-3 flex gap-2">
-                        <Button size="sm" onClick={async () => {
-                          try {
-                            const response = await fetch(`/api/mentors/${selectedMentor.id}/user`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'invite' }) });
-                            const payload = await response.json();
-                            if (!response.ok || !payload.success) throw new Error(payload.error || 'Unable to create user.');
-                            setUserDetails({ user: payload.user, activity: [] });
-                          } catch (error) { setImportMessage(error instanceof Error ? error.message : 'Unable to create user.'); }
-                        }}>Make user & send invitation</Button>
-                        <Button size="sm" variant="outline" onClick={async () => {
-                          const password = window.prompt('Enter a password (minimum 8 characters):') || '';
-                          const confirmPassword = window.prompt('Confirm the password:') || '';
-                          try {
-                            const response = await fetch(`/api/mentors/${selectedMentor.id}/user`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'password', password, confirmPassword }) });
-                            const payload = await response.json();
-                            if (!response.ok || !payload.success) throw new Error(payload.error || 'Unable to create user.');
-                            setUserDetails({ user: payload.user, activity: [] });
-                          } catch (error) { setImportMessage(error instanceof Error ? error.message : 'Unable to create user.'); }
-                        }}>Make user & set password</Button>
+                        <Button
+                          size="sm"
+                          onClick={async () => {
+                            try {
+                              const response = await fetch(
+                                `/api/mentors/${selectedMentor.id}/user`,
+                                {
+                                  method: "POST",
+                                  headers: {
+                                    "Content-Type": "application/json",
+                                  },
+                                  body: JSON.stringify({ mode: "invite" }),
+                                },
+                              );
+                              const payload = await response.json();
+                              if (!response.ok || !payload.success)
+                                throw new Error(
+                                  payload.error || "Unable to create user.",
+                                );
+                              setUserDetails({
+                                user: payload.user,
+                                activity: [],
+                              });
+                            } catch (error) {
+                              setImportMessage(
+                                error instanceof Error
+                                  ? error.message
+                                  : "Unable to create user.",
+                              );
+                            }
+                          }}
+                        >
+                          Make user & send invitation
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            const password =
+                              window.prompt(
+                                "Enter a password (minimum 8 characters):",
+                              ) || "";
+                            const confirmPassword =
+                              window.prompt("Confirm the password:") || "";
+                            try {
+                              const response = await fetch(
+                                `/api/mentors/${selectedMentor.id}/user`,
+                                {
+                                  method: "POST",
+                                  headers: {
+                                    "Content-Type": "application/json",
+                                  },
+                                  body: JSON.stringify({
+                                    mode: "password",
+                                    password,
+                                    confirmPassword,
+                                  }),
+                                },
+                              );
+                              const payload = await response.json();
+                              if (!response.ok || !payload.success)
+                                throw new Error(
+                                  payload.error || "Unable to create user.",
+                                );
+                              setUserDetails({
+                                user: payload.user,
+                                activity: [],
+                              });
+                            } catch (error) {
+                              setImportMessage(
+                                error instanceof Error
+                                  ? error.message
+                                  : "Unable to create user.",
+                              );
+                            }
+                          }}
+                        >
+                          Make user & set password
+                        </Button>
                       </div>
                     </div>
                   ) : (
                     <div className="rounded-xl border border-slate-200 bg-white p-4">
-                      <div className="flex items-center gap-2"><UserRound className="h-4 w-4 text-indigo-600" /><strong>{userDetails.user.name}</strong><Badge size="sm" variant="success">{userDetails.user.status}</Badge></div>
-                      <p className="mt-2 text-slate-600">{userDetails.user.email}</p>
-                      <p className="mt-1 text-slate-500">Last login: {userDetails.user.lastLoginAt ? formatDate(userDetails.user.lastLoginAt) : 'Never'}</p>
-                      <div className="mt-4 border-t pt-3"><p className="font-semibold text-slate-700">Session activity</p>{userDetails.activity.length ? userDetails.activity.map((event) => <p key={event.id} className="mt-2 text-slate-600">{formatDate(event.timestamp)} · {event.action} · {event.details}</p>) : <p className="mt-2 text-slate-500">No activity recorded.</p>}</div>
+                      <div className="flex items-center gap-2">
+                        <UserRound className="h-4 w-4 text-indigo-600" />
+                        <strong>{userDetails.user.name}</strong>
+                        <Badge size="sm" variant="success">
+                          {userDetails.user.status}
+                        </Badge>
+                      </div>
+                      <p className="mt-2 text-slate-600">
+                        {userDetails.user.email}
+                      </p>
+                      <p className="mt-1 text-slate-500">
+                        Last login:{" "}
+                        {userDetails.user.lastLoginAt
+                          ? formatDate(userDetails.user.lastLoginAt)
+                          : "Never"}
+                      </p>
+                      <div className="mt-4 border-t pt-3">
+                        <p className="font-semibold text-slate-700">
+                          Session activity
+                        </p>
+                        {userDetails.activity.length ? (
+                          userDetails.activity.map((event) => (
+                            <p key={event.id} className="mt-2 text-slate-600">
+                              {formatDate(event.timestamp)} · {event.action} ·{" "}
+                              {event.details}
+                            </p>
+                          ))
+                        ) : (
+                          <p className="mt-2 text-slate-500">
+                            No activity recorded.
+                          </p>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
               )}
 
               {/* PAYROLL TAB */}
-              {activeTab === 'payroll' && canViewPayroll && (
+              {activeTab === "payroll" && canViewPayroll && (
                 <div className="space-y-4 text-xs">
                   {(() => {
-                    const plan = plans.find((p) => p.id === selectedMentor.payrollPlanId);
+                    const plan = plans.find(
+                      (p) => p.id === selectedMentor.payrollPlanId,
+                    );
                     if (!plan) return <p>No plan configured.</p>;
                     return (
                       <div className="p-4 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-2">
                         <div className="flex items-center justify-between">
-                          <span className="font-bold text-indigo-900 text-sm">{plan.name}</span>
+                          <span className="font-bold text-indigo-900 text-sm">
+                            {plan.name}
+                          </span>
                         </div>
                         <p className="text-indigo-800">{plan.description}</p>
                         <div className="pt-2 border-t border-indigo-200 grid grid-cols-2 gap-2 text-slate-700">
-                          <div>Model: <strong>{plan.compensationModel}</strong></div>
-                          <div>Min Duration: <strong>{plan.minEligibleDurationMinutes} mins</strong></div>
-                          {plan.compensationModel === 'FIXED_SALARY' && (
-                            <div>Base Salary: <strong>{formatCurrency(plan.baseSalary)}</strong></div>
+                          <div>
+                            Model: <strong>{plan.compensationModel}</strong>
+                          </div>
+                          <div>
+                            Min Duration:{" "}
+                            <strong>
+                              {plan.minEligibleDurationMinutes} mins
+                            </strong>
+                          </div>
+                          {plan.compensationModel === "FIXED_SALARY" && (
+                            <div>
+                              Base Salary:{" "}
+                              <strong>{formatCurrency(plan.baseSalary)}</strong>
+                            </div>
                           )}
-                          {(plan.compensationModel === 'PER_CLASS' || plan.compensationModel === 'HYBRID') && (
-                            <div>Per Class: <strong>{formatCurrency(plan.defaultClassRate)}</strong></div>
+                          {(plan.compensationModel === "PER_CLASS" ||
+                            plan.compensationModel === "HYBRID") && (
+                            <div>
+                              Per Class:{" "}
+                              <strong>
+                                {formatCurrency(plan.defaultClassRate)}
+                              </strong>
+                            </div>
                           )}
-                          {(plan.compensationModel === 'DURATION_BASED' || plan.compensationModel === 'HYBRID') && (
-                            <div>Hourly: <strong>{formatCurrency(plan.hourlyRate)}/hr</strong></div>
+                          {(plan.compensationModel === "DURATION_BASED" ||
+                            plan.compensationModel === "HYBRID") && (
+                            <div>
+                              Hourly:{" "}
+                              <strong>
+                                {formatCurrency(plan.hourlyRate)}/hr
+                              </strong>
+                            </div>
                           )}
-                          {(plan.compensationModel === 'PER_STUDENT' || plan.compensationModel === 'HYBRID') && (
-                            <div>Per Student: <strong>{formatCurrency(plan.perStudentRate)}</strong></div>
+                          {(plan.compensationModel === "PER_STUDENT" ||
+                            plan.compensationModel === "HYBRID") && (
+                            <div>
+                              Per Student:{" "}
+                              <strong>
+                                {formatCurrency(plan.perStudentRate)}
+                              </strong>
+                            </div>
                           )}
-                          {(plan.compensationModel === 'PERCENTAGE_BASED' || plan.compensationModel === 'HYBRID') && (
-                            <div>Revenue Share: <strong>{plan.revenuePercentage}%</strong></div>
+                          {(plan.compensationModel === "PERCENTAGE_BASED" ||
+                            plan.compensationModel === "HYBRID") && (
+                            <div>
+                              Revenue Share:{" "}
+                              <strong>{plan.revenuePercentage}%</strong>
+                            </div>
                           )}
-                          <div>Late Cancel Pay: <strong>{plan.lateCancellationPayPercent}%</strong></div>
+                          <div>
+                            Late Cancel Pay:{" "}
+                            <strong>{plan.lateCancellationPayPercent}%</strong>
+                          </div>
                         </div>
                       </div>
                     );
                   })()}
                   <div className="rounded-xl border border-slate-200 p-4">
-                    <p className="font-bold text-slate-800">Assigned payroll plans</p>
-                    <div className="mt-3 space-y-2">{plans.map((candidate) => {
-                      const checked = (selectedMentor.payrollPlanIds || (selectedMentor.payrollPlanId ? [selectedMentor.payrollPlanId] : [])).includes(candidate.id);
-                      return <label key={candidate.id} className="flex items-center gap-2"><input type="checkbox" checked={checked} onChange={async (event) => {
-                        const current = new Set(selectedMentor.payrollPlanIds || (selectedMentor.payrollPlanId ? [selectedMentor.payrollPlanId] : []));
-                        if (event.target.checked) current.add(candidate.id); else current.delete(candidate.id);
-                        const payrollPlanIds = Array.from(current);
-                        const response = await fetch('/api/mentors', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: selectedMentor.id, payrollPlanIds, payrollPlanId: payrollPlanIds[0] }) });
-                        const payload = await response.json();
-                        if (!response.ok || !payload.success) throw new Error(payload.error || 'Unable to update payroll plans.');
-                        setSelectedMentor({ ...selectedMentor, payrollPlanIds, payrollPlanId: payrollPlanIds[0] });
-                        await refreshMentors();
-                      }} /><span>{candidate.name} ({candidate.code})</span></label>;
-                    })}</div>
+                    <p className="font-bold text-slate-800">
+                      Assigned payroll plans
+                    </p>
+                    <div className="mt-3 space-y-2">
+                      {plans.map((candidate) => {
+                        const checked = (
+                          selectedMentor.payrollPlanIds ||
+                          (selectedMentor.payrollPlanId
+                            ? [selectedMentor.payrollPlanId]
+                            : [])
+                        ).includes(candidate.id);
+                        return (
+                          <label
+                            key={candidate.id}
+                            className="flex items-center gap-2"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={async (event) => {
+                                const current = new Set(
+                                  selectedMentor.payrollPlanIds ||
+                                    (selectedMentor.payrollPlanId
+                                      ? [selectedMentor.payrollPlanId]
+                                      : []),
+                                );
+                                if (event.target.checked)
+                                  current.add(candidate.id);
+                                else current.delete(candidate.id);
+                                const payrollPlanIds = Array.from(current);
+                                const response = await fetch("/api/mentors", {
+                                  method: "PATCH",
+                                  headers: {
+                                    "Content-Type": "application/json",
+                                  },
+                                  body: JSON.stringify({
+                                    id: selectedMentor.id,
+                                    payrollPlanIds,
+                                    payrollPlanId: payrollPlanIds[0],
+                                  }),
+                                });
+                                const payload = await response.json();
+                                if (!response.ok || !payload.success)
+                                  throw new Error(
+                                    payload.error ||
+                                      "Unable to update payroll plans.",
+                                  );
+                                setSelectedMentor({
+                                  ...selectedMentor,
+                                  payrollPlanIds,
+                                  payrollPlanId: payrollPlanIds[0],
+                                });
+                                await refreshMentors();
+                              }}
+                            />
+                            <span>
+                              {candidate.name} ({candidate.code})
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               )}
 
               {/* PENALTIES TAB */}
-              {activeTab === 'penalties' && canViewPayroll && (
+              {activeTab === "penalties" && canViewPayroll && (
                 <div className="space-y-2 text-xs">
                   {mentorPenalties.length === 0 ? (
-                    <p className="text-slate-500">No penalties recorded for this mentor.</p>
+                    <p className="text-slate-500">
+                      No penalties recorded for this mentor.
+                    </p>
                   ) : (
                     mentorPenalties.map((pen) => (
-                      <div key={pen.id} className="p-3 bg-white border border-slate-200 rounded-xl space-y-1">
+                      <div
+                        key={pen.id}
+                        className="p-3 bg-white border border-slate-200 rounded-xl space-y-1"
+                      >
                         <div className="flex items-center justify-between">
-                          <span className="font-bold text-slate-900">{pen.category.replace(/_/g, ' ')}</span>
-                          <span className="font-bold text-rose-600">-{formatCurrency(pen.amount)}</span>
+                          <span className="font-bold text-slate-900">
+                            {pen.category.replace(/_/g, " ")}
+                          </span>
+                          <span className="font-bold text-rose-600">
+                            -{formatCurrency(pen.amount)}
+                          </span>
                         </div>
                         <p className="text-slate-600">{pen.reason}</p>
-                        <Badge variant="danger" size="sm">{pen.status}</Badge>
+                        <Badge variant="danger" size="sm">
+                          {pen.status}
+                        </Badge>
                       </div>
                     ))
                   )}
@@ -599,20 +1177,33 @@ export default function MentorsPage() {
               )}
 
               {/* PAYSLIPS TAB */}
-              {activeTab === 'payslips' && canViewPayroll && (
+              {activeTab === "payslips" && canViewPayroll && (
                 <div className="space-y-2 text-xs">
                   {mentorPayslips.length === 0 ? (
-                    <p className="text-slate-500">No finalized payslips generated yet.</p>
+                    <p className="text-slate-500">
+                      No finalized payslips generated yet.
+                    </p>
                   ) : (
                     mentorPayslips.map((slip) => (
-                      <div key={slip.id} className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between">
+                      <div
+                        key={slip.id}
+                        className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between"
+                      >
                         <div>
-                          <p className="font-semibold text-slate-900">{slip.periodName}</p>
-                          <p className="text-slate-400 text-[11px]">{slip.payslipNumber}</p>
+                          <p className="font-semibold text-slate-900">
+                            {slip.periodName}
+                          </p>
+                          <p className="text-slate-400 text-[11px]">
+                            {slip.payslipNumber}
+                          </p>
                         </div>
                         <div className="text-right">
-                          <p className="font-bold text-slate-900">{formatCurrency(slip.netPayable)}</p>
-                          <Badge variant="success" size="sm">{slip.paymentStatus}</Badge>
+                          <p className="font-bold text-slate-900">
+                            {formatCurrency(slip.netPayable)}
+                          </p>
+                          <Badge variant="success" size="sm">
+                            {slip.paymentStatus}
+                          </Badge>
                         </div>
                       </div>
                     ))

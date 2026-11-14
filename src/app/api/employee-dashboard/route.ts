@@ -5,6 +5,10 @@ import {
 } from "../../../lib/auth/server";
 import { prisma } from "../../../lib/db/prisma";
 import { ensureServerPersistence } from "../../../lib/db/server-initialization";
+import {
+  employeeLinkDiagnostics,
+  resolveEmployeeForUser,
+} from "../../../lib/employee/resolve-employee";
 
 const approvedStatuses = ["APPROVED", "LOCKED", "PAID"] as const;
 
@@ -23,80 +27,23 @@ export async function GET(req: NextRequest) {
   const denied = await authorizationErrorAsync(req);
   if (denied) return denied;
   const user = await getSessionUserAsync(req);
-  let employee = user?.employeeId
+  const resolvedEmployee = await resolveEmployeeForUser(user);
+  const employee = resolvedEmployee
     ? await prisma.employee.findUnique({
-        where: { id: user.employeeId },
+        where: { id: resolvedEmployee.id },
         include: { leaveRequests: { orderBy: { createdAt: "desc" }, take: 5 } },
       })
-    : user
-      ? await prisma.employee.findUnique({
-          where: { userId: user.id },
-          include: {
-            leaveRequests: { orderBy: { createdAt: "desc" }, take: 5 },
-          },
-        })
-      : null;
+    : null;
   // Recover safely from an interrupted account-creation flow. The work email
   // is unique on Employee and User, so an unlinked employee record with the
   // exact signed-in email can be connected without guessing an identity.
-  const mentorEmail = user?.mentorId
-    ? (
-        await prisma.mentor.findUnique({
-          where: { id: user.mentorId },
-          select: { email: true },
-        })
-      )?.email
-    : undefined;
-  if (!employee && user?.email) {
-    const candidateEmails = [
-      ...new Set(
-        [user.email, mentorEmail]
-          .filter((email): email is string => Boolean(email))
-          .map((email) => email.trim().toLowerCase()),
-      ),
-    ];
-    const emailMatchedEmployee = await prisma.employee.findUnique({
-      where: { email: candidateEmails[0] || user.email.trim().toLowerCase() },
-      include: { leaveRequests: { orderBy: { createdAt: "desc" }, take: 5 } },
-    });
-    const mentorEmailMatchedEmployee =
-      !emailMatchedEmployee && candidateEmails[1]
-        ? await prisma.employee.findUnique({
-            where: { email: candidateEmails[1] },
-            include: {
-              leaveRequests: { orderBy: { createdAt: "desc" }, take: 5 },
-            },
-          })
-        : null;
-    const matchedEmployee = emailMatchedEmployee || mentorEmailMatchedEmployee;
-    if (
-      matchedEmployee &&
-      (!matchedEmployee.userId || matchedEmployee.userId === user.id)
-    ) {
-      employee =
-        matchedEmployee.userId === user.id
-          ? matchedEmployee
-          : await prisma.employee.update({
-              where: { id: matchedEmployee.id },
-              data: { userId: user.id },
-              include: {
-                leaveRequests: { orderBy: { createdAt: "desc" }, take: 5 },
-              },
-            });
-    }
-  }
   if (!employee)
     return NextResponse.json({
       success: true,
       employee: null,
       components: [],
       totalPayable: 0,
-      linkState: {
-        accountEmail: user?.email || null,
-        mentorEmail: mentorEmail || null,
-        reason:
-          "No unlinked Employee Record was found for this account's work email.",
-      },
+      linkState: await employeeLinkDiagnostics(user),
     });
 
   const requestedMonth =

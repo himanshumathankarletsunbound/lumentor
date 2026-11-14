@@ -79,6 +79,7 @@ export default function LoginPage() {
       if (response.user.role === 'ADMINISTRATOR') router.push('/overview/executive');
       else if (response.user.role === 'OPERATIONS') router.push('/overview/operations');
       else if (response.user.role === 'MENTOR') router.push('/overview/mentor');
+      else if (response.user.role === 'EMPLOYEE') router.push('/employee/dashboard');
       else router.push('/');
     } else {
       setError(response.error || 'Invalid email or password. Please try again.');

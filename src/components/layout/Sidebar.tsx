@@ -587,6 +587,12 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
             <GraduationCap className="w-3 h-3" /> Faculty
           </span>
         );
+      case 'EMPLOYEE':
+        return (
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-violet-300 bg-violet-500/10 px-2 py-0.5 rounded-full border border-violet-500/20">
+            <Briefcase className="w-3 h-3" /> Employee
+          </span>
+        );
       default:
         return null;
     }

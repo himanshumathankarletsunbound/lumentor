@@ -849,6 +849,7 @@ export default function UsersRolesPage() {
                     <option value="OPERATIONS">Operations Specialist</option>
                     <option value="AUDIT">Audit Team</option>
                     <option value="MENTOR">Mentor (Faculty Portal)</option>
+                    <option value="EMPLOYEE">Employee (Employee Panel)</option>
                     <option value="CUSTOM">Custom Role</option>
                   </select>
                 </div>

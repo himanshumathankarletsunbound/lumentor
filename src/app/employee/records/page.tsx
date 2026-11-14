@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { AppShell } from "../../../components/layout/AppShell";
 import { Button } from "../../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card";
+import { Drawer } from "../../../components/ui/Drawer";
+import { Tabs } from "../../../components/ui/Tabs";
 import {
   Table,
   TableBody,
@@ -45,6 +46,9 @@ export default function EmployeeRecords() {
   const [step, setStep] = useState(1);
   const [open, setOpen] = useState(false);
   const [notice, setNotice] = useState("");
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [profileTab, setProfileTab] = useState("overview");
+  const [profileUser, setProfileUser] = useState<{ id: string; name: string; email: string; status: string; lastLoginAt?: string | null } | null>(null);
   const load = () =>
     fetch("/api/employees")
       .then((r) => r.json())
@@ -53,6 +57,13 @@ export default function EmployeeRecords() {
     const t = setTimeout(() => void load(), 0);
     return () => clearTimeout(t);
   }, []);
+  useEffect(() => {
+    if (!selectedEmployee) return;
+    void fetch(`/api/employees/${selectedEmployee.id}/user`)
+      .then((response) => response.json())
+      .then((payload) => setProfileUser(payload.user || null))
+      .catch(() => setProfileUser(null));
+  }, [selectedEmployee]);
   const save = async () => {
     const r = await fetch("/api/employees", {
       method: "POST",
@@ -125,12 +136,13 @@ export default function EmployeeRecords() {
                     <TableCell>{e.department || "—"}</TableCell>
                     <TableCell>{e.status}</TableCell>
                     <TableCell className="text-right">
-                      <Link
-                        href={`/employee/records/${e.id}`}
+                      <button
+                        type="button"
+                        onClick={() => { setSelectedEmployee(e); setProfileTab("overview"); }}
                         className="inline-flex rounded-md border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100"
                       >
                         View profile
-                      </Link>
+                      </button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -138,6 +150,16 @@ export default function EmployeeRecords() {
             </Table>
           </CardContent>
         </Card>
+        <Drawer isOpen={Boolean(selectedEmployee)} onClose={() => setSelectedEmployee(null)} title={selectedEmployee ? `${selectedEmployee.firstName} ${selectedEmployee.lastName}` : "Employee profile"} subtitle={selectedEmployee ? `Employee ID: ${selectedEmployee.employeeCode}` : ""} width="lg">
+          {selectedEmployee && <div className="space-y-5 text-xs">
+            <Tabs tabs={[{ id: "overview", label: "Overview" }, { id: "attendance", label: "Attendance" }, { id: "earnings", label: "Earnings" }, { id: "payslips", label: "Payslips" }, { id: "user", label: "User" }]} activeTab={profileTab} onChange={setProfileTab} />
+            {profileTab === "overview" && <div className="space-y-2 rounded-xl border bg-slate-50 p-4"><p><strong>Email:</strong> {selectedEmployee.email}</p><p><strong>Department:</strong> {selectedEmployee.department || "—"}</p><p><strong>Job title:</strong> {selectedEmployee.jobTitle || "—"}</p><p><strong>Status:</strong> {selectedEmployee.status}</p></div>}
+            {profileTab === "attendance" && <p className="rounded-xl border p-4 text-slate-600">Attendance, check-in, and missed-attendance reports are managed from the Attendance section.</p>}
+            {profileTab === "earnings" && <p className="rounded-xl border p-4 text-slate-600">Employee payroll and approved monthly earnings are available from Employee Payroll.</p>}
+            {profileTab === "payslips" && <p className="rounded-xl border p-4 text-slate-600">No employee payslips are available yet.</p>}
+            {profileTab === "user" && (!profileUser ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="font-semibold text-amber-900">No platform login created</p><p className="mt-1 text-amber-800">Create access only when this employee should use the Employee Portal.</p><div className="mt-3 flex gap-2"><Button size="sm" onClick={async () => { const response = await fetch(`/api/employees/${selectedEmployee.id}/user`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "invite" }) }); const payload = await response.json(); if (!response.ok) return setNotice(payload.error || "Unable to create user."); setProfileUser(payload.user); }}>Make user & send invitation</Button><Button size="sm" variant="outline" onClick={async () => { const password = window.prompt("Enter a password (minimum 8 characters):") || ""; const confirmPassword = window.prompt("Confirm the password:") || ""; const response = await fetch(`/api/employees/${selectedEmployee.id}/user`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "password", password, confirmPassword }) }); const payload = await response.json(); if (!response.ok) return setNotice(payload.error || "Unable to create user."); setProfileUser(payload.user); }}>Make user & set password</Button></div></div> : <div className="rounded-xl border p-4"><p className="font-semibold">{profileUser.name}</p><p className="mt-1">{profileUser.email}</p><p className="mt-1 text-slate-500">Status: {profileUser.status} · Last login: {profileUser.lastLoginAt ? new Date(profileUser.lastLoginAt).toLocaleString() : "Never"}</p></div>)}
+          </div>}
+        </Drawer>
         {open && (
           <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4">
             <Card className="w-full max-w-lg">

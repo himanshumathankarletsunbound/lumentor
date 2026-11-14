@@ -1132,6 +1132,9 @@ export async function createPenalty(input: {
   evidenceNote?: string;
   evidenceUrl?: string;
   createdBy: string;
+  status?: Penalty["status"];
+  approvedBy?: string;
+  approvedAt?: Date;
 }): Promise<Penalty> {
   const row = await prisma.penalty.create({
     data: {
@@ -1144,7 +1147,9 @@ export async function createPenalty(input: {
       evidenceNote: input.evidenceNote,
       evidenceUrl: input.evidenceUrl,
       createdBy: input.createdBy,
-      status: "SUBMITTED",
+      status: input.status || "SUBMITTED",
+      approvedBy: input.approvedBy,
+      approvedAt: input.approvedAt,
     },
     include: { mentor: true, branch: true },
   });

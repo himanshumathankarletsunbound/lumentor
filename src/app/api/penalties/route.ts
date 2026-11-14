@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { enforceRateLimit } from '../../../lib/rate-limit/limiter';
-import { authorizationErrorAsync } from '../../../lib/auth/server';
+import { authorizationErrorAsync, getSessionUserAsync } from '../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../lib/db/server-initialization';
 import { createPenalty, listPenalties } from '../../../lib/db/state-repository';
 
@@ -26,12 +26,16 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { mentorId, branchId, category, reason, amount, evidenceNote, createdBy } = body;
+    const { mentorId, branchId, category, reason, amount, evidenceNote, createdBy, approveImmediately } = body;
 
     if (!reason || !amount || !mentorId || !branchId) {
       return NextResponse.json({ error: 'Missing mandatory fields' }, { status: 400 });
     }
 
+    const user = await getSessionUserAsync(req);
+    if (approveImmediately && user?.role !== 'ADMINISTRATOR') {
+      return NextResponse.json({ error: 'Only administrators can add an approved payroll deduction.' }, { status: 403 });
+    }
     const pen = await createPenalty({
       mentorId,
       branchId,
@@ -41,6 +45,9 @@ export async function POST(req: NextRequest) {
       evidenceNote,
       createdBy: createdBy || 'system',
       classId: body.classId,
+      status: approveImmediately ? 'APPROVED' : 'SUBMITTED',
+      approvedBy: approveImmediately ? user?.id : undefined,
+      approvedAt: approveImmediately ? new Date() : undefined,
     });
     return NextResponse.json(pen);
   } catch (err: unknown) {

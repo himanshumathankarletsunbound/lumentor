@@ -149,6 +149,8 @@ export default function PayrollRulesPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<PayrollPlan | null>(null);
+  const [selectedPlanIds, setSelectedPlanIds] = useState<string[]>([]);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -177,6 +179,7 @@ export default function PayrollRulesPage() {
     const result = await response.json();
     if (!response.ok || !result.success) throw new Error(result.error || 'Failed to load payroll plans.');
     setPlans(result.plans);
+    setSelectedPlanIds((current) => current.filter((id) => result.plans.some((plan: PayrollPlan) => plan.id === id)));
   };
 
   useEffect(() => {
@@ -371,6 +374,40 @@ export default function PayrollRulesPage() {
     }
   };
 
+  const togglePlanSelection = (id: string) => {
+    setSelectedPlanIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
+  };
+
+  const toggleAllPlans = () => {
+    setSelectedPlanIds((current) => current.length === plans.length ? [] : plans.map((plan) => plan.id));
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedPlanIds.length === 0 || isBulkDeleting) return;
+    if (!confirm(`Delete ${selectedPlanIds.length} selected payroll plan${selectedPlanIds.length === 1 ? '' : 's'}? Plans assigned to mentors will be protected and left unchanged.`)) return;
+    setIsBulkDeleting(true);
+    try {
+      const response = await fetch('/api/payroll-plans', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: selectedPlanIds }),
+      });
+      const result = await response.json();
+      if (!response.ok && !result.deletedIds?.length) throw new Error(result.error || 'Failed to delete selected payroll plans.');
+      await refreshPlans();
+      const notes = [
+        result.deletedIds?.length ? `${result.deletedIds.length} deleted` : null,
+        result.blockedIds?.length ? `${result.blockedIds.length} protected because mentors are assigned` : null,
+        result.failedIds?.length ? `${result.failedIds.length} could not be deleted` : null,
+      ].filter(Boolean);
+      setStatusMsg({ type: result.failedIds?.length ? 'error' : 'success', text: `Bulk deletion complete: ${notes.join('; ')}.` });
+    } catch (err: unknown) {
+      setStatusMsg({ type: 'error', text: err instanceof Error ? err.message : 'Failed to delete selected payroll plans.' });
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
   return (
     <AppShell>
       <div className="space-y-5">
@@ -418,10 +455,18 @@ export default function PayrollRulesPage() {
           </div>
         )}
 
+        {selectedPlanIds.length > 0 && (
+          <div className="flex flex-col gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm font-medium text-rose-900">{selectedPlanIds.length} payroll plan{selectedPlanIds.length === 1 ? '' : 's'} selected</p>
+            <div className="flex items-center gap-2"><Button variant="ghost" size="sm" onClick={() => setSelectedPlanIds([])}>Clear selection</Button><Button variant="danger" size="sm" isLoading={isBulkDeleting} leftIcon={<Trash2 className="h-4 w-4" />} onClick={() => void handleBulkDelete()}>Delete selected</Button></div>
+          </div>
+        )}
+
         {/* Streamlined Plans Table: Fits perfectly on all screens without horizontal scroll */}
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-12"><input aria-label="Select all payroll plans" type="checkbox" checked={plans.length > 0 && selectedPlanIds.length === plans.length} onChange={toggleAllPlans} className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" /></TableHead>
               <TableHead className="w-[30%]">Plan & Model</TableHead>
               <TableHead className="w-[26%]">Compensation Rates</TableHead>
               <TableHead className="w-[24%]">Calculation Formula</TableHead>
@@ -432,7 +477,7 @@ export default function PayrollRulesPage() {
           <TableBody>
             {plans.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="py-12 text-center">
+                <TableCell colSpan={6} className="py-12 text-center">
                   <div className="flex flex-col items-center justify-center space-y-2">
                     <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
                       <Sliders className="w-5 h-5" />
@@ -470,6 +515,7 @@ export default function PayrollRulesPage() {
 
                 return (
                   <TableRow key={p.id}>
+                    <TableCell><input aria-label={`Select ${p.name}`} type="checkbox" checked={selectedPlanIds.includes(p.id)} onChange={() => togglePlanSelection(p.id)} className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" /></TableCell>
                     {/* Column 1: Plan Details & Model */}
                     <TableCell>
                       <div className="flex items-center gap-1.5">

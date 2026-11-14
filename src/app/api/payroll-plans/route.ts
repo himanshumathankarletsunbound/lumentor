@@ -333,23 +333,38 @@ export async function DELETE(req: NextRequest) {
 
   try {
     const { searchParams } = new URL(req.url);
-    const id = searchParams.get('id');
-    if (!id) {
-      return NextResponse.json({ success: false, error: 'Plan ID is required.' }, { status: 400 });
+    const body = await req.json().catch(() => null) as { ids?: unknown } | null;
+    const requestedIds = Array.isArray(body?.ids)
+      ? body.ids.filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
+      : [searchParams.get('id')].filter((id): id is string => Boolean(id));
+    const ids = [...new Set(requestedIds)];
+    if (ids.length === 0) {
+      return NextResponse.json({ success: false, error: 'Select at least one payroll plan.' }, { status: 400 });
     }
 
-    // Check if any mentor is using this plan
+    // Never delete a plan currently assigned to a mentor. A bulk operation
+    // deletes only safe selections and reports every protected/failed plan.
     const mentors = await import('../../../lib/db/state-repository').then(({ listMentors }) => listMentors());
-    const isUsed = mentors.some((m) => m.payrollPlanId === id);
-    if (isUsed) {
-      return NextResponse.json(
-        { success: false, error: 'Cannot delete plan assigned to active mentors.' },
-        { status: 400 }
-      );
+    const blockedIds = ids.filter((id) => mentors.some((mentor) => mentor.payrollPlanId === id));
+    const deletableIds = ids.filter((id) => !blockedIds.includes(id));
+    const deletedIds: string[] = [];
+    const failedIds: string[] = [];
+    for (const id of deletableIds) {
+      try {
+        await deletePayrollPlan(id);
+        deletedIds.push(id);
+      } catch {
+        failedIds.push(id);
+      }
     }
 
-    await deletePayrollPlan(id);
-    return NextResponse.json({ success: true, message: 'Plan deleted successfully.' });
+    return NextResponse.json({
+      success: failedIds.length === 0,
+      deletedIds,
+      blockedIds,
+      failedIds,
+      message: `${deletedIds.length} payroll plan${deletedIds.length === 1 ? '' : 's'} deleted.`,
+    }, { status: failedIds.length ? 409 : 200 });
   } catch (err: unknown) {
     return NextResponse.json(
       { success: false, error: err instanceof Error ? err.message : 'Failed to delete payroll plan.' },

@@ -36,6 +36,7 @@ export function GoogleWorkspaceEmailSettings() {
   const [testing, setTesting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const senderConfigured = Boolean(settings.user && settings.fromEmail);
+  const deliveryReady = Boolean(settings.oauthConnected && senderConfigured && settings.isEnabled);
 
   const load = async () => {
     try {
@@ -157,10 +158,10 @@ export function GoogleWorkspaceEmailSettings() {
             </label>
           </div>}
 
-          <div className={`rounded-lg border p-3 ${settings.oauthConnected && senderConfigured ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
-            <strong>{settings.oauthConnected && senderConfigured ? 'Google Workspace connected and ready' : settings.oauthConnected ? 'Google Workspace authorized — sender details incomplete' : 'Google Workspace not connected'}</strong>
+          <div className={`rounded-lg border p-3 ${deliveryReady ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
+            <strong>{deliveryReady ? 'Outbound email is enabled and ready' : settings.oauthConnected && !senderConfigured ? 'Google Workspace authorized — sender details incomplete' : settings.oauthConnected ? 'Google Workspace connected — outbound email is disabled' : 'Google Workspace not connected'}</strong>
             <p className="mt-1">
-              {settings.oauthConnected && !senderConfigured ? 'The OAuth mailbox is authorized, but its sender email was not saved. Click Edit sender details, enter the authorized Workspace email, and save.' : settings.oauthConfigured ? 'OAuth client configuration is ready.' : 'Set the server-side Google OAuth environment variables before connecting.'}
+              {settings.oauthConnected && !senderConfigured ? 'The OAuth mailbox is authorized, but its sender email was not saved. Click Edit sender details, enter the authorized Workspace email, and save.' : settings.oauthConnected && !settings.isEnabled ? 'A test email can still be sent, but invitations and password resets remain blocked until Enable outbound email is checked and saved.' : settings.oauthConfigured ? 'OAuth client configuration is ready.' : 'Set the server-side Google OAuth environment variables before connecting.'}
             </p>
           </div>
 

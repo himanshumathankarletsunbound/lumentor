@@ -103,13 +103,23 @@ export async function sendEmail(
   );
 
   const allowSimulation = process.env.DEMO_MODE === 'true' || process.env.NODE_ENV === 'development';
-  if (!config.isEnabled || !hasValidAuth) {
+  if (!config.isEnabled) {
     if (!allowSimulation) {
       return {
         success: false,
-        error: 'Outbound email is not connected. Authorize the Google Workspace account in Email Settings.',
+        error: 'Outbound email is disabled. In Email Settings, click Edit sender details, enable outbound email, and save.',
       };
     }
+  }
+  if (!hasValidAuth) {
+    if (!allowSimulation) {
+      return {
+        success: false,
+        error: 'Outbound email sender is incomplete. Connect Google Workspace and save the authorized sender email in Email Settings.',
+      };
+    }
+  }
+  if (!config.isEnabled || !hasValidAuth) {
     console.log(`[SIMULATED EMAIL] To: ${options.to} | Subject: "${options.subject}"`);
     return {
       success: true,

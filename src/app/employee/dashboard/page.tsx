@@ -1,244 +1,73 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BriefcaseBusiness, GraduationCap } from "lucide-react";
+import { CalendarDays, CheckCircle2, Clock3, IndianRupee, Plane } from "lucide-react";
 import { AppShell } from "../../../components/layout/AppShell";
+import { WelcomeHeader } from "../../../components/dashboard/WelcomeHeader";
+import { Badge } from "../../../components/ui/Badge";
+import { Button } from "../../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card";
+import { StatCard } from "../../../components/ui/StatCard";
 
-type Component = {
-  type: "EMPLOYMENT" | "MENTOR";
-  label: string;
-  status: string;
-  net: number;
-  details: {
-    daysWorked?: number;
-    totalWorkingDays?: number;
-    tdsApplied?: boolean;
-    eligibleClasses?: number;
-    planName?: string;
-  };
-};
-type Data = {
-  employee: {
-    firstName: string;
-    leaveRequests: Array<{ id: string; leaveType: string; status: string }>;
-  } | null;
-  dualRole: boolean;
-  attendance: { present: number; leave: number };
-  components: Component[];
-  totalPayable: number;
-  pendingMessage?: string | null;
-  error?: string;
-  linkState?: {
-    accountEmail: string | null;
-    mentorEmail: string | null;
-    reason: string;
-  };
-};
-const money = (value: number) =>
-  `₹${value.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+type Leave = { id: string; leaveType: string; status: string; startDate?: string; endDate?: string };
+type DashboardData = { employee: { leaveRequests: Leave[] } | null; components: unknown[]; totalPayable: number };
+
+const money = (value: number) => `₹${value.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+
+function leaveBadge(status: string) {
+  if (status === "APPROVED") return "success" as const;
+  if (status === "REJECTED") return "danger" as const;
+  if (status === "DRAFT") return "neutral" as const;
+  return "warning" as const;
+}
 
 export default function EmployeeDashboardPage() {
-  const [data, setData] = useState<Data | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [checkInState, setCheckInState] = useState<"ready" | "saving" | "checked-in">("ready");
+  const [checkInMessage, setCheckInMessage] = useState("Mark your attendance for today.");
+
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void fetch("/api/employee-dashboard")
-        .then(async (response) => {
-          const payload = await response.json().catch(() => ({}));
-          if (!response.ok || payload.success === false)
-            throw new Error(
-              payload.error || "Unable to load the Employee Dashboard.",
-            );
-          setData(payload);
-        })
-        .catch((error: unknown) =>
-          setLoadError(
-            error instanceof Error
-              ? error.message
-              : "Unable to load the Employee Dashboard.",
-          ),
-        );
-    }, 0);
-    return () => window.clearTimeout(timer);
+    // The dashboard structure is intentionally available immediately. This
+    // request only refreshes the employee-specific values in its cards.
+    const date = new Date();
+    date.setUTCDate(1);
+    date.setUTCMonth(date.getUTCMonth() - 1);
+    const previousPeriod = date.toISOString().slice(0, 7);
+    void fetch(`/api/employee-dashboard?month=${encodeURIComponent(previousPeriod)}`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload) => { if (payload?.success !== false && payload) setData(payload); })
+      .catch(() => undefined);
   }, []);
-  if (loadError)
-    return (
-      <AppShell>
-        <Card>
-          <CardHeader title="Employee Dashboard unavailable" />
-          <CardContent>{loadError}</CardContent>
-        </Card>
-      </AppShell>
-    );
-  if (!data)
-    return (
-      <AppShell>
-        <Card>
-          <CardHeader title="Loading Employee Dashboard" />
-          <CardContent>
-            Checking your employee and mentor account links…
-          </CardContent>
-        </Card>
-      </AppShell>
-    );
-  if (!data.employee)
-    return (
-      <AppShell>
-        <Card>
-          <CardHeader title="Profile pending" />
-          <CardContent>
-            {data.linkState?.reason ||
-              "Your portal account is not linked to an employee record yet."}
-            <span className="mt-2 block text-xs text-slate-500">
-              Signed-in email: {data.linkState?.accountEmail || "not available"}
-              {data.linkState?.mentorEmail &&
-              data.linkState.mentorEmail !== data.linkState.accountEmail
-                ? ` · Mentor record email: ${data.linkState.mentorEmail}`
-                : ""}
-            </span>
-          </CardContent>
-        </Card>
-      </AppShell>
-    );
-  const employment = data.components.filter(
-    (item) => item.type === "EMPLOYMENT",
-  );
-  const mentor = data.components.filter((item) => item.type === "MENTOR");
-  return (
-    <AppShell>
-      <div className="space-y-5">
-        <div>
-          <h1 className="text-2xl font-bold">
-            Welcome, {data.employee.firstName}
-          </h1>
-          <p className="text-sm text-slate-500">
-            Your approved employment salary and teaching payout are shown
-            separately, then combined.
-          </p>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Card>
-            <CardHeader title="Total approved earnings" />
-            <CardContent>
-              <p className="text-2xl font-bold text-indigo-700">
-                {money(data.totalPayable)}
-              </p>
-              <p className="mt-1 text-xs text-slate-500">
-                Combined amount for this month
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader title="Employee attendance" />
-            <CardContent>
-              <p className="text-2xl font-bold">{data.attendance.present}</p>
-              <p className="mt-1 text-xs text-slate-500">
-                Present days · {data.attendance.leave} approved leave request(s)
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader title="Account type" />
-            <CardContent>
-              <p className="text-2xl font-bold">
-                {data.dualRole ? "Employee + Mentor" : "Employee"}
-              </p>
-              <p className="mt-1 text-xs text-slate-500">
-                {data.dualRole
-                  ? "Both pay components are kept separate."
-                  : "Employment compensation only."}
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Card>
-            <CardHeader
-              title="Employment salary"
-              subtitle="Fixed salary, attendance calculation, and employee-only TDS."
-            />
-            <CardContent>
-              {employment.length ? (
-                employment.map((item, index) => (
-                  <div
-                    key={index}
-                    className="rounded-xl border border-slate-200 p-4"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-2 font-semibold">
-                        <BriefcaseBusiness className="h-4 w-4 text-indigo-600" />
-                        {item.label}
-                      </span>
-                      <span className="font-bold">{money(item.net)}</span>
-                    </div>
-                    <p className="mt-2 text-xs text-slate-500">
-                      {item.details.daysWorked}/{item.details.totalWorkingDays}{" "}
-                      working days · TDS{" "}
-                      {item.details.tdsApplied ? "applied" : "not applicable"}
-                    </p>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-slate-500">
-                  No approved employment salary for this month.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader
-              title="Mentor teaching payout"
-              subtitle="Class-based teaching earnings; never included in fixed salary."
-            />
-            <CardContent>
-              {mentor.length ? (
-                mentor.map((item, index) => (
-                  <div
-                    key={index}
-                    className="rounded-xl border border-slate-200 p-4"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-2 font-semibold">
-                        <GraduationCap className="h-4 w-4 text-emerald-600" />
-                        {item.label}
-                      </span>
-                      <span className="font-bold">{money(item.net)}</span>
-                    </div>
-                    <p className="mt-2 text-xs text-slate-500">
-                      {item.details.eligibleClasses} eligible class(es) ·{" "}
-                      {item.details.planName}
-                    </p>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-slate-500">
-                  No approved mentor payout for this month.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-        {data.pendingMessage && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            {data.pendingMessage}
-          </div>
-        )}
-        <Card>
-          <CardHeader title="Recent leave requests" />
-          <CardContent>
-            {data.employee.leaveRequests.length ? (
-              data.employee.leaveRequests.map((item) => (
-                <p key={item.id} className="border-b py-2 text-sm">
-                  {item.leaveType} · {item.status}
-                </p>
-              ))
-            ) : (
-              <p className="text-sm text-slate-500">No leave requests yet.</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </AppShell>
-  );
+
+  const markAttendance = async () => {
+    setCheckInState("saving");
+    try {
+      const response = await fetch("/api/employee-self-service", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "attendance" }) });
+      if (!response.ok) throw new Error("Unable to record attendance.");
+      setCheckInState("checked-in");
+      setCheckInMessage(`Attendance posted at ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`);
+    } catch {
+      setCheckInState("ready");
+      setCheckInMessage("Attendance could not be posted. Please try again.");
+    }
+  };
+
+  const leaveRequests = data?.employee?.leaveRequests || [];
+  const latestLeave = leaveRequests[0];
+  const lastMonthPayout = data?.totalPayable || 0;
+
+  return <AppShell><div className="space-y-6">
+    <WelcomeHeader subtitle="Employee workspace · Attendance, payout, and leave at a glance." />
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <StatCard title="Previous month payout" value={money(lastMonthPayout)} icon={<IndianRupee className="h-5 w-5" />} color="emerald" subtitle="Previous payroll period" />
+      <StatCard title="Leave requests" value={leaveRequests.length} icon={<Plane className="h-5 w-5" />} color="sky" subtitle={latestLeave ? `Latest: ${latestLeave.status.toLowerCase()}` : "No leave requests"} />
+      <StatCard title="Today" value={checkInState === "checked-in" ? "Present" : "Not marked"} icon={<CheckCircle2 className="h-5 w-5" />} color={checkInState === "checked-in" ? "emerald" : "amber"} subtitle="Use the check-in card below" />
+      <StatCard title="Payout status" value={data?.components?.length ? "Approved" : "Awaiting"} icon={<CalendarDays className="h-5 w-5" />} color={data?.components?.length ? "indigo" : "amber"} subtitle="Previous payroll period" />
+    </div>
+    <div className="grid gap-6 lg:grid-cols-2">
+      <Card><CardHeader title="Post attendance" subtitle="Check in once at the start of your workday." /><CardContent><div className="flex flex-col gap-4 rounded-xl border border-emerald-100 bg-emerald-50/60 p-5 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-emerald-600 shadow-sm"><Clock3 className="h-5 w-5" /></div><div><p className="font-semibold text-slate-900">Today&apos;s attendance</p><p className="text-sm text-slate-600">{checkInMessage}</p></div></div><Button variant={checkInState === "checked-in" ? "success" : "primary"} onClick={() => void markAttendance()} isLoading={checkInState === "saving"} disabled={checkInState === "checked-in"} leftIcon={<CheckCircle2 className="h-4 w-4" />}>{checkInState === "checked-in" ? "Checked in" : "Check in"}</Button></div></CardContent></Card>
+      <Card><CardHeader title="Previous month payout" subtitle="Your approved payout for the previous payroll period." /><CardContent><div className="rounded-xl border border-slate-200 bg-slate-50 p-5"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Net payable</p><p className="mt-1 text-3xl font-bold text-slate-900">{money(lastMonthPayout)}</p><p className="mt-2 text-sm text-slate-500">{data?.components?.length ? "Approved payout is available in My Earnings." : "Payout will appear after payroll is approved."}</p></div></CardContent></Card>
+    </div>
+    <Card><CardHeader title="Leave request updates" subtitle="Your most recent leave requests and their current review status." /><CardContent>{leaveRequests.length ? <div className="divide-y divide-slate-100">{leaveRequests.slice(0, 5).map((leave) => <div className="flex flex-wrap items-center justify-between gap-3 py-3" key={leave.id}><div><p className="font-medium text-slate-900">{leave.leaveType.replace(/_/g, " ")} leave</p><p className="mt-0.5 text-sm text-slate-500">{leave.startDate?.slice(0, 10) || "Date pending"}{leave.endDate && leave.endDate !== leave.startDate ? ` — ${leave.endDate.slice(0, 10)}` : ""}</p></div><Badge variant={leaveBadge(leave.status)}>{leave.status.replace(/_/g, " ")}</Badge></div>)}</div> : <div className="rounded-xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">No leave requests yet. Submit a request from Leave Management when needed.</div>}</CardContent></Card>
+  </div></AppShell>;
 }

@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   const denied = await authorizationErrorAsync(req, "employee_records", "view");
   if (denied) return denied;
   const user = await getSessionUserAsync(req);
-  const employee = user?.employeeId
+  let employee = user?.employeeId
     ? await prisma.employee.findUnique({
         where: { id: user.employeeId },
         include: { leaveRequests: { orderBy: { createdAt: "desc" }, take: 5 } },
@@ -33,6 +33,30 @@ export async function GET(req: NextRequest) {
           },
         })
       : null;
+  // Recover safely from an interrupted account-creation flow. The work email
+  // is unique on Employee and User, so an unlinked employee record with the
+  // exact signed-in email can be connected without guessing an identity.
+  if (!employee && user?.email) {
+    const emailMatchedEmployee = await prisma.employee.findUnique({
+      where: { email: user.email.trim().toLowerCase() },
+      include: { leaveRequests: { orderBy: { createdAt: "desc" }, take: 5 } },
+    });
+    if (
+      emailMatchedEmployee &&
+      (!emailMatchedEmployee.userId || emailMatchedEmployee.userId === user.id)
+    ) {
+      employee =
+        emailMatchedEmployee.userId === user.id
+          ? emailMatchedEmployee
+          : await prisma.employee.update({
+              where: { id: emailMatchedEmployee.id },
+              data: { userId: user.id },
+              include: {
+                leaveRequests: { orderBy: { createdAt: "desc" }, take: 5 },
+              },
+            });
+    }
+  }
   if (!employee)
     return NextResponse.json({
       success: true,

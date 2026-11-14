@@ -17,7 +17,10 @@ function monthRange(month: string) {
 
 export async function GET(req: NextRequest) {
   await ensureServerPersistence();
-  const denied = await authorizationErrorAsync(req, "employee_records", "view");
+  // A dual-role account can arrive here before its Employee Record has been
+  // linked. Authenticate first, then resolve only the signed-in account's own
+  // userId or exact work email below.
+  const denied = await authorizationErrorAsync(req);
   if (denied) return denied;
   const user = await getSessionUserAsync(req);
   let employee = user?.employeeId

@@ -1,42 +1,64 @@
-'use client';
+"use client";
 
-import React, { useState, useMemo } from 'react';
-import { AppShell } from '../../../components/layout/AppShell';
-import { db } from '../../../lib/db/store';
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell, TableEmptyState } from '../../../components/ui/Table';
-import { Badge } from '../../../components/ui/Badge';
-import { Button } from '../../../components/ui/Button';
-import { CalendarEventModal } from '../../../components/calendar/CalendarEventModal';
-import { ClassEvent } from '../../../lib/types/models';
-import { Search } from 'lucide-react';
-import { formatDate, formatTime } from '../../../lib/utils/formatters';
+import React, { useState, useMemo } from "react";
+import { AppShell } from "../../../components/layout/AppShell";
+import { db } from "../../../lib/db/store";
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+  TableEmptyState,
+} from "../../../components/ui/Table";
+import { Badge } from "../../../components/ui/Badge";
+import { Button } from "../../../components/ui/Button";
+import { CalendarEventModal } from "../../../components/calendar/CalendarEventModal";
+import { ClassEvent } from "../../../lib/types/models";
+import { Search } from "lucide-react";
+import { formatDate, formatTime } from "../../../lib/utils/formatters";
 
 export default function ClassesPage() {
-  const [classes, setClasses] = useState<ClassEvent[]>(db.getClasses());
+  const [classes, setClasses] = useState<ClassEvent[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<ClassEvent | null>(null);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('ALL');
-  const [branchFilter, setBranchFilter] = useState('ALL');
-  const [subjectFilter, setSubjectFilter] = useState('ALL');
-  const [mentorFilter, setMentorFilter] = useState('ALL');
-  const [dateFilter, setDateFilter] = useState('');
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [branchFilter, setBranchFilter] = useState("ALL");
+  const [subjectFilter, setSubjectFilter] = useState("ALL");
+  const [mentorFilter, setMentorFilter] = useState("ALL");
+  const [dateFilter, setDateFilter] = useState("");
 
   const branches = db.getBranches();
-  const subjects = Array.from(new Map(classes.map((item) => [item.subjectId, { id: item.subjectId, name: item.subjectName }])).values());
-  const mentors = Array.from(new Map(classes.map((item) => [item.mentorId, { id: item.mentorId, name: item.mentorName }])).values());
+  const subjects = Array.from(
+    new Map(
+      classes.map((item) => [
+        item.subjectId,
+        { id: item.subjectId, name: item.subjectName },
+      ]),
+    ).values(),
+  );
+  const mentors = Array.from(
+    new Map(
+      classes.map((item) => [
+        item.mentorId,
+        { id: item.mentorId, name: item.mentorName },
+      ]),
+    ).values(),
+  );
 
   const refreshClasses = async () => {
     try {
-      const res = await fetch('/api/dashboard');
+      const res = await fetch("/api/classes");
       const json = await res.json();
-      if (json.success && json.data && json.data.classes) {
-        setClasses(json.data.classes);
-        if (typeof db.initClient === 'function') {
-          db.initClient({ ...db.getSnapshot(), classes: json.data.classes });
+      if (json.success && json.classes) {
+        setClasses(json.classes);
+        if (typeof db.initClient === "function") {
+          db.initClient({ ...db.getSnapshot(), classes: json.classes });
         }
       }
     } catch (e) {
-      console.warn('Failed to refresh classes from API:', e);
+      console.warn("Failed to refresh classes from API:", e);
     }
   };
 
@@ -47,10 +69,11 @@ export default function ClassesPage() {
 
   const filtered = useMemo(() => {
     return classes.filter((c) => {
-      if (statusFilter !== 'ALL' && c.status !== statusFilter) return false;
-      if (branchFilter !== 'ALL' && c.branchId !== branchFilter) return false;
-      if (subjectFilter !== 'ALL' && c.subjectId !== subjectFilter) return false;
-      if (mentorFilter !== 'ALL' && c.mentorId !== mentorFilter) return false;
+      if (statusFilter !== "ALL" && c.status !== statusFilter) return false;
+      if (branchFilter !== "ALL" && c.branchId !== branchFilter) return false;
+      if (subjectFilter !== "ALL" && c.subjectId !== subjectFilter)
+        return false;
+      if (mentorFilter !== "ALL" && c.mentorId !== mentorFilter) return false;
       if (dateFilter && !c.startTime.startsWith(dateFilter)) return false;
       if (search.trim()) {
         const q = search.toLowerCase();
@@ -64,11 +87,21 @@ export default function ClassesPage() {
       }
       return true;
     });
-  }, [classes, statusFilter, branchFilter, subjectFilter, mentorFilter, dateFilter, search]);
+  }, [
+    classes,
+    statusFilter,
+    branchFilter,
+    subjectFilter,
+    mentorFilter,
+    dateFilter,
+    search,
+  ]);
 
   const handleSaveClass = (updated: ClassEvent) => {
     db.updateClass(updated.id, updated);
-    setClasses(db.getClasses());
+    setClasses((current) =>
+      current.map((item) => (item.id === updated.id ? updated : item)),
+    );
   };
 
   return (
@@ -77,9 +110,12 @@ export default function ClassesPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Classes & Sessions</h1>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+              Classes & Sessions
+            </h1>
             <p className="text-xs text-slate-500 mt-1">
-              Directory of scheduled, completed, and cancelled instructional sessions.
+              Directory of scheduled, completed, and cancelled instructional
+              sessions.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -116,15 +152,39 @@ export default function ClassesPage() {
                 </option>
               ))}
             </select>
-            <select value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)} aria-label="Filter by Subject" className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700">
+            <select
+              value={subjectFilter}
+              onChange={(e) => setSubjectFilter(e.target.value)}
+              aria-label="Filter by Subject"
+              className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700"
+            >
               <option value="ALL">All Subjects</option>
-              {subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
+              {subjects.map((subject) => (
+                <option key={subject.id} value={subject.id}>
+                  {subject.name}
+                </option>
+              ))}
             </select>
-            <select value={mentorFilter} onChange={(e) => setMentorFilter(e.target.value)} aria-label="Filter by Mentor" className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700">
+            <select
+              value={mentorFilter}
+              onChange={(e) => setMentorFilter(e.target.value)}
+              aria-label="Filter by Mentor"
+              className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700"
+            >
               <option value="ALL">All Mentors</option>
-              {mentors.map((mentor) => <option key={mentor.id} value={mentor.id}>{mentor.name}</option>)}
+              {mentors.map((mentor) => (
+                <option key={mentor.id} value={mentor.id}>
+                  {mentor.name}
+                </option>
+              ))}
             </select>
-            <input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} aria-label="Filter by Date" className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700" />
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              aria-label="Filter by Date"
+              className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700"
+            />
 
             <select
               value={statusFilter}
@@ -173,16 +233,22 @@ export default function ClassesPage() {
                   onClick={() => setSelectedEvent(cls)}
                 >
                   <TableCell className="font-semibold text-slate-900">
-                    <p className="hover:text-indigo-600 transition-colors">{cls.title}</p>
+                    <p className="hover:text-indigo-600 transition-colors">
+                      {cls.title}
+                    </p>
                     <p className="text-[11px] text-slate-400 font-normal">
-                      {cls.branchName} {cls.room ? `• ${cls.room}` : ''}
+                      {cls.branchName} {cls.room ? `• ${cls.room}` : ""}
                     </p>
                   </TableCell>
                   <TableCell>
-                    <span className="text-xs font-medium text-slate-700">{cls.subjectName}</span>
+                    <span className="text-xs font-medium text-slate-700">
+                      {cls.subjectName}
+                    </span>
                   </TableCell>
                   <TableCell>
-                    <span className="text-xs font-semibold text-slate-800">{cls.mentorName}</span>
+                    <span className="text-xs font-semibold text-slate-800">
+                      {cls.mentorName}
+                    </span>
                   </TableCell>
                   <TableCell className="text-xs text-slate-600">
                     <p>{formatDate(cls.startTime)}</p>
@@ -192,53 +258,62 @@ export default function ClassesPage() {
                   </TableCell>
                   <TableCell>
                     <span className="text-xs text-slate-600">
-                      {cls.students.map((s) => s.studentName).join(', ') || 'None'}
+                      {cls.students.map((s) => s.studentName).join(", ") ||
+                        "None"}
                     </span>
                   </TableCell>
                   <TableCell>
                     <Badge
                       variant={
-                        cls.status === 'COMPLETED'
-                          ? 'success'
-                          : cls.status === 'SCHEDULED'
-                          ? 'info'
-                          : cls.status === 'LATE_CANCELLED'
-                          ? 'danger'
-                          : 'neutral'
+                        cls.status === "COMPLETED"
+                          ? "success"
+                          : cls.status === "SCHEDULED"
+                            ? "info"
+                            : cls.status === "LATE_CANCELLED"
+                              ? "danger"
+                              : "neutral"
                       }
                       size="sm"
                       dot
                     >
                       {cls.status}
                     </Badge>
-                    {(cls.status === 'CANCELLED' || cls.status === 'LATE_CANCELLED') && cls.cancellationReason && (
-                      <p className="mt-1 max-w-44 text-[11px] text-slate-500">{cls.cancellationReason}</p>
-                    )}
+                    {(cls.status === "CANCELLED" ||
+                      cls.status === "LATE_CANCELLED") &&
+                      cls.cancellationReason && (
+                        <p className="mt-1 max-w-44 text-[11px] text-slate-500">
+                          {cls.cancellationReason}
+                        </p>
+                      )}
                   </TableCell>
                   <TableCell>
                     <Badge
                       variant={
-                        cls.attendanceStatusSummary === 'ALL_PRESENT'
-                          ? 'success'
-                          : cls.attendanceStatusSummary === 'UNMARKED'
-                          ? 'warning'
-                          : cls.attendanceStatusSummary === 'ALL_ABSENT'
-                          ? 'danger'
-                          : 'info'
+                        cls.attendanceStatusSummary === "ALL_PRESENT"
+                          ? "success"
+                          : cls.attendanceStatusSummary === "UNMARKED"
+                            ? "warning"
+                            : cls.attendanceStatusSummary === "ALL_ABSENT"
+                              ? "danger"
+                              : "info"
                       }
                       size="sm"
                     >
-                      {cls.attendanceStatusSummary === 'ALL_PRESENT'
-                        ? 'Marked · Present'
-                        : cls.attendanceStatusSummary === 'ALL_ABSENT'
-                        ? 'Marked · Absent'
-                        : cls.attendanceStatusSummary === 'PARTIAL'
-                        ? 'Marked · Partial'
-                        : 'Unmarked'}
+                      {cls.attendanceStatusSummary === "ALL_PRESENT"
+                        ? "Marked · Present"
+                        : cls.attendanceStatusSummary === "ALL_ABSENT"
+                          ? "Marked · Absent"
+                          : cls.attendanceStatusSummary === "PARTIAL"
+                            ? "Marked · Partial"
+                            : "Unmarked"}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="outline" size="sm" onClick={() => setSelectedEvent(cls)}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedEvent(cls)}
+                    >
                       Details
                     </Button>
                   </TableCell>

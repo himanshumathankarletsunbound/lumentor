@@ -1,34 +1,90 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { enforceRateLimit } from '../../../lib/rate-limit/limiter';
-import { authorizationErrorAsync } from '../../../lib/auth/server';
-import { ensureServerPersistence } from '../../../lib/db/server-initialization';
-import { getOrganizationSettings, listBranches, listClasses, listDashboardFinance, listMentors, listPenalties, listStudents } from '../../../lib/db/state-repository';
+import { NextRequest, NextResponse } from "next/server";
+import { enforceRateLimit } from "../../../lib/rate-limit/limiter";
+import {
+  authorizationErrorAsync,
+  getSessionUserAsync,
+} from "../../../lib/auth/server";
+import { ensureServerPersistence } from "../../../lib/db/server-initialization";
+import {
+  getOrganizationSettings,
+  listBranches,
+  listClasses,
+  listDashboardFinance,
+  listMentors,
+  listPenalties,
+  listStudents,
+} from "../../../lib/db/state-repository";
 
 export async function GET(req: NextRequest) {
-  const rateLimitError = enforceRateLimit(req, { limit: 60, windowSeconds: 60, identifierPrefix: 'dashboard-get' });
+  const rateLimitError = enforceRateLimit(req, {
+    limit: 60,
+    windowSeconds: 60,
+    identifierPrefix: "dashboard-get",
+  });
   if (rateLimitError) return rateLimitError;
 
   try {
     await ensureServerPersistence();
-    const denied = await authorizationErrorAsync(req, 'overview', 'view');
+    const denied = await authorizationErrorAsync(req, "overview", "view");
     if (denied) return denied;
+    const user = await getSessionUserAsync(req);
     const { searchParams } = new URL(req.url);
-    const branchId = searchParams.get('branchId') || undefined;
+    const branchId = searchParams.get("branchId") || undefined;
+    const mentorId = user?.mentorId;
 
-    const [branches, mentors, students, classes, penalties, finance, orgSettings] = await Promise.all([
-      listBranches(), listMentors(branchId), listStudents(branchId), listClasses({ branchId }), listPenalties(), listDashboardFinance(), getOrganizationSettings().catch(() => ({ orgName: 'LUmentor', currency: 'INR', timezone: 'America/New_York', cutoffDay: 15 })),
+    const [
+      branches,
+      mentors,
+      students,
+      classes,
+      penalties,
+      finance,
+      orgSettings,
+    ] = await Promise.all([
+      mentorId ? Promise.resolve([]) : listBranches(),
+      mentorId ? Promise.resolve([]) : listMentors(branchId),
+      mentorId ? Promise.resolve([]) : listStudents(branchId),
+      listClasses({ branchId, mentorId }),
+      mentorId ? Promise.resolve([]) : listPenalties(),
+      mentorId
+        ? Promise.resolve({
+            batches: [],
+            syncJobs: [],
+            auditLogs: [],
+            payslips: [],
+            invoices: [],
+            payments: [],
+          })
+        : listDashboardFinance(),
+      getOrganizationSettings().catch(() => ({
+        orgName: "LUmentor",
+        currency: "INR",
+        timezone: "America/New_York",
+        cutoffDay: 15,
+      })),
     ]);
-    const { batches, syncJobs, auditLogs, payslips, invoices, payments } = finance;
+    const { batches, syncJobs, auditLogs, payslips, invoices, payments } =
+      finance;
 
     // Aggregations
     const totalStudents = students.length;
-    const classcardSyncedStudents = students.filter((s) => s.provenance === 'CLASSCARD_SOURCED').length;
-    const activeMentors = mentors.filter((m) => m.status === 'ACTIVE').length;
+    const classcardSyncedStudents = students.filter(
+      (s) => s.provenance === "CLASSCARD_SOURCED",
+    ).length;
+    const activeMentors = mentors.filter((m) => m.status === "ACTIVE").length;
     const totalClasses = classes.length;
-    const completedClasses = classes.filter((c) => c.status === 'COMPLETED').length;
+    const completedClasses = classes.filter(
+      (c) => c.status === "COMPLETED",
+    ).length;
     const totalInvoices = invoices.length;
-    const totalRevenue = payments.reduce((acc, p) => acc + (p.status === 'SUCCESS' ? p.amount : 0), 0);
-    const totalPayrollExpenditure = batches.reduce((acc, b) => acc + b.totalNet, 0);
+    const totalRevenue = payments.reduce(
+      (acc, p) => acc + (p.status === "SUCCESS" ? p.amount : 0),
+      0,
+    );
+    const totalPayrollExpenditure = batches.reduce(
+      (acc, b) => acc + b.totalNet,
+      0,
+    );
 
     return NextResponse.json({
       success: true,
@@ -45,7 +101,7 @@ export async function GET(req: NextRequest) {
         invoices,
         payments,
         orgSettings,
-        classcardConfig: { apiKey: '', configured: false },
+        classcardConfig: { apiKey: "", configured: false },
         stats: {
           totalStudents,
           classcardSyncedStudents,
@@ -60,18 +116,23 @@ export async function GET(req: NextRequest) {
     });
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
-    const isDatabaseAuthFailure = errorMsg.includes('Authentication failed against the database server')
-      || errorMsg.includes('password authentication failed')
-      || errorMsg.includes('database credentials');
-    const isDatabaseUnavailable = errorMsg.includes('Can\'t reach database server')
-      || errorMsg.includes('must be configured for production database access');
-    return NextResponse.json({
-      success: false,
-      error: isDatabaseAuthFailure
-        ? 'The database credentials configured for production are invalid.'
-        : isDatabaseUnavailable
-        ? 'The production database is unavailable. Configure a reachable Supabase pooler connection.'
-        : 'Failed to load dashboard data.',
-    }, { status: 500 });
+    const isDatabaseAuthFailure =
+      errorMsg.includes("Authentication failed against the database server") ||
+      errorMsg.includes("password authentication failed") ||
+      errorMsg.includes("database credentials");
+    const isDatabaseUnavailable =
+      errorMsg.includes("Can't reach database server") ||
+      errorMsg.includes("must be configured for production database access");
+    return NextResponse.json(
+      {
+        success: false,
+        error: isDatabaseAuthFailure
+          ? "The database credentials configured for production are invalid."
+          : isDatabaseUnavailable
+            ? "The production database is unavailable. Configure a reachable Supabase pooler connection."
+            : "Failed to load dashboard data.",
+      },
+      { status: 500 },
+    );
   }
 }

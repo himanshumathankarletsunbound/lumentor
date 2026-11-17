@@ -7,6 +7,7 @@ import { Alert } from '../../../components/ui/Alert';
 import { Badge } from '../../../components/ui/Badge';
 import { Card, CardContent, CardHeader } from '../../../components/ui/Card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../components/ui/Table';
+import { Tabs } from '../../../components/ui/Tabs';
 import { formatCurrency, formatDateTime } from '../../../lib/utils/formatters';
 import { ClassEvent, Mentor, Branch, Subject } from '../../../lib/types/models';
 import { InitiativeEntry, InitiativePlan, Penalty, PenaltyPolicy, PayrollBatch, PayrollPlan } from '../../../lib/types/payroll';
@@ -40,7 +41,15 @@ function hasBillableAbsence(classEvent: ClassEvent) {
   return classEvent.students.some((student) => student.attendanceStatus === 'ABSENT_BILLABLE');
 }
 
+function batchStatusVariant(status: PayrollBatch['status']): 'warning' | 'info' | 'success' | 'neutral' {
+  if (status === 'DRAFT') return 'warning';
+  if (status === 'SUBMITTED') return 'info';
+  if (status === 'APPROVED') return 'success';
+  return 'neutral';
+}
+
 export default function SinglePayoutPage() {
+  const [tab, setTab] = useState<'payout' | 'drafts' | 'history'>('payout');
   const [month, setMonth] = useState('2000-01');
   const [mentorId, setMentorId] = useState('');
   const [mentors, setMentors] = useState<Mentor[]>([]);
@@ -69,6 +78,9 @@ export default function SinglePayoutPage() {
   const [penaltyAmount, setPenaltyAmount] = useState('');
   const [penaltyPolicies, setPenaltyPolicies] = useState<PenaltyPolicy[]>([]);
   const [penalties, setPenalties] = useState<Penalty[]>([]);
+  const [savedBatches, setSavedBatches] = useState<PayrollBatch[]>([]);
+  const [batchesLoading, setBatchesLoading] = useState(false);
+  const [deletingBatchId, setDeletingBatchId] = useState<string | null>(null);
 
   const bounds = useMemo(() => monthBounds(month), [month]);
   const payoutSummary = useMemo(() => {
@@ -97,6 +109,8 @@ export default function SinglePayoutPage() {
       mentor.phone.toLowerCase().includes(query)
     );
   }, [mentorSearch, mentors]);
+  const draftBatches = useMemo(() => savedBatches.filter((item) => item.status === 'DRAFT'), [savedBatches]);
+  const historyBatches = useMemo(() => savedBatches.filter((item) => item.status !== 'DRAFT'), [savedBatches]);
 
   const loadMentors = useCallback(async () => {
     const response = await fetch('/api/mentors');
@@ -124,6 +138,18 @@ export default function SinglePayoutPage() {
     setPlans(plansResult.plans);
   }, []);
 
+  const loadSavedBatches = useCallback(async () => {
+    setBatchesLoading(true);
+    try {
+      const response = await fetch('/api/payroll/batches');
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.error || 'Unable to load saved payouts.');
+      setSavedBatches(result.batches);
+    } finally {
+      setBatchesLoading(false);
+    }
+  }, []);
+
   const loadClasses = useCallback(async () => {
     if (!mentorId) return;
     const response = await fetch(`/api/classes?mentorId=${encodeURIComponent(mentorId)}&startDate=${encodeURIComponent(bounds.startDate)}&endDate=${encodeURIComponent(bounds.endDate)}`);
@@ -146,6 +172,13 @@ export default function SinglePayoutPage() {
     }, 0);
     return () => window.clearTimeout(timer);
   }, [loadMentors, loadReferenceData]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadSavedBatches().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to load saved payouts.' }));
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadSavedBatches]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -209,7 +242,28 @@ export default function SinglePayoutPage() {
     const result = await response.json();
     if (!response.ok || result.error) throw new Error(result.error || 'Unable to calculate payout. Configure an active payroll plan first.');
     setBatch(result);
+    await loadSavedBatches();
     setNotice({ type: 'success', message: `${result.batchNumber} is ready. Submit it for administrator approval.` });
+  };
+
+  const deleteDraftBatch = async (savedBatch: PayrollBatch) => {
+    const mentorNames = savedBatch.lineItems.map((item) => item.mentorName).filter(Boolean).join(', ') || 'the selected mentor';
+    if (!window.confirm(`Delete draft ${savedBatch.batchNumber} for ${mentorNames}? This permanently removes the complete generated payout and all of its payout lines.`)) return;
+    setDeletingBatchId(savedBatch.id);
+    try {
+      const response = await fetch('/api/payroll/batches', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ batchId: savedBatch.id }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.error || 'Unable to delete the draft payout.');
+      if (batch?.id === savedBatch.id) setBatch(null);
+      await loadSavedBatches();
+      setNotice({ type: 'success', message: `${result.batchNumber} and its complete payout were deleted.` });
+    } finally {
+      setDeletingBatchId(null);
+    }
   };
 
   const approve = async () => {
@@ -303,6 +357,16 @@ export default function SinglePayoutPage() {
           <p className="text-xs text-slate-500 mt-1">Review one mentor’s monthly classes, incentives, deductions, approval, and payslip.</p>
         </div>
         {notice && <Alert type={notice.type} title={notice.type === 'success' ? 'Success' : 'Error'} message={notice.message} />}
+        <Tabs
+          tabs={[
+            { id: 'payout', label: 'Create payout' },
+            { id: 'drafts', label: 'Draft', count: draftBatches.length },
+            { id: 'history', label: 'History', count: historyBatches.length },
+          ]}
+          activeTab={tab}
+          onChange={(value) => setTab(value as 'payout' | 'drafts' | 'history')}
+        />
+        {tab === 'payout' ? <>
         <Card>
           <CardHeader title="1. Select mentor and month" />
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
@@ -385,6 +449,22 @@ export default function SinglePayoutPage() {
 
           <div className="grid gap-4 lg:grid-cols-2"><div className="rounded-xl border border-emerald-100"><div className="flex items-center justify-between border-b border-emerald-100 bg-emerald-50 px-3 py-2"><span className="font-semibold text-emerald-900">Added incentives</span><span className="font-bold text-emerald-800">+{formatCurrency(incentives.reduce((sum, item) => sum + item.totalAmount, 0))}</span></div><div className="divide-y divide-slate-100">{incentives.length ? incentives.map((item) => <div key={item.id} className="flex items-center justify-between px-3 py-2"><span>{item.name}<span className="ml-1 text-slate-400">{item.planName ? '· configured' : '· custom'}</span></span><span className="font-semibold text-emerald-700">+{formatCurrency(item.totalAmount)}</span></div>) : <p className="px-3 py-5 text-slate-500">No incentives added for this payout period.</p>}</div></div><div className="rounded-xl border border-rose-100"><div className="flex items-center justify-between border-b border-rose-100 bg-rose-50 px-3 py-2"><span className="font-semibold text-rose-900">Approved penalties</span><span className="font-bold text-rose-800">-{formatCurrency(penalties.filter((item) => item.status === 'APPROVED').reduce((sum, item) => sum + item.amount, 0))}</span></div><div className="divide-y divide-slate-100">{penalties.filter((item) => item.status === 'APPROVED').length ? penalties.filter((item) => item.status === 'APPROVED').map((item) => <div key={item.id} className="flex items-center justify-between px-3 py-2"><span>{item.reason}<span className="ml-1 text-slate-400">· {item.category}</span></span><span className="font-semibold text-rose-700">-{formatCurrency(item.amount)}</span></div>) : <p className="px-3 py-5 text-slate-500">No approved penalties for this mentor.</p>}</div></div></div>
         </CardContent></Card>
+        </> : <Card>
+          <CardHeader
+            title={tab === 'drafts' ? 'Draft payouts' : 'Payout history'}
+            subtitle={tab === 'drafts'
+              ? 'Drafts can be removed before submission. Deleting one removes the whole generated payout batch and every payout line in it.'
+              : 'Submitted, approved, finalized, and paid payouts are retained as an auditable history and cannot be deleted.'}
+            action={<Button variant="outline" size="sm" isLoading={batchesLoading} leftIcon={<RefreshCw className="h-4 w-4" />} onClick={() => void loadSavedBatches().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to refresh saved payouts.' }))}>Refresh</Button>}
+          />
+          <CardContent>
+            {(() => {
+              const visibleBatches = tab === 'drafts' ? draftBatches : historyBatches;
+              if (!visibleBatches.length) return <div className="rounded-lg border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-500">{tab === 'drafts' ? 'No draft payouts.' : 'No submitted or finalized payout history yet.'}</div>;
+              return <Table><TableHeader><TableRow><TableHead>Payout</TableHead><TableHead>Mentor</TableHead><TableHead>Period</TableHead><TableHead>Classes</TableHead><TableHead>Net payout</TableHead><TableHead>Status</TableHead><TableHead>Created</TableHead><TableHead>Action</TableHead></TableRow></TableHeader><TableBody>{visibleBatches.map((savedBatch) => <TableRow key={savedBatch.id}><TableCell><p className="font-semibold text-slate-800">{savedBatch.batchNumber}</p><p className="text-[11px] text-slate-500">{savedBatch.lineItems.length} payout line{savedBatch.lineItems.length === 1 ? '' : 's'}</p></TableCell><TableCell>{savedBatch.lineItems.map((item) => <p key={item.id} className="text-xs text-slate-700">{item.mentorName}</p>)}</TableCell><TableCell className="text-xs">{formatDateTime(savedBatch.startDate).split(' at ')[0]} – {formatDateTime(savedBatch.endDate).split(' at ')[0]}</TableCell><TableCell>{savedBatch.totalEligibleClasses}</TableCell><TableCell className="font-semibold">{formatCurrency(savedBatch.totalNet)}</TableCell><TableCell><Badge variant={batchStatusVariant(savedBatch.status)} size="sm">{savedBatch.status}</Badge></TableCell><TableCell className="text-xs text-slate-600">{formatDateTime(savedBatch.createdAt)}</TableCell><TableCell>{savedBatch.status === 'DRAFT' ? <Button size="sm" variant="danger" isLoading={deletingBatchId === savedBatch.id} leftIcon={<Trash2 className="h-3.5 w-3.5" />} onClick={() => void deleteDraftBatch(savedBatch).catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to delete draft payout.' }))}>Delete payout</Button> : <span className="text-xs text-slate-500">Protected history</span>}</TableCell></TableRow>)}</TableBody></Table>;
+            })()}
+          </CardContent>
+        </Card>}
       </div>
     </AppShell>
   );

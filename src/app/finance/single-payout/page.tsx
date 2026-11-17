@@ -71,6 +71,23 @@ export default function SinglePayoutPage() {
   const [penalties, setPenalties] = useState<Penalty[]>([]);
 
   const bounds = useMemo(() => monthBounds(month), [month]);
+  const payoutSummary = useMemo(() => {
+    const unmarkedClasses = classes.filter((item) => item.attendanceStatusSummary === 'UNMARKED').length;
+    const classPayout = batch?.lineItems.reduce(
+      (sum, item) => sum
+        + Number(item.classEarnings)
+        + Number(item.durationEarnings)
+        + Number(item.studentEarnings)
+        + Number(item.revenueShareEarnings),
+      0,
+    ) ?? 0;
+    return {
+      markedClasses: classes.length - unmarkedClasses,
+      unmarkedClasses,
+      classPayout,
+      totalPayout: batch?.totalNet ?? 0,
+    };
+  }, [batch, classes]);
   const filteredMentors = useMemo(() => {
     const query = mentorSearch.trim().toLowerCase();
     if (!query) return mentors;
@@ -343,6 +360,12 @@ export default function SinglePayoutPage() {
         <Card>
           <CardHeader title="2. Classes in this payout period" subtitle={classes.length ? 'Present sessions use their Title Mapper plan. Choose a plan only for billable absences. Unmarked sessions can be removed from this payout without changing attendance.' : 'No classes found; administrators can add one below.'} />
           <CardContent>
+            <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 px-3 py-3"><p className="text-xs font-medium text-emerald-800">Marked classes</p><p className="mt-1 text-xl font-bold text-emerald-950">{payoutSummary.markedClasses}</p><p className="text-[11px] text-emerald-700">Attendance completed</p></div>
+              <div className="rounded-lg border border-amber-100 bg-amber-50/50 px-3 py-3"><p className="text-xs font-medium text-amber-800">Unmarked classes</p><p className="mt-1 text-xl font-bold text-amber-950">{payoutSummary.unmarkedClasses}</p><p className="text-[11px] text-amber-700">Attendance needs review</p></div>
+              <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 px-3 py-3"><p className="text-xs font-medium text-indigo-800">Class payout</p><p className="mt-1 text-xl font-bold text-indigo-950">{batch ? formatCurrency(payoutSummary.classPayout) : '—'}</p><p className="text-[11px] text-indigo-700">Session earnings only</p></div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3"><p className="text-xs font-medium text-slate-700">Total payout</p><p className="mt-1 text-xl font-bold text-slate-950">{batch ? formatCurrency(payoutSummary.totalPayout) : '—'}</p><p className="text-[11px] text-slate-500">After incentives and penalties</p></div>
+            </div>
             {excludedClassIds.length > 0 && <div className="mb-3 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"><span>{excludedClassIds.length} unmarked class{excludedClassIds.length === 1 ? '' : 'es'} removed from this payout. Attendance records are unchanged.</span><Button size="sm" variant="ghost" onClick={() => { setExcludedClassIds([]); setBatch(null); }}>Restore all</Button></div>}
             <Table><TableHeader><TableRow><TableHead>Class</TableHead><TableHead>Subject</TableHead><TableHead>Date</TableHead><TableHead>Attendance</TableHead><TableHead>Payroll plan</TableHead><TableHead>Status</TableHead><TableHead>Action</TableHead></TableRow></TableHeader><TableBody>{classes.map((item) => {
               const billableAbsence = hasBillableAbsence(item);

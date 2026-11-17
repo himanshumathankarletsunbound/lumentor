@@ -7,12 +7,11 @@ const engine = new PayrollEngine();
 
 export async function generateBatchFromPostgres(options: CalculatePayrollOptions): Promise<PayrollBatch> {
   const batchId = `batch-${Date.now()}`;
-  const [allMentors, allClasses, plans, penalties, adjustments, initiatives, orgSettings] = await Promise.all([
+  const [allMentors, allClasses, plans, penalties, initiatives, orgSettings] = await Promise.all([
     listMentors(options.branchId),
     listClasses({ branchId: options.branchId, startDate: options.startDate, endDate: options.endDate }),
     listPayrollPlans(),
     listPenalties(),
-    prisma.adjustment.findMany({ select: { mentorId: true, amount: true, appliedPayrollBatchId: true } }),
     listInitiativeEntries(options.startDate, options.endDate),
     getOrganizationSettings(),
   ]);
@@ -20,10 +19,17 @@ export async function generateBatchFromPostgres(options: CalculatePayrollOptions
   if (selectedMentors.length === 0) {
     throw new Error('No mentors matched the payroll calculation scope.');
   }
+  const selectedMentorIds = new Set(selectedMentors.map((mentor) => mentor.id));
+  const adjustments = await prisma.adjustment.findMany({
+    where: { mentorId: { in: [...selectedMentorIds] } },
+    select: { mentorId: true, amount: true, appliedPayrollBatchId: true },
+  });
   const context: PayrollContext = {
     adjustments: adjustments.map((item) => ({ mentorId: item.mentorId, amount: Number(item.amount), appliedPayrollBatchId: item.appliedPayrollBatchId })),
-    initiatives,
-    penalties: penalties.map((item) => ({ id: item.id, mentorId: item.mentorId, status: item.status, amount: item.amount, appliedPayrollBatchId: item.appliedPayrollBatchId, category: item.category, reason: item.reason, createdAt: item.createdAt })),
+    initiatives: initiatives.filter((entry) => selectedMentorIds.has(entry.mentorId)),
+    penalties: penalties
+      .filter((item) => selectedMentorIds.has(item.mentorId))
+      .map((item) => ({ id: item.id, mentorId: item.mentorId, status: item.status, amount: item.amount, appliedPayrollBatchId: item.appliedPayrollBatchId, category: item.category, reason: item.reason, createdAt: item.createdAt })),
   };
   const warnings: string[] = [];
   const excludedClassIds = new Set(options.excludedClassIds || []);

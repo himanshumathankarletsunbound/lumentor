@@ -169,7 +169,8 @@ export class PayrollEngine {
 
     // Approved Bonuses / Adjustments
     const adjustments = (context?.adjustments ?? db.getAdjustments(mentor.id)).filter(
-      (a) => !a.appliedPayrollBatchId || a.appliedPayrollBatchId === batchId
+      (adjustment) => adjustment.mentorId === mentor.id
+        && (!adjustment.appliedPayrollBatchId || adjustment.appliedPayrollBatchId === batchId)
     );
     const initiatives = (context?.initiatives ?? []).filter((entry) => entry.mentorId === mentor.id);
     const initiativeAmount = initiatives.reduce((sum, entry) => sum + entry.totalAmount, 0);
@@ -180,7 +181,9 @@ export class PayrollEngine {
 
     // Approved Penalties (MUST be strictly APPROVED and not already APPLIED elsewhere)
     const approvedPenalties = (context?.penalties ?? db.getPenalties(mentor.id)).filter(
-      (p) => p.status === 'APPROVED' && (!p.appliedPayrollBatchId || p.appliedPayrollBatchId === batchId)
+      (penalty) => penalty.mentorId === mentor.id
+        && penalty.status === 'APPROVED'
+        && (!penalty.appliedPayrollBatchId || penalty.appliedPayrollBatchId === batchId)
     );
     const penaltyDeductions = approvedPenalties.reduce((sum, p) => sum + p.amount, 0);
     const appliedPenaltyIds = approvedPenalties.map((p) => p.id);

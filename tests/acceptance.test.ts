@@ -345,6 +345,42 @@ async function runAcceptanceTests() {
     );
   });
 
+  // --- 11B. PAYROLL ISOLATION ---
+  test('Scenario 11B: Another mentor’s adjustments and penalties never affect this mentor’s payroll', () => {
+    const mentor = db.createMentor({
+      firstName: 'Payroll',
+      lastName: 'Isolation',
+      email: 'payroll-isolation@academyapex.com',
+      phone: '+1 555 8910',
+      branchId: 'branch-nyc',
+      branchName: 'NYC Flagship',
+      subjectIds: [],
+      payrollPlanId: 'plan-per-class-std',
+      status: 'ACTIVE',
+      provenance: 'LOCALLY_CREATED',
+      teachingHoursThisMonth: 0,
+      completedClassesCount: 0,
+      attendanceRate: 100,
+    });
+    const plan = db.getPayrollPlanById('plan-per-class-std')!;
+    const lineItem = payrollEngine.calculateMentorPayroll(
+      mentor,
+      plan,
+      [],
+      '2026-10-01',
+      '2026-10-31',
+      'test-batch-isolation',
+      {
+        adjustments: [{ mentorId: 'another-mentor', amount: 15_500 }],
+        initiatives: [{ mentorId: 'another-mentor', name: 'Other mentor incentive', totalAmount: 2_000 }],
+        penalties: [{ id: 'other-penalty', mentorId: 'another-mentor', status: 'APPROVED', amount: 600, category: 'OTHER', reason: 'Other mentor penalty', createdAt: '2026-10-01' }],
+      },
+    );
+    assert.equal(lineItem.bonusAmount, 0, 'Another mentor’s payment must never be added to this payout');
+    assert.equal(lineItem.penaltyDeductions, 0, 'Another mentor’s penalty must never reduce this payout');
+    assert.equal(lineItem.appliedPenaltyIds.length, 0, 'Another mentor’s penalty must never be attached to this payout');
+  });
+
   // --- 12. APPROVED PENALTIES NOT APPLIED TWICE ---
   test('Scenario 12: Approved penalties are not applied twice across subsequent cycles', () => {
     const mentor = db.createMentor({

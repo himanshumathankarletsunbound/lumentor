@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authorizationErrorAsync } from '../../../../lib/auth/server';
+import { authorizationErrorAsync, getSessionUserAsync } from '../../../../lib/auth/server';
 import { ensureServerPersistence } from '../../../../lib/db/server-initialization';
 import { createInitiativeEntry, listInitiativeEntries } from '../../../../lib/db/state-repository';
+import { prisma } from '../../../../lib/db/prisma';
+import { enforceRateLimit } from '../../../../lib/rate-limit/limiter';
 
 export async function GET(req: NextRequest) {
   try {
@@ -44,6 +46,48 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : 'Unable to create initiative entry.' },
       { status: 503 }
+    );
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    await ensureServerPersistence();
+    const denied = await authorizationErrorAsync(req, 'payroll_processing', 'edit');
+    if (denied) return denied;
+    const rateLimitError = enforceRateLimit(req, { limit: 15, windowSeconds: 60, identifierPrefix: 'payroll-initiative-delete' });
+    if (rateLimitError) return rateLimitError;
+
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+    const mentorId = searchParams.get('mentorId');
+    if (!id || !mentorId) return NextResponse.json({ success: false, error: 'Initiative and mentor IDs are required.' }, { status: 400 });
+
+    const user = await getSessionUserAsync(req);
+    if (!user) return NextResponse.json({ success: false, error: 'Authentication is required.' }, { status: 401 });
+    const entry = await prisma.initiativeEntry.findUnique({ where: { id } });
+    if (!entry || entry.mentorId !== mentorId) return NextResponse.json({ success: false, error: 'Incentive entry was not found.' }, { status: 404 });
+    if (entry.appliedPayrollBatchId) {
+      return NextResponse.json({ success: false, error: 'This incentive has already been finalized in a payout and cannot be removed.' }, { status: 409 });
+    }
+
+    await prisma.$transaction([
+      prisma.initiativeEntry.delete({ where: { id } }),
+      prisma.auditEvent.create({
+        data: {
+          userId: user.id,
+          action: 'PAYROLL_INCENTIVE_REMOVED',
+          entityType: 'InitiativeEntry',
+          entityId: id,
+          details: `Removed incentive "${entry.name}" for mentor ${mentorId} before payroll finalization.`,
+        },
+      }),
+    ]);
+    return NextResponse.json({ success: true, id });
+  } catch (error) {
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : 'Unable to remove incentive.' },
+      { status: 500 },
     );
   }
 }

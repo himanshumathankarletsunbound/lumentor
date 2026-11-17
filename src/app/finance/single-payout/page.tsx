@@ -78,6 +78,7 @@ export default function SinglePayoutPage() {
   const [penaltyAmount, setPenaltyAmount] = useState('');
   const [penaltyPolicies, setPenaltyPolicies] = useState<PenaltyPolicy[]>([]);
   const [penalties, setPenalties] = useState<Penalty[]>([]);
+  const [removingIncentiveId, setRemovingIncentiveId] = useState<string | null>(null);
   const [savedBatches, setSavedBatches] = useState<PayrollBatch[]>([]);
   const [batchesLoading, setBatchesLoading] = useState(false);
   const [deletingBatchId, setDeletingBatchId] = useState<string | null>(null);
@@ -313,6 +314,35 @@ export default function SinglePayoutPage() {
     setNotice({ type: 'success', message: 'Incentive added. Calculate the payout to include it.' });
   };
 
+  const removeIncentive = async (incentive: InitiativeEntry) => {
+    const currentDraft = batch?.status === 'DRAFT' ? batch : null;
+    const warning = currentDraft
+      ? ` This will also delete the current draft ${currentDraft.batchNumber}, so it cannot be submitted with the removed incentive.`
+      : '';
+    if (!window.confirm(`Remove the ${incentive.name} incentive (${formatCurrency(incentive.totalAmount)})?${warning}`)) return;
+    setRemovingIncentiveId(incentive.id);
+    try {
+      if (currentDraft) {
+        const draftResponse = await fetch('/api/payroll/batches', {
+          method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ batchId: currentDraft.id }),
+        });
+        const draftResult = await draftResponse.json();
+        if (!draftResponse.ok || !draftResult.success) throw new Error(draftResult.error || 'Unable to clear the current draft payout.');
+        setBatch(null);
+        await loadSavedBatches();
+      } else if (batch) {
+        throw new Error('This payout is no longer a draft. Its incentive cannot be removed.');
+      }
+      const response = await fetch(`/api/payroll/initiatives?id=${encodeURIComponent(incentive.id)}&mentorId=${encodeURIComponent(mentorId)}`, { method: 'DELETE' });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.error || 'Unable to remove incentive.');
+      await loadAdjustments();
+      setNotice({ type: 'success', message: 'Incentive removed. Calculate a new payout when ready.' });
+    } finally {
+      setRemovingIncentiveId(null);
+    }
+  };
+
   const selectIncentiveType = (id: string) => {
     const selectedPlan = initiativePlans.find((plan) => plan.id === id);
     setIncentivePlanId(id);
@@ -447,7 +477,7 @@ export default function SinglePayoutPage() {
           {incentiveOpen && <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4"><p className="mb-3 font-semibold text-emerald-900">Add incentive</p><div className="grid grid-cols-1 gap-2 sm:grid-cols-4"><select value={incentivePlanId} onChange={(event) => selectIncentiveType(event.target.value)} className="rounded-lg border p-2"><option value="">Custom incentive</option>{initiativePlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} · {formatCurrency(plan.amount)}</option>)}</select><input value={incentiveReason} disabled={Boolean(incentivePlanId)} onChange={(event) => setIncentiveReason(event.target.value)} placeholder="Custom incentive name" className="rounded-lg border p-2 disabled:bg-slate-100" /><input value={incentiveAmount} disabled={Boolean(incentivePlanId)} onChange={(event) => setIncentiveAmount(event.target.value)} type="number" min="0" step="0.01" placeholder="Amount" className="rounded-lg border p-2 disabled:bg-slate-100" /><Button size="sm" variant="success" onClick={() => void addIncentive().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to add incentive.' }))}>Add incentive</Button></div></div>}
           {penaltyOpen && <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-4"><p className="mb-1 font-semibold text-rose-900">Add approved penalty</p><p className="mb-3 text-slate-600">This deduction is approved by the payroll administrator and will be included when the payout is calculated.</p><div className="grid grid-cols-1 gap-2 sm:grid-cols-4"><select value={penaltyPolicyId} onChange={(event) => selectPenaltyType(event.target.value)} className="rounded-lg border p-2"><option value="">Custom penalty</option>{penaltyPolicies.map((policy) => <option key={policy.id} value={policy.id}>{policy.name} · {formatCurrency(policy.defaultAmount || policy.rateValue || 0)}</option>)}</select><input value={penaltyReason} disabled={Boolean(penaltyPolicyId)} onChange={(event) => setPenaltyReason(event.target.value)} placeholder="Custom penalty name" className="rounded-lg border p-2 disabled:bg-slate-100" /><input value={penaltyAmount} onChange={(event) => setPenaltyAmount(event.target.value)} type="number" min="0" step="0.01" placeholder="Amount" className="rounded-lg border p-2" /><Button size="sm" variant="danger" onClick={() => void addPenalty().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to add penalty.' }))}>Add penalty</Button></div></div>}
 
-          <div className="grid gap-4 lg:grid-cols-2"><div className="rounded-xl border border-emerald-100"><div className="flex items-center justify-between border-b border-emerald-100 bg-emerald-50 px-3 py-2"><span className="font-semibold text-emerald-900">Added incentives</span><span className="font-bold text-emerald-800">+{formatCurrency(incentives.reduce((sum, item) => sum + item.totalAmount, 0))}</span></div><div className="divide-y divide-slate-100">{incentives.length ? incentives.map((item) => <div key={item.id} className="flex items-center justify-between px-3 py-2"><span>{item.name}<span className="ml-1 text-slate-400">{item.planName ? '· configured' : '· custom'}</span></span><span className="font-semibold text-emerald-700">+{formatCurrency(item.totalAmount)}</span></div>) : <p className="px-3 py-5 text-slate-500">No incentives added for this payout period.</p>}</div></div><div className="rounded-xl border border-rose-100"><div className="flex items-center justify-between border-b border-rose-100 bg-rose-50 px-3 py-2"><span className="font-semibold text-rose-900">Approved penalties</span><span className="font-bold text-rose-800">-{formatCurrency(penalties.filter((item) => item.status === 'APPROVED').reduce((sum, item) => sum + item.amount, 0))}</span></div><div className="divide-y divide-slate-100">{penalties.filter((item) => item.status === 'APPROVED').length ? penalties.filter((item) => item.status === 'APPROVED').map((item) => <div key={item.id} className="flex items-center justify-between px-3 py-2"><span>{item.reason}<span className="ml-1 text-slate-400">· {item.category}</span></span><span className="font-semibold text-rose-700">-{formatCurrency(item.amount)}</span></div>) : <p className="px-3 py-5 text-slate-500">No approved penalties for this mentor.</p>}</div></div></div>
+          <div className="grid gap-4 lg:grid-cols-2"><div className="rounded-xl border border-emerald-100"><div className="flex items-center justify-between border-b border-emerald-100 bg-emerald-50 px-3 py-2"><span className="font-semibold text-emerald-900">Added incentives</span><span className="font-bold text-emerald-800">+{formatCurrency(incentives.reduce((sum, item) => sum + item.totalAmount, 0))}</span></div><div className="divide-y divide-slate-100">{incentives.length ? incentives.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 px-3 py-2"><span>{item.name}<span className="ml-1 text-slate-400">{item.planName ? '· configured' : '· custom'}</span></span><div className="flex items-center gap-2"><span className="font-semibold text-emerald-700">+{formatCurrency(item.totalAmount)}</span><Button size="sm" variant="ghost" isLoading={removingIncentiveId === item.id} leftIcon={<Trash2 className="h-3.5 w-3.5" />} onClick={() => void removeIncentive(item).catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to remove incentive.' }))}>Remove</Button></div></div>) : <p className="px-3 py-5 text-slate-500">No incentives added for this payout period.</p>}</div></div><div className="rounded-xl border border-rose-100"><div className="flex items-center justify-between border-b border-rose-100 bg-rose-50 px-3 py-2"><span className="font-semibold text-rose-900">Approved penalties</span><span className="font-bold text-rose-800">-{formatCurrency(penalties.filter((item) => item.status === 'APPROVED').reduce((sum, item) => sum + item.amount, 0))}</span></div><div className="divide-y divide-slate-100">{penalties.filter((item) => item.status === 'APPROVED').length ? penalties.filter((item) => item.status === 'APPROVED').map((item) => <div key={item.id} className="flex items-center justify-between px-3 py-2"><span>{item.reason}<span className="ml-1 text-slate-400">· {item.category}</span></span><span className="font-semibold text-rose-700">-{formatCurrency(item.amount)}</span></div>) : <p className="px-3 py-5 text-slate-500">No approved penalties for this mentor.</p>}</div></div></div>
         </CardContent></Card>
         </> : <Card>
           <CardHeader

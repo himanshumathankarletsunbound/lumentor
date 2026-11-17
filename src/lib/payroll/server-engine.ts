@@ -26,10 +26,15 @@ export async function generateBatchFromPostgres(options: CalculatePayrollOptions
     penalties: penalties.map((item) => ({ id: item.id, mentorId: item.mentorId, status: item.status, amount: item.amount, appliedPayrollBatchId: item.appliedPayrollBatchId, category: item.category, reason: item.reason, createdAt: item.createdAt })),
   };
   const warnings: string[] = [];
+  const excludedClassIds = new Set(options.excludedClassIds || []);
   const lineItems = selectedMentors.flatMap((mentor) => {
     const mentorClasses = allClasses.filter((item) => item.mentorId === mentor.id);
     const groups = new Map<string, typeof allClasses>();
     for (const classEvent of mentorClasses) {
+      if (excludedClassIds.has(classEvent.id)) {
+        warnings.push(`Class ${classEvent.title} was removed from this payout by the payroll preparer.`);
+        continue;
+      }
       const hasUnmarkedAttendance = classEvent.students.length === 0
         || classEvent.students.some((student) => student.attendanceStatus === 'UNMARKED');
       const hasBillableAbsence = classEvent.students.some((student) => student.attendanceStatus === 'ABSENT_BILLABLE');

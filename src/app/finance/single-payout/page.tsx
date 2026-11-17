@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { formatCurrency, formatDateTime } from '../../../lib/utils/formatters';
 import { ClassEvent, Mentor, Branch, Subject } from '../../../lib/types/models';
 import { InitiativeEntry, InitiativePlan, Penalty, PenaltyPolicy, PayrollBatch, PayrollPlan } from '../../../lib/types/payroll';
-import { Plus, RefreshCw } from 'lucide-react';
+import { Plus, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
 
 function monthBounds(month: string) {
   const [year, monthNumber] = month.split('-').map(Number);
@@ -53,6 +53,7 @@ export default function SinglePayoutPage() {
   const [batch, setBatch] = useState<PayrollBatch | null>(null);
   const [plans, setPlans] = useState<PayrollPlan[]>([]);
   const [classPayrollPlanOverrides, setClassPayrollPlanOverrides] = useState<Record<string, string>>({});
+  const [excludedClassIds, setExcludedClassIds] = useState<string[]>([]);
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [addingClass, setAddingClass] = useState(false);
   const [classForm, setClassForm] = useState({ title: '', subjectId: '', branchId: '', startTime: `${month}-01T10:00`, durationMinutes: '60' });
@@ -186,7 +187,7 @@ export default function SinglePayoutPage() {
     const response = await fetch('/api/payroll/calculate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ periodId: `single-${month}`, ...bounds, mentorIds: [mentorId], classPayrollPlanOverrides }),
+      body: JSON.stringify({ periodId: `single-${month}`, ...bounds, mentorIds: [mentorId], classPayrollPlanOverrides, excludedClassIds }),
     });
     const result = await response.json();
     if (!response.ok || result.error) throw new Error(result.error || 'Unable to calculate payout. Configure an active payroll plan first.');
@@ -298,6 +299,7 @@ export default function SinglePayoutPage() {
                   setMentorSearch(event.target.value);
                   setMentorMenuOpen(true);
                   setMentorId('');
+                  setExcludedClassIds([]);
                   setBatch(null);
                 }}
                 onFocus={() => {
@@ -320,6 +322,7 @@ export default function SinglePayoutPage() {
                         setMentorId(mentor.id);
                         setMentorSearch(`${mentor.firstName} ${mentor.lastName}`);
                         setMentorMenuOpen(false);
+                        setExcludedClassIds([]);
                         setBatch(null);
                       }}
                       className="block w-full px-3 py-2 text-left text-xs hover:bg-indigo-50"
@@ -333,16 +336,19 @@ export default function SinglePayoutPage() {
                 </div>
               )}
             </div>
-            <label className="font-semibold text-slate-700">Month<input type="month" value={month} onChange={(e) => { setMonth(e.target.value); setBatch(null); }} className="mt-1 w-full p-2 border rounded-lg font-normal" /></label>
+            <label className="font-semibold text-slate-700">Month<input type="month" value={month} onChange={(e) => { setMonth(e.target.value); setExcludedClassIds([]); setBatch(null); }} className="mt-1 w-full p-2 border rounded-lg font-normal" /></label>
             <div className="flex items-end"><Button variant="outline" size="sm" leftIcon={<RefreshCw className="w-4 h-4" />} onClick={() => void loadClasses()}>Refresh classes</Button></div>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader title="2. Classes in this payout period" subtitle={classes.length ? 'Present sessions use their Title Mapper plan. Choose a plan only for billable absences.' : 'No classes found; administrators can add one below.'} />
+          <CardHeader title="2. Classes in this payout period" subtitle={classes.length ? 'Present sessions use their Title Mapper plan. Choose a plan only for billable absences. Unmarked sessions can be removed from this payout without changing attendance.' : 'No classes found; administrators can add one below.'} />
           <CardContent>
-            <Table><TableHeader><TableRow><TableHead>Class</TableHead><TableHead>Subject</TableHead><TableHead>Date</TableHead><TableHead>Attendance</TableHead><TableHead>Payroll plan</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{classes.map((item) => {
+            {excludedClassIds.length > 0 && <div className="mb-3 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"><span>{excludedClassIds.length} unmarked class{excludedClassIds.length === 1 ? '' : 'es'} removed from this payout. Attendance records are unchanged.</span><Button size="sm" variant="ghost" onClick={() => { setExcludedClassIds([]); setBatch(null); }}>Restore all</Button></div>}
+            <Table><TableHeader><TableRow><TableHead>Class</TableHead><TableHead>Subject</TableHead><TableHead>Date</TableHead><TableHead>Attendance</TableHead><TableHead>Payroll plan</TableHead><TableHead>Status</TableHead><TableHead>Action</TableHead></TableRow></TableHeader><TableBody>{classes.map((item) => {
               const billableAbsence = hasBillableAbsence(item);
-              return <TableRow key={item.id}><TableCell className="font-semibold">{item.title}</TableCell><TableCell>{item.subjectName}</TableCell><TableCell>{formatDateTime(item.startTime)}</TableCell><TableCell><div className="flex flex-wrap gap-1">{attendanceBadges(item).map(({ label, count }) => <Badge key={label} variant={label === 'Present' ? 'success' : label === 'Absent billable' ? 'warning' : 'neutral'} size="sm">{label} · {count}</Badge>)}</div></TableCell><TableCell>{billableAbsence ? <select value={classPayrollPlanOverrides[item.id] || ''} onChange={(event) => { setClassPayrollPlanOverrides((current) => ({ ...current, [item.id]: event.target.value })); setBatch(null); }} className="w-44 rounded-lg border p-2 text-xs"><option value="">Select billable plan</option>{plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} (v{plan.version})</option>)}</select> : item.mappedPayrollPlanName ? <span className="text-xs font-medium text-emerald-700">{item.mappedPayrollPlanName}</span> : <span className="text-xs text-slate-500">{item.attendanceStatusSummary === 'UNMARKED' || item.attendanceStatusSummary === 'ALL_ABSENT' ? 'Not payable' : 'Not mapped'}</span>}</TableCell><TableCell><Badge variant="neutral" size="sm">{item.status}</Badge></TableCell></TableRow>;
+              const isUnmarked = item.attendanceStatusSummary === 'UNMARKED';
+              const isExcluded = excludedClassIds.includes(item.id);
+              return <TableRow key={item.id} className={isExcluded ? 'bg-slate-50 opacity-70' : undefined}><TableCell className="font-semibold">{item.title}</TableCell><TableCell>{item.subjectName}</TableCell><TableCell>{formatDateTime(item.startTime)}</TableCell><TableCell><div className="flex flex-wrap gap-1">{attendanceBadges(item).map(({ label, count }) => <Badge key={label} variant={label === 'Present' ? 'success' : label === 'Absent billable' ? 'warning' : 'neutral'} size="sm">{label} · {count}</Badge>)}</div></TableCell><TableCell>{isExcluded ? <span className="text-xs font-medium text-amber-700">Removed from this payout</span> : billableAbsence ? <select value={classPayrollPlanOverrides[item.id] || ''} onChange={(event) => { setClassPayrollPlanOverrides((current) => ({ ...current, [item.id]: event.target.value })); setBatch(null); }} className="w-44 rounded-lg border p-2 text-xs"><option value="">Select billable plan</option>{plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} (v{plan.version})</option>)}</select> : item.mappedPayrollPlanName ? <span className="text-xs font-medium text-emerald-700">{item.mappedPayrollPlanName}</span> : <span className="text-xs text-slate-500">{item.attendanceStatusSummary === 'UNMARKED' || item.attendanceStatusSummary === 'ALL_ABSENT' ? 'Not payable' : 'Not mapped'}</span>}</TableCell><TableCell><Badge variant={isExcluded ? 'warning' : 'neutral'} size="sm">{isExcluded ? 'Excluded' : item.status}</Badge></TableCell><TableCell>{isUnmarked && (isExcluded ? <Button size="sm" variant="ghost" leftIcon={<RotateCcw className="h-3.5 w-3.5" />} onClick={() => { setExcludedClassIds((current) => current.filter((classId) => classId !== item.id)); setBatch(null); }}>Restore</Button> : <Button size="sm" variant="danger" leftIcon={<Trash2 className="h-3.5 w-3.5" />} onClick={() => { setExcludedClassIds((current) => [...current, item.id]); setBatch(null); }}>Remove</Button>)}</TableCell></TableRow>;
             })}</TableBody></Table>
             <Button variant="outline" size="sm" className="mt-3" leftIcon={<Plus className="w-4 h-4" />} onClick={() => setAddingClass(true)}>Add class</Button>
           </CardContent>

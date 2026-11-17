@@ -19,6 +19,8 @@ export interface CalculatePayrollOptions {
   payrollPlanId?: string;
   /** A plan selected specifically for a billable-absence session. */
   classPayrollPlanOverrides?: Record<string, string>;
+  /** Sessions explicitly removed from this payroll calculation. This never changes attendance or the class record. */
+  excludedClassIds?: string[];
 }
 
 export interface PayrollContext {

@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { periodId, startDate, endDate, branchId, mentorIds, payrollPlanId, classPayrollPlanOverrides } = body;
+    const { periodId, startDate, endDate, branchId, mentorIds, payrollPlanId, classPayrollPlanOverrides, excludedClassIds } = body;
 
     const parsedStart = new Date(startDate);
     const parsedEnd = new Date(endDate);
@@ -31,6 +31,13 @@ export async function POST(req: NextRequest) {
     )) {
       return NextResponse.json({ error: 'classPayrollPlanOverrides must be a map of class IDs to payroll plan IDs.' }, { status: 400 });
     }
+    if (excludedClassIds !== undefined && (
+      !Array.isArray(excludedClassIds)
+      || excludedClassIds.some((classId) => typeof classId !== 'string' || !classId.trim())
+      || new Set(excludedClassIds).size !== excludedClassIds.length
+    )) {
+      return NextResponse.json({ error: 'excludedClassIds must be a list of unique class IDs.' }, { status: 400 });
+    }
 
     const batch = await generateBatchFromPostgres({
       periodId,
@@ -40,6 +47,7 @@ export async function POST(req: NextRequest) {
       mentorIds,
       payrollPlanId,
       classPayrollPlanOverrides,
+      excludedClassIds,
     });
 
     return NextResponse.json(batch);

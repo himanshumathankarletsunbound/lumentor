@@ -512,9 +512,12 @@ export async function POST(req: NextRequest) {
       const end = String(body.end || '').trim();
       const requestedMentorIds = Array.isArray(body.mentorIds) ? body.mentorIds.map(String).filter(Boolean) : [];
       if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || start > end) throw new Error('Provide a valid start and end date.');
+      const stagedImportId = String(body.importId || '').trim();
+      const stagedImport = stagedImportId ? await prisma.classcardAttendanceImport.findUnique({ where: { id: stagedImportId } }) : null;
+      if (stagedImportId && !stagedImport) throw new Error('The staged attendance import was not found.');
       const selectedMentors = requestedMentorIds.length ? await prisma.mentor.findMany({ where: { id: { in: requestedMentorIds } }, select: { externalId: true } }) : [];
       const allowedStaffIds = new Set(selectedMentors.map((mentor) => classcardId(mentor.externalId)).filter(Boolean));
-      const payload = await classcardFetch(`attendance?start_date=${encodeURIComponent(start)}&end_date=${encodeURIComponent(end)}`, 'GET');
+      const payload = stagedImport?.rawPayload || await classcardFetch(`attendance?start_date=${encodeURIComponent(start)}&end_date=${encodeURIComponent(end)}`, 'GET');
       const fetchedRows = attendanceRows(payload).filter((row) => {
         const date = firstValue(row, ['date', 'attendance_date']) || eventStart(row);
         return !date || isDateInRange(date, start, end);

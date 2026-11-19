@@ -117,18 +117,61 @@ export default function FetchDataPage() {
         setProgressLabel(failures.length ? 'Event fetch completed with some mentor request failures.' : 'Events fetched and matched.');
         setNotice({ type: failures.length ? 'error' : 'success', message: `Fetched ${uniqueEvents} unique events across ${mentorsToFetch.length} mentor${mentorsToFetch.length === 1 ? '' : 's'}.` });
       } else {
-        setProgress(25);
-        setProgressLabel('Requesting attendance from Classcard…');
-        const mentorIds = mode === 'all' ? [] : selected;
-        const response = await fetch('/api/classcard/integration', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, start, end, mentorIds }) });
-        setProgress(75);
-        setProgressLabel('Classcard responded. Processing and matching records…');
-        const payload = await response.json();
-        if (!response.ok || !payload.success) throw new Error(payload.error || 'Classcard fetch failed.');
-        setSummary(payload.summary || null);
-        setAttendance(payload.attendance || []);
-        setProgressLabel('Attendance fetched and matched.');
-        setNotice({ type: 'success', message: `Fetched ${payload.summary?.fetched || 0} attendance records.` });
+        const chosenMentors = mode === 'all' ? eligible : eligible.filter((mentor) => selected.includes(mentor.id));
+        const uniqueByClasscardId = new Map<string, Mentor>();
+        for (const mentor of chosenMentors) {
+          const classcardId = mentor.externalId?.trim();
+          if (classcardId && !uniqueByClasscardId.has(classcardId)) uniqueByClasscardId.set(classcardId, mentor);
+        }
+        const mentorsToProcess = [...uniqueByClasscardId.values()];
+        if (!mentorsToProcess.length) throw new Error('No selected mentors have Classcard IDs.');
+        setProgressLabel('Fetching attendance source data from Classcard…');
+        setProgress(5);
+        const stageResponse = await fetch('/api/classcard/integration', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'stage-attendance', start, end }),
+        });
+        const staged = await stageResponse.json();
+        if (!stageResponse.ok || !staged.success || !staged.importId) throw new Error(staged.error || 'Unable to fetch attendance from Classcard.');
+        setProgressTotalMentors(mentorsToProcess.length);
+        const attendanceByKey = new Map<string, AttendanceRow>();
+        const failures: Array<{ mentorId: string; mentorName: string; error: string }> = [];
+        let mapped = 0;
+        let unmatchedEvents = 0;
+        let unmatchedStudents = 0;
+        for (let index = 0; index < mentorsToProcess.length; index += 1) {
+          const mentor = mentorsToProcess[index];
+          const mentorName = `${mentor.firstName} ${mentor.lastName}`.trim();
+          setProgressCurrentMentor(mentorName);
+          setProgressLabel(`Matching attendance for ${mentorName}…`);
+          setProgress(5 + Math.round((index / mentorsToProcess.length) * 95));
+          try {
+            const response = await fetch('/api/classcard/integration', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'fetch-attendance', start, end, mentorIds: [mentor.id], importId: staged.importId }),
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.success) throw new Error(payload.error || 'Attendance matching failed.');
+            for (const row of payload.attendance || []) {
+              const key = `${row.eventId}:${row.studentExternalId}:${row.status}`;
+              if (!attendanceByKey.has(key)) attendanceByKey.set(key, row);
+            }
+            mapped += Number(payload.summary?.mapped || 0);
+            unmatchedEvents += Number(payload.summary?.events || 0);
+            unmatchedStudents += Number(payload.summary?.students || 0);
+          } catch (error) {
+            failures.push({ mentorId: mentor.id, mentorName, error: error instanceof Error ? error.message : 'Attendance matching failed.' });
+            setProgressFailedMentors(failures.length);
+          } finally {
+            const completed = index + 1;
+            setProgressCompletedMentors(completed);
+            setProgress(5 + Math.round((completed / mentorsToProcess.length) * 95));
+          }
+        }
+        setAttendance([...attendanceByKey.values()]);
+        setSummary({ mentorsProcessed: mentorsToProcess.length, fetched: Number(staged.fetchedRows || 0), mapped, unmatchedEvents, unmatchedStudents, failedMentorRequests: failures.length, failures });
+        setProgressCurrentMentor('');
+        setProgressLabel(failures.length ? 'Attendance fetch completed with some mentor matching failures.' : 'Attendance fetched and matched.');
+        setNotice({ type: failures.length ? 'error' : 'success', message: `Fetched ${Number(staged.fetchedRows || 0)} attendance records and processed ${mentorsToProcess.length} mentor${mentorsToProcess.length === 1 ? '' : 's'}.` });
       }
       setProgress(100);
     } catch (error) {
@@ -146,7 +189,7 @@ export default function FetchDataPage() {
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h1 className="text-2xl font-bold text-slate-900">Fetch Data</h1><p className="mt-1 text-sm text-slate-500">Fetch Classcard events and attendance securely, then match them to existing records.</p></div><Button variant="outline" leftIcon={<RefreshCw className="h-4 w-4" />} onClick={() => void loadMentors().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to refresh mentors.' }))}>Refresh mentors</Button></div>
     {notice && <Alert type={notice.type} title={notice.type === 'error' ? 'Fetch failed' : 'Fetch complete'} message={notice.message} />}
     <Tabs tabs={[{ id: 'events', label: 'Fetch Events', icon: <CalendarClock className="h-4 w-4" /> }, { id: 'attendance', label: 'Fetch Attendance', icon: <Users className="h-4 w-4" /> }]} activeTab={tab} onChange={(value) => setTab(value as 'events' | 'attendance')} />
-    {(loading || progress > 0) && <Card><CardContent className="space-y-3 p-4"><div className="flex items-center justify-between text-sm font-medium text-slate-700"><span>{progressLabel || 'Ready'}</span><span>{progress}%</span></div><div className="h-3 overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} aria-label={`${tab === 'events' ? 'Events' : 'Attendance'} fetch progress`}><div className={`h-full rounded-full transition-all duration-500 ${loading ? 'animate-pulse bg-indigo-600' : 'bg-emerald-600'}`} style={{ width: `${progress}%` }} /></div>{tab === 'events' && progressTotalMentors > 0 ? <div className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs sm:grid-cols-3"><div><p className="text-slate-500">Mentors completed</p><p className="mt-0.5 font-semibold text-slate-800">{progressCompletedMentors} of {progressTotalMentors}</p></div><div><p className="text-slate-500">Currently fetching</p><p className="mt-0.5 truncate font-semibold text-slate-800">{progressCurrentMentor || (loading ? 'Finishing…' : 'Completed')}</p></div><div><p className="text-slate-500">Failed requests</p><p className={`mt-0.5 font-semibold ${progressFailedMentors ? 'text-rose-700' : 'text-slate-800'}`}>{progressFailedMentors}</p></div></div> : null}<p className="text-xs text-slate-500">{loading ? (tab === 'events' ? 'Each Classcard staff request is completed before the next mentor starts.' : 'The server is contacting Classcard and matching the response. Keep this page open.') : 'Fetch complete.'}</p></CardContent></Card>}
+    {(loading || progress > 0) && <Card><CardContent className="space-y-3 p-4"><div className="flex items-center justify-between text-sm font-medium text-slate-700"><span>{progressLabel || 'Ready'}</span><span>{progress}%</span></div><div className="h-3 overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} aria-label={`${tab === 'events' ? 'Events' : 'Attendance'} fetch progress`}><div className={`h-full rounded-full transition-all duration-500 ${loading ? 'animate-pulse bg-indigo-600' : 'bg-emerald-600'}`} style={{ width: `${progress}%` }} /></div>{progressTotalMentors > 0 ? <div className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs sm:grid-cols-3"><div><p className="text-slate-500">Mentors completed</p><p className="mt-0.5 font-semibold text-slate-800">{progressCompletedMentors} of {progressTotalMentors}</p></div><div><p className="text-slate-500">{tab === 'events' ? 'Currently fetching' : 'Currently matching'}</p><p className="mt-0.5 truncate font-semibold text-slate-800">{progressCurrentMentor || (loading ? 'Finishing…' : 'Completed')}</p></div><div><p className="text-slate-500">Failed requests</p><p className={`mt-0.5 font-semibold ${progressFailedMentors ? 'text-rose-700' : 'text-slate-800'}`}>{progressFailedMentors}</p></div></div> : null}<p className="text-xs text-slate-500">{loading ? (tab === 'events' ? 'Each Classcard staff request is completed before the next mentor starts.' : 'Classcard attendance is fetched once, then securely matched one mentor at a time.') : 'Fetch complete.'}</p></CardContent></Card>}
     <Card><CardHeader title={tab === 'events' ? 'Event fetch parameters' : 'Attendance fetch parameters'} subtitle={tab === 'events' ? 'Classcard staff events are requested per selected mentor. Subject IDs are never required.' : 'Classcard attendance is fetched by date range and optionally filtered through already-fetched mentor events.'} /><CardContent className="space-y-5">
       <div className="grid gap-4 md:grid-cols-2"><label className="text-sm font-medium text-slate-700">Start date<input className="mt-1 w-full rounded-lg border border-slate-200 p-2" type="date" value={start} onChange={(event) => setStart(event.target.value)} /></label><label className="text-sm font-medium text-slate-700">End date<input className="mt-1 w-full rounded-lg border border-slate-200 p-2" type="date" value={end} onChange={(event) => setEnd(event.target.value)} /></label></div>
       <div className="rounded-xl border border-slate-200 p-4"><p className="text-sm font-semibold text-slate-800">Staff selection</p><div className="mt-3 flex flex-wrap gap-4 text-sm"><label className="flex items-center gap-2"><input type="radio" checked={mode === 'all'} onChange={() => setMode('all')} /> All Mentors <span className="text-slate-500">({eligible.length} with Classcard IDs)</span></label><label className="flex items-center gap-2"><input type="radio" checked={mode === 'selected'} onChange={() => setMode('selected')} /> Select Mentors</label></div>

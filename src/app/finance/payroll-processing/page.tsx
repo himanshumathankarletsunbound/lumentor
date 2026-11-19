@@ -32,8 +32,9 @@ import { formatCurrency, formatDuration, formatDate } from '../../../lib/utils/f
 import { PayrollBatch, PayrollLineItem, Payslip, PayoutSchedule } from '../../../lib/types/payroll';
 import { ClassEvent, Mentor } from '../../../lib/types/models';
 import Link from 'next/link';
+import { BulkPayrollWorkspace } from '../../../components/payroll/BulkPayrollWorkspace';
 
-export default function PayrollProcessingPage() {
+function LegacyPayrollProcessingPage() {
   const { currentUser, isAdmin } = useAuth();
 
   // Data from store
@@ -864,4 +865,8 @@ export default function PayrollProcessingPage() {
       </div>
     </AppShell>
   );
+}
+
+export default function PayrollProcessingPage() {
+  return <BulkPayrollWorkspace />;
 }

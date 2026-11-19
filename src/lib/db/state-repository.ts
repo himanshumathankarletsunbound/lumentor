@@ -780,30 +780,33 @@ export async function listClasses(
       )
       .map((item) => [item.classEventId, item.gibbonCourseClassId]),
   );
-  const classcardClassIds = Array.from(
-    new Set(
-      classcardEvents.flatMap((item) =>
-        item.gibbonCourseClassId ? [item.gibbonCourseClassId] : [],
-      ),
-    ),
-  );
-  const mappings = classcardClassIds.length
-    ? await prisma.classcardClassMapping.findMany({
-        where: {
-          gibbonCourseClassId: { in: classcardClassIds },
-          status: "MAPPED",
-        },
-        include: { payrollPlan: { select: { id: true, name: true } } },
-      })
-    : [];
+  const mappings = await prisma.classcardClassMapping.findMany({
+    where: { status: "MAPPED" },
+    include: { payrollPlan: { select: { id: true, name: true } } },
+  });
   const mappingByClassId = new Map(
     mappings.map((item) => [item.gibbonCourseClassId, item]),
   );
+  const mappingByTitle = new Map(
+    mappings
+      .filter((item) => item.displayTitle)
+      .map((item) => [
+        String(item.displayTitle)
+          .trim()
+          .replace(/\s+/g, " ")
+          .toLocaleLowerCase(),
+        item,
+      ]),
+  );
   return classes.map((item) => {
     const classcardClassId = classcardByEventId.get(item.id) || undefined;
-    const mapping = classcardClassId
-      ? mappingByClassId.get(classcardClassId)
-      : undefined;
+    const titleKey = String(item.title || "")
+      .trim()
+      .replace(/\s+/g, " ")
+      .toLocaleLowerCase();
+    const mapping =
+      (classcardClassId ? mappingByClassId.get(classcardClassId) : undefined) ||
+      mappingByTitle.get(titleKey);
     const statuses = item.attendances.map((attendance) => attendance.status);
     const summary: ClassEvent["attendanceStatusSummary"] =
       statuses.length === 0 || statuses.some((status) => status === "UNMARKED")
@@ -1306,7 +1309,10 @@ export async function savePersistedEmailConfig(
   // Individual actions (such as recording a test result) must not erase the
   // sender address and delivery settings saved by the configuration screen.
   const current = await getPersistedEmailConfig();
-  await setEncryptedSecret("email.config", JSON.stringify({ ...current, ...config }));
+  await setEncryptedSecret(
+    "email.config",
+    JSON.stringify({ ...current, ...config }),
+  );
 }
 
 export async function getOrganizationSettings() {

@@ -140,7 +140,10 @@ export async function findUserByResetToken(
 export async function saveUser(user: CurrentUser): Promise<CurrentUser> {
   const organizationId = await ensureOrganization();
   const saved = await prisma.user.upsert({
-    where: { email: user.email.toLowerCase() },
+    // User IDs are stable while email addresses are editable login names.
+    // Using email as the upsert key creates a second account (or fails on the
+    // primary key) whenever an administrator corrects an email address.
+    where: { id: user.id },
     create: {
       id: user.id,
       organizationId,
@@ -166,6 +169,7 @@ export async function saveUser(user: CurrentUser): Promise<CurrentUser> {
       mentorId: user.mentorId,
     },
     update: {
+      email: user.email.toLowerCase(),
       name: user.name,
       passwordHash: user.passwordHash || "",
       salt: user.salt || "",
@@ -194,7 +198,13 @@ export async function saveUser(user: CurrentUser): Promise<CurrentUser> {
 }
 
 export async function deleteUser(id: string): Promise<void> {
-  await prisma.user.delete({ where: { id } });
+  await prisma.$transaction(async (transaction) => {
+    // AuditEvent has a required user relation. A deliberate account deletion
+    // removes that account's audit entries in the same transaction, rather
+    // than failing after a partial change or leaving orphaned references.
+    await transaction.auditEvent.deleteMany({ where: { userId: id } });
+    await transaction.user.delete({ where: { id } });
+  });
 }
 
 export async function listUsers(): Promise<CurrentUser[]> {

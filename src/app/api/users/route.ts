@@ -1,10 +1,26 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { hashPassword, generateResetToken } from '../../../lib/auth/crypto';
-import { SystemRole, UserStatus, RolePermission, CurrentUser } from '../../../lib/types/auth';
-import { sendPasswordSetupEmail } from '../../../lib/email/service';
-import { authorizationErrorAsync, getSessionUserAsync } from '../../../lib/auth/server';
-import { createAuditEvent, listUsers, listRoles, findUserByEmail, findUserById, saveUser, deleteUser as deleteNormalizedUser } from '../../../lib/db/state-repository';
-import { ensureServerPersistence } from '../../../lib/db/server-initialization';
+import { NextRequest, NextResponse } from "next/server";
+import { hashPassword, generateResetToken } from "../../../lib/auth/crypto";
+import {
+  SystemRole,
+  UserStatus,
+  RolePermission,
+  CurrentUser,
+} from "../../../lib/types/auth";
+import { sendPasswordSetupEmail } from "../../../lib/email/service";
+import {
+  authorizationErrorAsync,
+  getSessionUserAsync,
+} from "../../../lib/auth/server";
+import {
+  createAuditEvent,
+  listUsers,
+  listRoles,
+  findUserByEmail,
+  findUserById,
+  saveUser,
+  deleteUser as deleteNormalizedUser,
+} from "../../../lib/db/state-repository";
+import { ensureServerPersistence } from "../../../lib/db/server-initialization";
 
 function sanitizeUser(u: CurrentUser) {
   const safeUser = { ...u };
@@ -13,12 +29,17 @@ function sanitizeUser(u: CurrentUser) {
   delete safeUser.resetToken;
   return {
     ...safeUser,
-    status: (u.status || 'ACTIVE') as UserStatus,
+    status: (u.status || "ACTIVE") as UserStatus,
     hasConfiguredPassword: Boolean(u.passwordHash && u.salt),
   };
 }
 
-async function auditUserAction(req: NextRequest, action: string, entityId: string, details: string): Promise<void> {
+async function auditUserAction(
+  req: NextRequest,
+  action: string,
+  entityId: string,
+  details: string,
+): Promise<void> {
   const actor = await getSessionUserAsync(req);
   if (!actor) return;
   await createAuditEvent({
@@ -26,7 +47,7 @@ async function auditUserAction(req: NextRequest, action: string, entityId: strin
     userName: actor.name,
     userRole: actor.role,
     action,
-    entityType: 'User',
+    entityType: "User",
     entityId,
     details,
   });
@@ -34,47 +55,64 @@ async function auditUserAction(req: NextRequest, action: string, entityId: strin
 
 export async function GET(req: NextRequest) {
   await ensureServerPersistence();
-  const denied = await authorizationErrorAsync(req, 'users_roles', 'view');
+  const denied = await authorizationErrorAsync(req, "users_roles", "view");
   if (denied) return denied;
   try {
     const users = (await listUsers()).map(sanitizeUser);
-    return NextResponse.json({ success: true, users, roles: await listRoles() });
+    return NextResponse.json({
+      success: true,
+      users,
+      roles: await listRoles(),
+    });
   } catch (err: unknown) {
     return NextResponse.json(
-      { success: false, error: err instanceof Error ? err.message : 'Failed to fetch users' },
-      { status: 500 }
+      {
+        success: false,
+        error: err instanceof Error ? err.message : "Failed to fetch users",
+      },
+      { status: 500 },
     );
   }
 }
 
 export async function POST(req: NextRequest) {
   await ensureServerPersistence();
-  const denied = await authorizationErrorAsync(req, 'users_roles', 'create');
+  const denied = await authorizationErrorAsync(req, "users_roles", "create");
   if (denied) return denied;
   try {
     const body = await req.json().catch(() => ({}));
-    const name = String(body.name || '').trim();
-    const email = String(body.email || '').trim().toLowerCase();
-    const role = (body.role || 'OPERATIONS') as SystemRole;
-    const roleName = String(body.roleName || '').trim();
-    const assignedBranchIds = Array.isArray(body.assignedBranchIds) ? body.assignedBranchIds : [];
+    const name = String(body.name || "").trim();
+    const email = String(body.email || "")
+      .trim()
+      .toLowerCase();
+    const role = (body.role || "OPERATIONS") as SystemRole;
+    const roleName = String(body.roleName || "").trim();
+    const assignedBranchIds = Array.isArray(body.assignedBranchIds)
+      ? body.assignedBranchIds
+      : [];
     const sendPasswordSetupEmailFlag = body.sendPasswordSetupEmail !== false;
-    const initialPassword = String(body.initialPassword || '').trim();
-    let requestedStatus = (body.status || '') as UserStatus;
+    const initialPassword = String(body.initialPassword || "").trim();
+    let requestedStatus = (body.status || "") as UserStatus;
 
     if (!name) {
-      return NextResponse.json({ success: false, error: 'Full name is required.' }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "Full name is required." },
+        { status: 400 },
+      );
     }
 
-    if (!email || !email.includes('@') || !email.includes('.')) {
-      return NextResponse.json({ success: false, error: 'A valid email address is required.' }, { status: 400 });
+    if (!email || !email.includes("@") || !email.includes(".")) {
+      return NextResponse.json(
+        { success: false, error: "A valid email address is required." },
+        { status: 400 },
+      );
     }
 
     const existing = await findUserByEmail(email);
     if (existing) {
       return NextResponse.json(
         { success: false, error: `A user with email ${email} already exists.` },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -82,7 +120,9 @@ export async function POST(req: NextRequest) {
     const roles = await listRoles();
     const matchedRole = roles.find((r) => r.systemRole === role) || roles[0];
     const finalRoleName = roleName || matchedRole?.name || role;
-    const permissions: RolePermission[] = matchedRole ? matchedRole.permissions : [];
+    const permissions: RolePermission[] = matchedRole
+      ? matchedRole.permissions
+      : [];
 
     let passwordHash: string | undefined = undefined;
     let salt: string | undefined = undefined;
@@ -97,7 +137,7 @@ export async function POST(req: NextRequest) {
       salt = hashed.salt;
       mustChangePassword = Boolean(body.temporaryPassword);
       if (!requestedStatus) {
-        requestedStatus = 'ACTIVE';
+        requestedStatus = "ACTIVE";
       }
     }
 
@@ -106,11 +146,11 @@ export async function POST(req: NextRequest) {
       resetToken = tokenInfo.token;
       resetTokenExpiry = tokenInfo.expiresAt;
 
-      const origin = req.nextUrl.origin || 'http://localhost:3005';
+      const origin = req.nextUrl.origin || "http://localhost:3005";
       resetUrl = `${origin}/reset-password?token=${encodeURIComponent(resetToken)}`;
 
-      if (!requestedStatus || requestedStatus === 'ACTIVE') {
-        requestedStatus = 'SENT_PASSWORD_VERIFICATION';
+      if (!requestedStatus || requestedStatus === "ACTIVE") {
+        requestedStatus = "SENT_PASSWORD_VERIFICATION";
       }
     }
 
@@ -120,7 +160,7 @@ export async function POST(req: NextRequest) {
       email,
       role,
       roleName: finalRoleName,
-      status: requestedStatus || 'SENT_PASSWORD_VERIFICATION',
+      status: requestedStatus || "SENT_PASSWORD_VERIFICATION",
       assignedBranchIds,
       permissions,
       passwordHash,
@@ -130,16 +170,29 @@ export async function POST(req: NextRequest) {
       mustChangePassword,
     });
 
-    await auditUserAction(req, 'USER_CREATED', newUser.id, `Created user ${newUser.email} (${newUser.roleName}) with status ${newUser.status}. Invite setup: ${sendPasswordSetupEmailFlag ? 'YES' : 'NO'}`);
+    await auditUserAction(
+      req,
+      "USER_CREATED",
+      newUser.id,
+      `Created user ${newUser.email} (${newUser.roleName}) with status ${newUser.status}. Invite setup: ${sendPasswordSetupEmailFlag ? "YES" : "NO"}`,
+    );
 
     // Send setup email through the configured Google Workspace OAuth account.
     if (resetUrl && sendPasswordSetupEmailFlag) {
-      const email = await sendPasswordSetupEmail(newUser.email, newUser.name, resetUrl);
+      const email = await sendPasswordSetupEmail(
+        newUser.email,
+        newUser.name,
+        resetUrl,
+      );
       if (!email.success) {
-        newUser.status = 'PASSWORD_SETUP_DELIVERY_FAILED';
+        newUser.status = "PASSWORD_SETUP_DELIVERY_FAILED";
         await saveUser(newUser);
         return NextResponse.json(
-          { success: false, error: `User created, but the welcome email was not sent: ${email.error || 'email service unavailable'}`, user: sanitizeUser(newUser) },
+          {
+            success: false,
+            error: `User created, but the welcome email was not sent: ${email.error || "email service unavailable"}`,
+            user: sanitizeUser(newUser),
+          },
           { status: 503 },
         );
       }
@@ -155,49 +208,101 @@ export async function POST(req: NextRequest) {
     });
   } catch (err: unknown) {
     return NextResponse.json(
-      { success: false, error: err instanceof Error ? err.message : 'Failed to create user.' },
-      { status: 500 }
+      {
+        success: false,
+        error: err instanceof Error ? err.message : "Failed to create user.",
+      },
+      { status: 500 },
     );
   }
 }
 
 export async function PATCH(req: NextRequest) {
   await ensureServerPersistence();
-  const denied = await authorizationErrorAsync(req, 'users_roles', 'edit');
+  const denied = await authorizationErrorAsync(req, "users_roles", "edit");
   if (denied) return denied;
   try {
     const body = await req.json().catch(() => ({}));
-    const id = String(body.id || '').trim();
-    const action = String(body.action || '').trim();
+    const id = String(body.id || "").trim();
+    const action = String(body.action || "").trim();
 
     if (!id) {
-      return NextResponse.json({ success: false, error: 'User ID is required.' }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "User ID is required." },
+        { status: 400 },
+      );
     }
 
     const user = await findUserById(id);
     if (!user) {
-      return NextResponse.json({ success: false, error: 'User not found.' }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: "User not found." },
+        { status: 404 },
+      );
+    }
+
+    const requestedEmail =
+      body.email === undefined
+        ? user.email
+        : String(body.email || "")
+            .trim()
+            .toLowerCase();
+    if (
+      !requestedEmail ||
+      !requestedEmail.includes("@") ||
+      !requestedEmail.includes(".")
+    ) {
+      return NextResponse.json(
+        { success: false, error: "A valid email address is required." },
+        { status: 400 },
+      );
+    }
+    if (requestedEmail !== user.email.toLowerCase()) {
+      const existingEmailOwner = await findUserByEmail(requestedEmail);
+      if (existingEmailOwner && existingEmailOwner.id !== user.id) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `A user with email ${requestedEmail} already exists.`,
+          },
+          { status: 409 },
+        );
+      }
+      user.email = requestedEmail;
     }
 
     // Action 1: Resend password verification link
-    if (action === 'resend_password_link' || action === 'resend_invite') {
+    if (action === "resend_password_link" || action === "resend_invite") {
       const tokenInfo = generateResetToken(1440); // 24 hours
       user.resetToken = tokenInfo.token;
       user.resetTokenExpiry = tokenInfo.expiresAt;
-      user.status = 'SENT_PASSWORD_VERIFICATION';
+      user.status = "SENT_PASSWORD_VERIFICATION";
       await saveUser(user);
 
-      const origin = req.nextUrl.origin || 'http://localhost:3005';
+      const origin = req.nextUrl.origin || "http://localhost:3005";
       const resetUrl = `${origin}/reset-password?token=${encodeURIComponent(tokenInfo.token)}`;
 
-      await auditUserAction(req, 'PASSWORD_RESET_RESENT', user.id, `Resent password setup link to ${user.email}`);
+      await auditUserAction(
+        req,
+        "PASSWORD_RESET_RESENT",
+        user.id,
+        `Resent password setup link to ${user.email}`,
+      );
 
-      const email = await sendPasswordSetupEmail(user.email, user.name, resetUrl);
+      const email = await sendPasswordSetupEmail(
+        user.email,
+        user.name,
+        resetUrl,
+      );
       if (!email.success) {
-        user.status = 'PASSWORD_SETUP_DELIVERY_FAILED';
+        user.status = "PASSWORD_SETUP_DELIVERY_FAILED";
         await saveUser(user);
         return NextResponse.json(
-          { success: false, error: `Password setup email was not sent: ${email.error || 'email service unavailable'}`, user: sanitizeUser(user) },
+          {
+            success: false,
+            error: `Password setup email was not sent: ${email.error || "email service unavailable"}`,
+            user: sanitizeUser(user),
+          },
           { status: 503 },
         );
       }
@@ -210,14 +315,23 @@ export async function PATCH(req: NextRequest) {
       });
     }
 
-    if (action === 'set_temporary_password') {
-      const temporaryPassword = String(body.temporaryPassword || '');
-      const confirmPassword = String(body.confirmPassword || '');
+    if (action === "set_temporary_password") {
+      const temporaryPassword = String(body.temporaryPassword || "");
+      const confirmPassword = String(body.confirmPassword || "");
       if (temporaryPassword.length < 8) {
-        return NextResponse.json({ success: false, error: 'Temporary password must be at least 8 characters long.' }, { status: 400 });
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Temporary password must be at least 8 characters long.",
+          },
+          { status: 400 },
+        );
       }
       if (temporaryPassword !== confirmPassword) {
-        return NextResponse.json({ success: false, error: 'Temporary passwords do not match.' }, { status: 400 });
+        return NextResponse.json(
+          { success: false, error: "Temporary passwords do not match." },
+          { status: 400 },
+        );
       }
       const { hash, salt } = hashPassword(temporaryPassword);
       user.passwordHash = hash;
@@ -225,26 +339,45 @@ export async function PATCH(req: NextRequest) {
       user.mustChangePassword = true;
       user.resetToken = undefined;
       user.resetTokenExpiry = undefined;
-      user.status = 'ACTIVE';
+      user.status = "ACTIVE";
       user.sessionToken = undefined;
       user.sessionExpiry = undefined;
       await saveUser(user);
-      await auditUserAction(req, 'TEMPORARY_PASSWORD_SET', user.id, `Set a temporary password for ${user.email}; user must change it after login.`);
-      return NextResponse.json({ success: true, user: sanitizeUser(user), message: 'Temporary password saved. The user must set a new password after logging in.' });
+      await auditUserAction(
+        req,
+        "TEMPORARY_PASSWORD_SET",
+        user.id,
+        `Set a temporary password for ${user.email}; user must change it after login.`,
+      );
+      return NextResponse.json({
+        success: true,
+        user: sanitizeUser(user),
+        message:
+          "Temporary password saved. The user must set a new password after logging in.",
+      });
     }
 
     // Action 2: Update status
     if (body.status) {
-      const validStatuses: UserStatus[] = ['ACTIVE', 'SENT_PASSWORD_VERIFICATION', 'PASSWORD_SETUP_DELIVERY_FAILED', 'SUSPENDED', 'DISABLED'];
+      const validStatuses: UserStatus[] = [
+        "ACTIVE",
+        "SENT_PASSWORD_VERIFICATION",
+        "PASSWORD_SETUP_DELIVERY_FAILED",
+        "SUSPENDED",
+        "DISABLED",
+      ];
       if (!validStatuses.includes(body.status)) {
         return NextResponse.json(
-          { success: false, error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` },
-          { status: 400 }
+          {
+            success: false,
+            error: `Invalid status. Must be one of: ${validStatuses.join(", ")}`,
+          },
+          { status: 400 },
         );
       }
 
       user.status = body.status;
-      if (body.status === 'SUSPENDED' || body.status === 'DISABLED') {
+      if (body.status === "SUSPENDED" || body.status === "DISABLED") {
         user.sessionToken = undefined;
         user.sessionExpiry = undefined;
       }
@@ -267,55 +400,86 @@ export async function PATCH(req: NextRequest) {
 
     await saveUser(user);
 
-    await auditUserAction(req, 'USER_UPDATED', user.id, `Updated user profile/status for ${user.email} (Status: ${user.status}, Role: ${user.role})`);
+    await auditUserAction(
+      req,
+      "USER_UPDATED",
+      user.id,
+      `Updated user profile/status for ${user.email} (Status: ${user.status}, Role: ${user.role})`,
+    );
 
     return NextResponse.json({
       success: true,
       user: sanitizeUser(user),
-      message: 'User updated successfully.',
+      message: "User updated successfully.",
     });
   } catch (err: unknown) {
     return NextResponse.json(
-      { success: false, error: err instanceof Error ? err.message : 'Failed to update user.' },
-      { status: 500 }
+      {
+        success: false,
+        error: err instanceof Error ? err.message : "Failed to update user.",
+      },
+      { status: 500 },
     );
   }
 }
 
 export async function DELETE(req: NextRequest) {
   await ensureServerPersistence();
-  const denied = await authorizationErrorAsync(req, 'users_roles', 'delete');
+  const denied = await authorizationErrorAsync(req, "users_roles", "delete");
   if (denied) return denied;
   try {
     const { searchParams } = new URL(req.url);
-    const id = searchParams.get('id');
+    const id = searchParams.get("id");
 
     if (!id) {
-      return NextResponse.json({ success: false, error: 'User ID is required.' }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "User ID is required." },
+        { status: 400 },
+      );
     }
 
     const user = await findUserById(id);
     if (!user) {
-      return NextResponse.json({ success: false, error: 'User not found.' }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: "User not found." },
+        { status: 404 },
+      );
     }
 
     // Safety check: Don't delete the primary super admin
-    if (user.id === 'user-super-admin' || user.email === 'himanshu.m@letsunbound.com') {
+    if (
+      user.id === "user-super-admin" ||
+      user.email === "himanshu.m@letsunbound.com"
+    ) {
       return NextResponse.json(
-        { success: false, error: 'Cannot delete the primary Super Administrator account.' },
-        { status: 400 }
+        {
+          success: false,
+          error: "Cannot delete the primary Super Administrator account.",
+        },
+        { status: 400 },
       );
     }
 
     await deleteNormalizedUser(id);
 
-    await auditUserAction(req, 'USER_DELETED', id, `Deleted user account ${user.email} (${user.name})`);
+    await auditUserAction(
+      req,
+      "USER_DELETED",
+      id,
+      `Deleted user account ${user.email} (${user.name})`,
+    );
 
-    return NextResponse.json({ success: true, message: `User ${user.email} has been removed.` });
+    return NextResponse.json({
+      success: true,
+      message: `User ${user.email} has been removed.`,
+    });
   } catch (err: unknown) {
     return NextResponse.json(
-      { success: false, error: err instanceof Error ? err.message : 'Failed to delete user.' },
-      { status: 500 }
+      {
+        success: false,
+        error: err instanceof Error ? err.message : "Failed to delete user.",
+      },
+      { status: 500 },
     );
   }
 }

@@ -71,12 +71,49 @@ const statusText = (event: ClassEvent) =>
           ? "Absent"
           : "Unmarked";
 
+type EmployeePayrollLine = {
+  employeeId: string;
+  totalWorkingDays: number;
+  daysWorked: number;
+  leaveDays: number;
+  fixedSalary: number;
+  variablePercent: number;
+  variableAmount: number;
+  additionalPayment: number;
+  tdsAmount: number;
+  totalPayable: number;
+  employee: {
+    employeeCode: string;
+    firstName: string;
+    lastName: string;
+    tdsEnabled: boolean;
+    tdsPercent: number | null;
+  };
+};
+
+type EmployeePayrollBatch = {
+  id: string;
+  status: string;
+  lines: EmployeePayrollLine[];
+};
+
+type EmployeePayrollInput = {
+  variablePercent: string;
+  variableAmount: string;
+  additionalPayment: string;
+};
+
 export function BulkPayrollWorkspace() {
   const [month, setMonth] = useState("2000-01");
   const [tab, setTab] = useState<"mentors" | "employees">("mentors");
   const [mentors, setMentors] = useState<Mentor[]>([]);
   const [classes, setClasses] = useState<ClassEvent[]>([]);
   const [batch, setBatch] = useState<PayrollBatch | null>(null);
+  const [employeeBatch, setEmployeeBatch] =
+    useState<EmployeePayrollBatch | null>(null);
+  const [employeeInputs, setEmployeeInputs] = useState<
+    Record<string, EmployeePayrollInput>
+  >({});
   const [selectedMentorId, setSelectedMentorId] = useState<string | null>(null);
   const [excludedClassIds, setExcludedClassIds] = useState<string[]>([]);
   const [entries, setEntries] = useState<InitiativeEntry[]>([]);
@@ -106,6 +143,60 @@ export function BulkPayrollWorkspace() {
   const selectedTotal = selectedLines.reduce(
     (sum, item) => sum + item.netPayable,
     0,
+  );
+
+  const employeePreview = (line: EmployeePayrollLine) => {
+    const input = employeeInputs[line.employeeId];
+    const variablePercent = Number(
+      input?.variablePercent ?? line.variablePercent ?? 0,
+    );
+    const variableAmount = Number(
+      input?.variableAmount ?? line.variableAmount ?? 0,
+    );
+    const additionalPayment = Number(
+      input?.additionalPayment ?? line.additionalPayment ?? 0,
+    );
+    const validPercent = Number.isFinite(variablePercent)
+      ? Math.min(100, Math.max(0, variablePercent))
+      : 0;
+    const validVariableAmount = Number.isFinite(variableAmount)
+      ? Math.max(0, variableAmount)
+      : 0;
+    const validAdditionalPayment = Number.isFinite(additionalPayment)
+      ? Math.max(0, additionalPayment)
+      : 0;
+    const variablePay = Math.round(
+      (line.fixedSalary * validPercent) / 100 + validVariableAmount,
+    );
+    const beforeTds = Math.round(
+      (line.daysWorked / line.totalWorkingDays) * line.fixedSalary -
+        variablePay -
+        validAdditionalPayment,
+    );
+    const tdsAmount = line.employee.tdsEnabled
+      ? Math.round(
+          (Math.max(0, beforeTds) * Number(line.employee.tdsPercent || 0)) /
+            100,
+        )
+      : 0;
+    return {
+      variablePercent: validPercent,
+      variableAmount: validVariableAmount,
+      additionalPayment: validAdditionalPayment,
+      variablePay,
+      tdsAmount,
+      totalPayable: Math.max(0, beforeTds - tdsAmount),
+    };
+  };
+  const employeeRequestLines = Object.fromEntries(
+    Object.entries(employeeInputs).map(([employeeId, input]) => [
+      employeeId,
+      {
+        variablePercent: Number(input.variablePercent || 0),
+        variableAmount: Number(input.variableAmount || 0),
+        additionalPayment: Number(input.additionalPayment || 0),
+      },
+    ]),
   );
 
   useEffect(() => {
@@ -146,6 +237,8 @@ export function BulkPayrollWorkspace() {
           throw new Error(data.error || "Unable to load sessions.");
         setClasses(data.classes);
         setBatch(null);
+        setEmployeeBatch(null);
+        setEmployeeInputs({});
         setExcludedClassIds([]);
       } catch (error) {
         setNotice({
@@ -212,6 +305,68 @@ export function BulkPayrollWorkspace() {
     } finally {
       setLoading(false);
     }
+  };
+  const calculateEmployeePayroll = async (submit = false) => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/employee-payroll", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          month,
+          lines: employeeRequestLines,
+          draft: !submit,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to calculate employee payroll.");
+      }
+      setEmployeeBatch(data);
+      setEmployeeInputs(
+        Object.fromEntries(
+          data.lines.map((line: EmployeePayrollLine) => [
+            line.employeeId,
+            {
+              variablePercent: String(line.variablePercent || 0),
+              variableAmount: String(line.variableAmount || 0),
+              additionalPayment: String(line.additionalPayment || 0),
+            },
+          ]),
+        ),
+      );
+      setNotice({
+        type: "success",
+        message: submit
+          ? "Employee payroll has been submitted for approval."
+          : `Calculated ${data.lines.length} employee salary line(s). Review and adjust before submitting.`,
+      });
+    } catch (error) {
+      setNotice({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to calculate employee payroll.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+  const updateEmployeeInput = (
+    employeeId: string,
+    field: keyof EmployeePayrollInput,
+    value: string,
+  ) => {
+    setEmployeeInputs((current) => ({
+      ...current,
+      [employeeId]: {
+        variablePercent: current[employeeId]?.variablePercent || "0",
+        variableAmount: current[employeeId]?.variableAmount || "0",
+        additionalPayment: current[employeeId]?.additionalPayment || "0",
+        [field]: value,
+      },
+    }));
   };
   const discard = async () => {
     if (
@@ -572,9 +727,15 @@ export function BulkPayrollWorkspace() {
               variant="primary"
               isLoading={loading}
               leftIcon={<RefreshCw className="h-4 w-4" />}
-              onClick={() => void calculate()}
+              onClick={() =>
+                void (tab === "employees"
+                  ? calculateEmployeePayroll()
+                  : calculate())
+              }
             >
-              Calculate mentor payouts
+              {tab === "employees"
+                ? "Calculate employee payroll"
+                : "Calculate mentor payouts"}
             </Button>
           </CardContent>
         </Card>
@@ -588,9 +749,144 @@ export function BulkPayrollWorkspace() {
         />
         {tab === "employees" ? (
           <Card>
-            <CardContent className="py-12 text-center text-sm text-slate-500">
-              Employee payroll remains in its dedicated workflow. This tab is
-              ready for the employee bulk review without changing that system.
+            <CardHeader
+              title="2. Employee payroll review"
+              subtitle="Uses the recorded monthly working days, fixed salary, optional variable deductions, and the employee's TDS setting. Mentor teaching payouts remain separate."
+            />
+            <CardContent className="space-y-4 overflow-x-auto">
+              {employeeBatch ? (
+                <>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Employee ID</TableHead>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Working days</TableHead>
+                        <TableHead>Leaves</TableHead>
+                        <TableHead>Fixed salary</TableHead>
+                        <TableHead>Variable %</TableHead>
+                        <TableHead>Variable amount</TableHead>
+                        <TableHead>Additional deduction</TableHead>
+                        <TableHead>TDS</TableHead>
+                        <TableHead>Total payable</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {employeeBatch.lines.map((line) => {
+                        const preview = employeePreview(line);
+                        const input = employeeInputs[line.employeeId];
+                        return (
+                          <TableRow key={line.employeeId}>
+                            <TableCell className="font-medium">
+                              {line.employee.employeeCode}
+                            </TableCell>
+                            <TableCell>
+                              {line.employee.firstName} {line.employee.lastName}
+                            </TableCell>
+                            <TableCell>
+                              {line.daysWorked}/{line.totalWorkingDays}
+                            </TableCell>
+                            <TableCell>{line.leaveDays}</TableCell>
+                            <TableCell>
+                              {formatCurrency(line.fixedSalary)}
+                            </TableCell>
+                            <TableCell>
+                              <input
+                                aria-label={`Variable percentage for ${line.employee.firstName} ${line.employee.lastName}`}
+                                className="w-20 rounded border border-slate-300 p-1.5 text-right"
+                                min="0"
+                                max="100"
+                                type="number"
+                                value={input?.variablePercent ?? "0"}
+                                onChange={(event) =>
+                                  updateEmployeeInput(
+                                    line.employeeId,
+                                    "variablePercent",
+                                    event.target.value,
+                                  )
+                                }
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <input
+                                aria-label={`Variable amount for ${line.employee.firstName} ${line.employee.lastName}`}
+                                className="w-24 rounded border border-slate-300 p-1.5 text-right"
+                                min="0"
+                                type="number"
+                                value={input?.variableAmount ?? "0"}
+                                onChange={(event) =>
+                                  updateEmployeeInput(
+                                    line.employeeId,
+                                    "variableAmount",
+                                    event.target.value,
+                                  )
+                                }
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <input
+                                aria-label={`Additional deduction for ${line.employee.firstName} ${line.employee.lastName}`}
+                                className="w-24 rounded border border-slate-300 p-1.5 text-right"
+                                min="0"
+                                type="number"
+                                value={input?.additionalPayment ?? "0"}
+                                onChange={(event) =>
+                                  updateEmployeeInput(
+                                    line.employeeId,
+                                    "additionalPayment",
+                                    event.target.value,
+                                  )
+                                }
+                              />
+                            </TableCell>
+                            <TableCell>
+                              {line.employee.tdsEnabled
+                                ? `${line.employee.tdsPercent || 0}% · ${formatCurrency(preview.tdsAmount)}`
+                                : "Not applicable"}
+                            </TableCell>
+                            <TableCell className="font-semibold text-emerald-700">
+                              {formatCurrency(preview.totalPayable)}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+                    <p className="text-sm text-slate-600">
+                      Draft total:{" "}
+                      {formatCurrency(
+                        employeeBatch.lines.reduce(
+                          (sum, line) =>
+                            sum + employeePreview(line).totalPayable,
+                          0,
+                        ),
+                      )}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        isLoading={loading}
+                        onClick={() => void calculateEmployeePayroll()}
+                      >
+                        Recalculate draft
+                      </Button>
+                      <Button
+                        variant="primary"
+                        isLoading={loading}
+                        onClick={() => void calculateEmployeePayroll(true)}
+                      >
+                        Save for approval
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="py-12 text-center text-sm text-slate-500">
+                  Select the month and calculate employee payroll to load the
+                  recorded attendance and salary review.
+                </div>
+              )}
             </CardContent>
           </Card>
         ) : (

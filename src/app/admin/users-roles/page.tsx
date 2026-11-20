@@ -1,16 +1,29 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import Link from 'next/link';
-import { AppShell } from '../../../components/layout/AppShell';
-import { db } from '../../../lib/db/store';
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell, TableEmptyState } from '../../../components/ui/Table';
-import { Badge } from '../../../components/ui/Badge';
-import { Button } from '../../../components/ui/Button';
-import { Card, CardHeader, CardContent } from '../../../components/ui/Card';
-import { Modal } from '../../../components/ui/Modal';
-import { Alert } from '../../../components/ui/Alert';
-import { UserRole, CurrentUser, SystemRole, UserStatus } from '../../../lib/types/auth';
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import Link from "next/link";
+import { AppShell } from "../../../components/layout/AppShell";
+import { db } from "../../../lib/db/store";
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+  TableEmptyState,
+} from "../../../components/ui/Table";
+import { Badge } from "../../../components/ui/Badge";
+import { Button } from "../../../components/ui/Button";
+import { Card, CardHeader, CardContent } from "../../../components/ui/Card";
+import { Modal } from "../../../components/ui/Modal";
+import { Alert } from "../../../components/ui/Alert";
+import {
+  UserRole,
+  CurrentUser,
+  SystemRole,
+  UserStatus,
+} from "../../../lib/types/auth";
 import {
   Shield,
   Users,
@@ -31,31 +44,39 @@ import {
   EyeOff,
   MoreVertical,
   Pencil,
-} from 'lucide-react';
-import { formatDate } from '../../../lib/utils/formatters';
+} from "lucide-react";
+import { formatDate } from "../../../lib/utils/formatters";
 
 export default function UsersRolesPage() {
   const [roles, setRoles] = useState<UserRole[]>(() => db.getRoles());
   const [users, setUsers] = useState<CurrentUser[]>(() => db.getUsers());
-  const [branches] = useState(() => db.getBranches().filter((branch) => !/^demo\b/i.test(branch.name) && !/^demo\b/i.test(branch.code)));
+  const [branches] = useState(() =>
+    db
+      .getBranches()
+      .filter(
+        (branch) =>
+          !/^demo\b/i.test(branch.name) && !/^demo\b/i.test(branch.code),
+      ),
+  );
 
   // Role creation modal state
   const [showRoleModal, setShowRoleModal] = useState(false);
-  const [roleName, setRoleName] = useState('');
-  const [roleDesc, setRoleDesc] = useState('');
+  const [roleName, setRoleName] = useState("");
+  const [roleDesc, setRoleDesc] = useState("");
 
   // Add User modal state
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<CurrentUser | null>(null);
-  const [userName, setUserName] = useState('');
-  const [userEmail, setUserEmail] = useState('');
-  const [userRole, setUserRole] = useState<SystemRole>('OPERATIONS');
-  const [userRoleName, setUserRoleName] = useState('Operations Specialist');
-  const [userBranchScope, setUserBranchScope] = useState<string>('ALL');
+  const [userName, setUserName] = useState("");
+  const [userEmail, setUserEmail] = useState("");
+  const [userRole, setUserRole] = useState<SystemRole>("OPERATIONS");
+  const [userRoleName, setUserRoleName] = useState("Operations Specialist");
+  const [userBranchScope, setUserBranchScope] = useState<string>("ALL");
   const [sendPasswordLink, setSendPasswordLink] = useState(true);
-  const [initialPassword, setInitialPassword] = useState('');
+  const [initialPassword, setInitialPassword] = useState("");
   const [showInitialPassword, setShowInitialPassword] = useState(false);
-  const [showManualPasswordToggle, setShowManualPasswordToggle] = useState(false);
+  const [showManualPasswordToggle, setShowManualPasswordToggle] =
+    useState(false);
 
   // Invitation link success modal
   const [showLinkSuccessModal, setShowLinkSuccessModal] = useState(false);
@@ -66,25 +87,31 @@ export default function UsersRolesPage() {
     isResend?: boolean;
   } | null>(null);
   const [hasCopiedLink, setHasCopiedLink] = useState(false);
-  const [passwordActionUser, setPasswordActionUser] = useState<CurrentUser | null>(null);
-  const [passwordAction, setPasswordAction] = useState<'link' | 'temporary'>('link');
-  const [temporaryPassword, setTemporaryPassword] = useState('');
-  const [confirmTemporaryPassword, setConfirmTemporaryPassword] = useState('');
+  const [passwordActionUser, setPasswordActionUser] =
+    useState<CurrentUser | null>(null);
+  const [passwordAction, setPasswordAction] = useState<"link" | "temporary">(
+    "link",
+  );
+  const [temporaryPassword, setTemporaryPassword] = useState("");
+  const [confirmTemporaryPassword, setConfirmTemporaryPassword] = useState("");
   const [showTemporaryPassword, setShowTemporaryPassword] = useState(false);
 
   // Search & Filter
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | UserStatus>('ALL');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | UserStatus>("ALL");
 
   // Loading & Error states
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [actionNotice, setActionNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [actionNotice, setActionNotice] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
 
   // Load and refresh users from API
   const refreshUsers = useCallback(async () => {
     try {
-      const res = await fetch('/api/users');
+      const res = await fetch("/api/users");
       const data = await res.json();
       if (data.success && Array.isArray(data.users)) {
         setUsers(data.users);
@@ -109,31 +136,37 @@ export default function UsersRolesPage() {
   // Create Role
   const handleCreateRole = async () => {
     if (!roleName.trim()) return;
-    const response = await fetch('/api/roles', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const response = await fetch("/api/roles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: roleName,
-        description: roleDesc || 'Custom authorized organizational role',
+        description: roleDesc || "Custom authorized organizational role",
         permissions: [
-          { module: 'overview', actions: ['view'] },
-          { module: 'calendar', actions: ['view'] },
-          { module: 'classes', actions: ['view', 'create'] },
-          { module: 'attendance', actions: ['view', 'create'] },
-          { module: 'reports', actions: ['view', 'export'] },
+          { module: "overview", actions: ["view"] },
+          { module: "calendar", actions: ["view"] },
+          { module: "classes", actions: ["view", "create"] },
+          { module: "attendance", actions: ["view", "create"] },
+          { module: "reports", actions: ["view", "export"] },
         ],
       }),
     });
     const data = await response.json();
     if (!response.ok || !data.success) {
-      setActionNotice({ type: 'error', message: data.error || 'Failed to create role.' });
+      setActionNotice({
+        type: "error",
+        message: data.error || "Failed to create role.",
+      });
       return;
     }
     await refreshUsers();
     setShowRoleModal(false);
-    setRoleName('');
-    setRoleDesc('');
-    setActionNotice({ type: 'success', message: `Custom role "${roleName}" created successfully.` });
+    setRoleName("");
+    setRoleDesc("");
+    setActionNotice({
+      type: "success",
+      message: `Custom role "${roleName}" created successfully.`,
+    });
   };
 
   // Create User
@@ -142,18 +175,19 @@ export default function UsersRolesPage() {
     setFormError(null);
 
     if (!userName.trim()) {
-      setFormError('Full name is required.');
+      setFormError("Full name is required.");
       return;
     }
-    if (!userEmail.trim() || !userEmail.includes('@')) {
-      setFormError('A valid email address is required.');
+    if (!userEmail.trim() || !userEmail.includes("@")) {
+      setFormError("A valid email address is required.");
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      const assignedBranchIds = userBranchScope === 'ALL' ? [] : [userBranchScope];
+      const assignedBranchIds =
+        userBranchScope === "ALL" ? [] : [userBranchScope];
       const payload = {
         name: userName.trim(),
         email: userEmail.trim().toLowerCase(),
@@ -164,17 +198,19 @@ export default function UsersRolesPage() {
         initialPassword: initialPassword ? initialPassword.trim() : undefined,
       };
 
-      const res = await fetch('/api/users', {
-        method: editingUser ? 'PATCH' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editingUser ? { id: editingUser.id, ...payload } : payload),
+      const res = await fetch("/api/users", {
+        method: editingUser ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          editingUser ? { id: editingUser.id, ...payload } : payload,
+        ),
       });
 
       const data = await res.json();
       setIsSubmitting(false);
 
       if (!data.success) {
-        setFormError(data.error || 'Failed to create user account.');
+        setFormError(data.error || "Failed to create user account.");
         return;
       }
 
@@ -183,14 +219,14 @@ export default function UsersRolesPage() {
       setShowAddUserModal(false);
 
       // Reset form
-      setUserName('');
-      setUserEmail('');
-      setUserRole('OPERATIONS');
-      setUserRoleName('Operations Specialist');
-      setUserBranchScope('ALL');
+      setUserName("");
+      setUserEmail("");
+      setUserRole("OPERATIONS");
+      setUserRoleName("Operations Specialist");
+      setUserBranchScope("ALL");
       setEditingUser(null);
       setSendPasswordLink(true);
-      setInitialPassword('');
+      setInitialPassword("");
       setShowManualPasswordToggle(false);
 
       // If a reset/setup link was generated, show the modal
@@ -204,13 +240,13 @@ export default function UsersRolesPage() {
         setShowLinkSuccessModal(true);
       } else {
         setActionNotice({
-          type: 'success',
+          type: "success",
           message: `User ${payload.email} created successfully with Active credentials.`,
         });
       }
     } catch (err: any) {
       setIsSubmitting(false);
-      setFormError(err.message || 'Network error creating user.');
+      setFormError(err.message || "Network error creating user.");
     }
   };
 
@@ -219,37 +255,51 @@ export default function UsersRolesPage() {
     setIsSubmitting(true);
     setFormError(null);
     try {
-      const action = passwordAction === 'link' ? 'resend_password_link' : 'set_temporary_password';
-      const body = passwordAction === 'link'
-        ? { id: passwordActionUser.id, action }
-        : {
-          id: passwordActionUser.id,
-          action,
-          temporaryPassword,
-          confirmPassword: confirmTemporaryPassword,
-        };
-      const res = await fetch('/api/users', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+      const action =
+        passwordAction === "link"
+          ? "resend_password_link"
+          : "set_temporary_password";
+      const body =
+        passwordAction === "link"
+          ? { id: passwordActionUser.id, action }
+          : {
+              id: passwordActionUser.id,
+              action,
+              temporaryPassword,
+              confirmPassword: confirmTemporaryPassword,
+            };
+      const res = await fetch("/api/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        setFormError(data.error || 'Unable to update the password.');
+        setFormError(data.error || "Unable to update the password.");
         return;
       }
       await refreshUsers();
       setPasswordActionUser(null);
-      setTemporaryPassword('');
-      setConfirmTemporaryPassword('');
-      if (passwordAction === 'link' && data.resetUrl) {
-        setGeneratedLinkData({ name: passwordActionUser.name, email: passwordActionUser.email, resetUrl: data.resetUrl, isResend: true });
+      setTemporaryPassword("");
+      setConfirmTemporaryPassword("");
+      if (passwordAction === "link" && data.resetUrl) {
+        setGeneratedLinkData({
+          name: passwordActionUser.name,
+          email: passwordActionUser.email,
+          resetUrl: data.resetUrl,
+          isResend: true,
+        });
         setShowLinkSuccessModal(true);
       } else {
-        setActionNotice({ type: 'success', message: `Temporary password set for ${passwordActionUser.email}. The user must choose a new password after login.` });
+        setActionNotice({
+          type: "success",
+          message: `Temporary password set for ${passwordActionUser.email}. The user must choose a new password after login.`,
+        });
       }
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Unable to update the password.');
+      setFormError(
+        err instanceof Error ? err.message : "Unable to update the password.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -257,41 +307,58 @@ export default function UsersRolesPage() {
 
   const handleCopySetupLink = async (user: CurrentUser) => {
     try {
-      const res = await fetch('/api/users', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: user.id, action: 'resend_password_link' }),
+      const res = await fetch("/api/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: user.id, action: "resend_password_link" }),
       });
       const data = await res.json();
-      if (!data.success || !data.resetUrl) throw new Error(data.error || 'Failed to generate setup link.');
+      if (!data.success || !data.resetUrl)
+        throw new Error(data.error || "Failed to generate setup link.");
       await navigator.clipboard.writeText(data.resetUrl);
       await refreshUsers();
-      setActionNotice({ type: 'success', message: `Setup link copied for ${user.email}.` });
+      setActionNotice({
+        type: "success",
+        message: `Setup link copied for ${user.email}.`,
+      });
     } catch (err) {
-      setActionNotice({ type: 'error', message: err instanceof Error ? err.message : 'Failed to copy setup link.' });
+      setActionNotice({
+        type: "error",
+        message:
+          err instanceof Error ? err.message : "Failed to copy setup link.",
+      });
     }
   };
 
   // Update Status
-  const handleUpdateStatus = async (user: CurrentUser, nextStatus: UserStatus) => {
+  const handleUpdateStatus = async (
+    user: CurrentUser,
+    nextStatus: UserStatus,
+  ) => {
     try {
-      const res = await fetch('/api/users', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: user.id, status: nextStatus }),
       });
       const data = await res.json();
       if (data.success) {
         await refreshUsers();
         setActionNotice({
-          type: 'success',
+          type: "success",
           message: `User status for ${user.email} updated to ${getStatusLabel(nextStatus)}.`,
         });
       } else {
-        setActionNotice({ type: 'error', message: data.error || 'Failed to update status' });
+        setActionNotice({
+          type: "error",
+          message: data.error || "Failed to update status",
+        });
       }
     } catch (err: any) {
-      setActionNotice({ type: 'error', message: err.message || 'Error updating status' });
+      setActionNotice({
+        type: "error",
+        message: err.message || "Error updating status",
+      });
     }
   };
 
@@ -301,29 +368,42 @@ export default function UsersRolesPage() {
     setUserEmail(user.email);
     setUserRole(user.role);
     setUserRoleName(user.roleName);
-    setUserBranchScope(user.assignedBranchIds[0] || 'ALL');
+    setUserBranchScope(user.assignedBranchIds[0] || "ALL");
     setFormError(null);
     setShowAddUserModal(true);
   };
 
   // Delete User
   const handleDeleteUser = async (user: CurrentUser) => {
-    if (!confirm(`Are you sure you want to delete user account ${user.name} (${user.email})?`)) {
+    if (
+      !confirm(
+        `Permanently delete ${user.name} (${user.email})? This also removes that account's audit entries and cannot be undone.`,
+      )
+    ) {
       return;
     }
     try {
       const res = await fetch(`/api/users?id=${encodeURIComponent(user.id)}`, {
-        method: 'DELETE',
+        method: "DELETE",
       });
       const data = await res.json();
       if (data.success) {
         await refreshUsers();
-        setActionNotice({ type: 'success', message: `User ${user.email} removed.` });
+        setActionNotice({
+          type: "success",
+          message: `User ${user.email} removed.`,
+        });
       } else {
-        setActionNotice({ type: 'error', message: data.error || 'Failed to delete user' });
+        setActionNotice({
+          type: "error",
+          message: data.error || "Failed to delete user",
+        });
       }
     } catch (err: any) {
-      setActionNotice({ type: 'error', message: err.message || 'Error deleting user' });
+      setActionNotice({
+        type: "error",
+        message: err.message || "Error deleting user",
+      });
     }
   };
 
@@ -342,11 +422,15 @@ export default function UsersRolesPage() {
   // Filtered Users List
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
-      const status = u.status || 'ACTIVE';
-      if (statusFilter !== 'ALL' && status !== statusFilter) return false;
+      const status = u.status || "ACTIVE";
+      if (statusFilter !== "ALL" && status !== statusFilter) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        if (!u.name.toLowerCase().includes(q) && !u.email.toLowerCase().includes(q) && !u.roleName.toLowerCase().includes(q)) {
+        if (
+          !u.name.toLowerCase().includes(q) &&
+          !u.email.toLowerCase().includes(q) &&
+          !u.roleName.toLowerCase().includes(q)
+        ) {
           return false;
         }
       }
@@ -356,54 +440,58 @@ export default function UsersRolesPage() {
 
   // Statistics counters
   const totalCount = users.length;
-  const activeCount = users.filter((u) => (u.status || 'ACTIVE') === 'ACTIVE').length;
-  const pendingCount = users.filter((u) => u.status === 'SENT_PASSWORD_VERIFICATION').length;
-  const suspendedCount = users.filter((u) => u.status === 'SUSPENDED').length;
-  const disabledCount = users.filter((u) => u.status === 'DISABLED').length;
+  const activeCount = users.filter(
+    (u) => (u.status || "ACTIVE") === "ACTIVE",
+  ).length;
+  const pendingCount = users.filter(
+    (u) => u.status === "SENT_PASSWORD_VERIFICATION",
+  ).length;
+  const suspendedCount = users.filter((u) => u.status === "SUSPENDED").length;
+  const disabledCount = users.filter((u) => u.status === "DISABLED").length;
 
   function getStatusLabel(s?: UserStatus) {
     switch (s) {
-      case 'SENT_PASSWORD_VERIFICATION':
-        return 'Sent Password Verification';
-      case 'PASSWORD_SETUP_DELIVERY_FAILED':
-        return 'Setup Email Failed';
-      case 'SUSPENDED':
-        return 'Suspended';
-      case 'DISABLED':
-        return 'Disabled';
-      case 'ACTIVE':
+      case "SENT_PASSWORD_VERIFICATION":
+        return "Sent Password Verification";
+      case "PASSWORD_SETUP_DELIVERY_FAILED":
+        return "Setup Email Failed";
+      case "SUSPENDED":
+        return "Suspended";
+      case "DISABLED":
+        return "Disabled";
+      case "ACTIVE":
       default:
-        return 'Active';
+        return "Active";
     }
   }
 
   function renderStatusBadge(status?: UserStatus) {
     switch (status) {
-      case 'SENT_PASSWORD_VERIFICATION':
+      case "SENT_PASSWORD_VERIFICATION":
         return (
           <Badge variant="info" size="sm" dot>
             Sent Password Verification
           </Badge>
         );
-      case 'PASSWORD_SETUP_DELIVERY_FAILED':
+      case "PASSWORD_SETUP_DELIVERY_FAILED":
         return (
           <Badge variant="danger" size="sm" dot>
             Setup Email Failed
           </Badge>
         );
-      case 'SUSPENDED':
+      case "SUSPENDED":
         return (
           <Badge variant="warning" size="sm" dot>
             Suspended
           </Badge>
         );
-      case 'DISABLED':
+      case "DISABLED":
         return (
           <Badge variant="danger" size="sm" dot>
             Disabled
           </Badge>
         );
-      case 'ACTIVE':
+      case "ACTIVE":
       default:
         return (
           <Badge variant="success" size="sm" dot>
@@ -420,13 +508,16 @@ export default function UsersRolesPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Users, Roles & Access Control</h1>
+              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+                Users, Roles & Access Control
+              </h1>
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/60">
                 Enterprise RBAC
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-1">
-              Manage authorized faculty accounts, role-based module security, and password onboarding workflows.
+              Manage authorized faculty accounts, role-based module security,
+              and password onboarding workflows.
             </p>
           </div>
 
@@ -446,12 +537,12 @@ export default function UsersRolesPage() {
               onClick={() => {
                 setFormError(null);
                 setEditingUser(null);
-                setUserName('');
-                setUserEmail('');
-                setUserRole('OPERATIONS');
-                setUserRoleName('Operations Specialist');
-                setUserBranchScope('ALL');
-                setInitialPassword('');
+                setUserName("");
+                setUserEmail("");
+                setUserRole("OPERATIONS");
+                setUserRoleName("Operations Specialist");
+                setUserBranchScope("ALL");
+                setInitialPassword("");
                 setShowAddUserModal(true);
               }}
             >
@@ -463,8 +554,12 @@ export default function UsersRolesPage() {
         {/* Global Action Notice */}
         {actionNotice && (
           <Alert
-            variant={actionNotice.type === 'success' ? 'success' : 'danger'}
-            title={actionNotice.type === 'success' ? 'Action Completed' : 'Operation Error'}
+            variant={actionNotice.type === "success" ? "success" : "danger"}
+            title={
+              actionNotice.type === "success"
+                ? "Action Completed"
+                : "Operation Error"
+            }
             message={actionNotice.message}
             action={
               <button
@@ -481,15 +576,17 @@ export default function UsersRolesPage() {
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           <button
             type="button"
-            onClick={() => setStatusFilter('ALL')}
+            onClick={() => setStatusFilter("ALL")}
             className={`p-3.5 rounded-xl border text-left transition-all ${
-              statusFilter === 'ALL'
-                ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
-                : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+              statusFilter === "ALL"
+                ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+                : "bg-white text-slate-700 border-slate-200 hover:border-slate-300"
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold uppercase tracking-wider opacity-75">All Users</span>
+              <span className="text-[11px] font-semibold uppercase tracking-wider opacity-75">
+                All Users
+              </span>
               <Users className="w-4 h-4 opacity-75" />
             </div>
             <p className="text-xl font-bold mt-1">{totalCount}</p>
@@ -497,15 +594,17 @@ export default function UsersRolesPage() {
 
           <button
             type="button"
-            onClick={() => setStatusFilter('ACTIVE')}
+            onClick={() => setStatusFilter("ACTIVE")}
             className={`p-3.5 rounded-xl border text-left transition-all ${
-              statusFilter === 'ACTIVE'
-                ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+              statusFilter === "ACTIVE"
+                ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                : "bg-white text-slate-700 border-slate-200 hover:border-slate-300"
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold uppercase tracking-wider opacity-75">Active</span>
+              <span className="text-[11px] font-semibold uppercase tracking-wider opacity-75">
+                Active
+              </span>
               <CheckCircle2 className="w-4 h-4 text-emerald-500" />
             </div>
             <p className="text-xl font-bold mt-1 text-emerald-600 group-hover:text-emerald-700">
@@ -515,15 +614,17 @@ export default function UsersRolesPage() {
 
           <button
             type="button"
-            onClick={() => setStatusFilter('SENT_PASSWORD_VERIFICATION')}
+            onClick={() => setStatusFilter("SENT_PASSWORD_VERIFICATION")}
             className={`p-3.5 rounded-xl border text-left transition-all ${
-              statusFilter === 'SENT_PASSWORD_VERIFICATION'
-                ? 'bg-sky-600 text-white border-sky-600 shadow-sm'
-                : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+              statusFilter === "SENT_PASSWORD_VERIFICATION"
+                ? "bg-sky-600 text-white border-sky-600 shadow-sm"
+                : "bg-white text-slate-700 border-slate-200 hover:border-slate-300"
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold uppercase tracking-wider opacity-75">Sent Verification</span>
+              <span className="text-[11px] font-semibold uppercase tracking-wider opacity-75">
+                Sent Verification
+              </span>
               <Mail className="w-4 h-4 text-sky-500" />
             </div>
             <p className="text-xl font-bold mt-1 text-sky-600">
@@ -533,15 +634,17 @@ export default function UsersRolesPage() {
 
           <button
             type="button"
-            onClick={() => setStatusFilter('SUSPENDED')}
+            onClick={() => setStatusFilter("SUSPENDED")}
             className={`p-3.5 rounded-xl border text-left transition-all ${
-              statusFilter === 'SUSPENDED'
-                ? 'bg-amber-600 text-white border-amber-600 shadow-sm'
-                : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+              statusFilter === "SUSPENDED"
+                ? "bg-amber-600 text-white border-amber-600 shadow-sm"
+                : "bg-white text-slate-700 border-slate-200 hover:border-slate-300"
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold uppercase tracking-wider opacity-75">Suspended</span>
+              <span className="text-[11px] font-semibold uppercase tracking-wider opacity-75">
+                Suspended
+              </span>
               <Clock className="w-4 h-4 text-amber-500" />
             </div>
             <p className="text-xl font-bold mt-1 text-amber-600">
@@ -551,15 +654,17 @@ export default function UsersRolesPage() {
 
           <button
             type="button"
-            onClick={() => setStatusFilter('DISABLED')}
+            onClick={() => setStatusFilter("DISABLED")}
             className={`p-3.5 rounded-xl border text-left transition-all col-span-2 sm:col-span-1 ${
-              statusFilter === 'DISABLED'
-                ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
-                : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+              statusFilter === "DISABLED"
+                ? "bg-rose-600 text-white border-rose-600 shadow-sm"
+                : "bg-white text-slate-700 border-slate-200 hover:border-slate-300"
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold uppercase tracking-wider opacity-75">Disabled</span>
+              <span className="text-[11px] font-semibold uppercase tracking-wider opacity-75">
+                Disabled
+              </span>
               <Ban className="w-4 h-4 text-rose-500" />
             </div>
             <p className="text-xl font-bold mt-1 text-rose-600">
@@ -572,9 +677,12 @@ export default function UsersRolesPage() {
         <Card>
           <div className="p-4 sm:p-5 border-b border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div>
-              <h2 className="text-base font-bold text-slate-900">System User Directory</h2>
+              <h2 className="text-base font-bold text-slate-900">
+                System User Directory
+              </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Authorized accounts with designated access scopes and onboarding status
+                Authorized accounts with designated access scopes and onboarding
+                status
               </p>
             </div>
 
@@ -627,8 +735,10 @@ export default function UsersRolesPage() {
                   </TableRow>
                 ) : (
                   filteredUsers.map((u) => {
-                    const status = u.status || 'ACTIVE';
-                    const isSuperAdmin = u.id === 'user-super-admin' || u.email === 'himanshu.m@letsunbound.com';
+                    const status = u.status || "ACTIVE";
+                    const isSuperAdmin =
+                      u.id === "user-super-admin" ||
+                      u.email === "himanshu.m@letsunbound.com";
 
                     return (
                       <TableRow key={u.id}>
@@ -646,23 +756,27 @@ export default function UsersRolesPage() {
                                   </span>
                                 )}
                               </p>
-                              <p className="text-[11px] text-slate-500 font-mono">{u.email}</p>
+                              <p className="text-[11px] text-slate-500 font-mono">
+                                {u.email}
+                              </p>
                             </div>
                           </div>
                         </TableCell>
 
                         <TableCell>
                           <div className="space-y-0.5">
-                            <p className="text-xs font-semibold text-slate-800">{u.roleName}</p>
+                            <p className="text-xs font-semibold text-slate-800">
+                              {u.roleName}
+                            </p>
                             <Badge
                               variant={
-                                u.role === 'ADMINISTRATOR'
-                                  ? 'default'
-                                  : u.role === 'OPERATIONS'
-                                  ? 'warning'
-                                  : u.role === 'MENTOR'
-                                  ? 'purple'
-                                  : 'neutral'
+                                u.role === "ADMINISTRATOR"
+                                  ? "default"
+                                  : u.role === "OPERATIONS"
+                                    ? "warning"
+                                    : u.role === "MENTOR"
+                                      ? "purple"
+                                      : "neutral"
                               }
                               size="sm"
                             >
@@ -684,7 +798,7 @@ export default function UsersRolesPage() {
                               All Campuses
                             </span>
                           ) : (
-                            <span>{u.assignedBranchIds.join(', ')}</span>
+                            <span>{u.assignedBranchIds.join(", ")}</span>
                           )}
                         </TableCell>
 
@@ -710,18 +824,50 @@ export default function UsersRolesPage() {
                               </button>
                             )}
                             <details className="relative">
-                              <summary title="More user actions" className="list-none cursor-pointer p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded">
+                              <summary
+                                title="More user actions"
+                                className="list-none cursor-pointer p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded"
+                              >
                                 <MoreVertical className="w-4 h-4" />
                               </summary>
                               <div className="absolute right-0 z-10 mt-1 w-48 rounded-lg border border-slate-200 bg-white p-1 text-left shadow-lg">
-                                <button type="button" onClick={() => { setPasswordActionUser(u); setPasswordAction('link'); setFormError(null); }} className="flex w-full items-center gap-2 rounded px-3 py-2 text-xs text-slate-700 hover:bg-slate-50">
-                                  <KeyRound className="w-3.5 h-3.5" /> Change password
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setPasswordActionUser(u);
+                                    setPasswordAction("link");
+                                    setFormError(null);
+                                  }}
+                                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
+                                >
+                                  <KeyRound className="w-3.5 h-3.5" /> Change
+                                  password
                                 </button>
-                                <button type="button" onClick={() => handleCopySetupLink(u)} className="flex w-full items-center gap-2 rounded px-3 py-2 text-xs text-slate-700 hover:bg-slate-50">
-                                  <Copy className="w-3.5 h-3.5" /> Copy setup link
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopySetupLink(u)}
+                                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
+                                >
+                                  <Copy className="w-3.5 h-3.5" /> Copy setup
+                                  link
                                 </button>
-                                <button type="button" disabled={isSuperAdmin} onClick={() => handleUpdateStatus(u, status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED')} className="flex w-full items-center gap-2 rounded px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-40">
-                                  <Ban className="w-3.5 h-3.5" /> {status === 'SUSPENDED' ? 'Reactivate account' : 'Suspend account'}
+                                <button
+                                  type="button"
+                                  disabled={isSuperAdmin}
+                                  onClick={() =>
+                                    handleUpdateStatus(
+                                      u,
+                                      status === "SUSPENDED"
+                                        ? "ACTIVE"
+                                        : "SUSPENDED",
+                                    )
+                                  }
+                                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                                >
+                                  <Ban className="w-3.5 h-3.5" />{" "}
+                                  {status === "SUSPENDED"
+                                    ? "Reactivate account"
+                                    : "Suspend account"}
                                 </button>
                               </div>
                             </details>
@@ -738,7 +884,10 @@ export default function UsersRolesPage() {
 
         {/* Roles Table */}
         <Card>
-          <CardHeader title="System & Custom Security Roles" subtitle="Granular module permissions and authorized scope" />
+          <CardHeader
+            title="System & Custom Security Roles"
+            subtitle="Granular module permissions and authorized scope"
+          />
           <CardContent className="p-0">
             <Table>
               <TableHeader>
@@ -753,20 +902,34 @@ export default function UsersRolesPage() {
               <TableBody>
                 {roles.map((r) => (
                   <TableRow key={r.id}>
-                    <TableCell className="font-bold text-slate-900">{r.name}</TableCell>
+                    <TableCell className="font-bold text-slate-900">
+                      {r.name}
+                    </TableCell>
                     <TableCell>
                       <Badge
-                        variant={r.systemRole === 'ADMINISTRATOR' ? 'default' : r.systemRole === 'OPERATIONS' ? 'warning' : r.systemRole === 'AUDIT' ? 'warning' : 'success'}
+                        variant={
+                          r.systemRole === "ADMINISTRATOR"
+                            ? "default"
+                            : r.systemRole === "OPERATIONS"
+                              ? "warning"
+                              : r.systemRole === "AUDIT"
+                                ? "warning"
+                                : "success"
+                        }
                         size="sm"
                       >
                         {r.systemRole}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-xs text-slate-600 max-w-sm">{r.description}</TableCell>
+                    <TableCell className="text-xs text-slate-600 max-w-sm">
+                      {r.description}
+                    </TableCell>
                     <TableCell className="text-xs text-slate-700 font-semibold">
                       {r.permissions.length} modules configured
                     </TableCell>
-                    <TableCell className="text-xs text-slate-500">{formatDate(r.createdAt)}</TableCell>
+                    <TableCell className="text-xs text-slate-500">
+                      {formatDate(r.createdAt)}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -782,12 +945,16 @@ export default function UsersRolesPage() {
               setShowAddUserModal(false);
               setEditingUser(null);
             }}
-            title={editingUser ? 'Edit User Account' : 'Add New User Account'}
+            title={editingUser ? "Edit User Account" : "Add New User Account"}
             subtitle="Create an institutional faculty or operations account and issue password credentials"
             maxWidth="lg"
             footer={
               <div className="flex justify-end gap-2">
-                <Button variant="ghost" size="sm" onClick={() => setShowAddUserModal(false)}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAddUserModal(false)}
+                >
                   Cancel
                 </Button>
                 <Button
@@ -797,7 +964,7 @@ export default function UsersRolesPage() {
                   isLoading={isSubmitting}
                   leftIcon={<Check className="w-4 h-4" />}
                 >
-                  {editingUser ? 'Save Changes' : 'Create & Dispatch Setup'}
+                  {editingUser ? "Save Changes" : "Create & Dispatch Setup"}
                 </Button>
               </div>
             }
@@ -827,7 +994,8 @@ export default function UsersRolesPage() {
               {/* Email */}
               <div>
                 <label className="font-semibold text-slate-700 block mb-1">
-                  Institutional Email Address <span className="text-rose-500">*</span>
+                  Institutional Email Address{" "}
+                  <span className="text-rose-500">*</span>
                 </label>
                 <div className="relative">
                   <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -846,14 +1014,19 @@ export default function UsersRolesPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="font-semibold text-slate-700 block mb-1">
-                    System Security Role <span className="text-rose-500">*</span>
+                    System Security Role{" "}
+                    <span className="text-rose-500">*</span>
                   </label>
                   <select
                     value={userRole}
-                    onChange={(e) => handleRoleSelectionChange(e.target.value as SystemRole)}
+                    onChange={(e) =>
+                      handleRoleSelectionChange(e.target.value as SystemRole)
+                    }
                     className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
-                    <option value="ADMINISTRATOR">Administrator (Full Access)</option>
+                    <option value="ADMINISTRATOR">
+                      Administrator (Full Access)
+                    </option>
                     <option value="OPERATIONS">Operations Specialist</option>
                     <option value="AUDIT">Audit Team</option>
                     <option value="MENTOR">Mentor (Faculty Portal)</option>
@@ -908,11 +1081,16 @@ export default function UsersRolesPage() {
                     className="mt-0.5 h-4 w-4 text-indigo-600 rounded border-slate-300"
                   />
                   <div>
-                    <label htmlFor="send-link-checkbox" className="font-semibold text-slate-900 block cursor-pointer">
+                    <label
+                      htmlFor="send-link-checkbox"
+                      className="font-semibold text-slate-900 block cursor-pointer"
+                    >
                       Send set password verification link to email
                     </label>
                     <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                      Generates a secure 24-hour setup token allowing the new user to verify their account and configure their institutional password.
+                      Generates a secure 24-hour setup token allowing the new
+                      user to verify their account and configure their
+                      institutional password.
                     </p>
                   </div>
                 </div>
@@ -921,11 +1099,15 @@ export default function UsersRolesPage() {
                 <div className="pt-2 border-t border-indigo-200/50">
                   <button
                     type="button"
-                    onClick={() => setShowManualPasswordToggle(!showManualPasswordToggle)}
+                    onClick={() =>
+                      setShowManualPasswordToggle(!showManualPasswordToggle)
+                    }
                     className="text-[11px] font-semibold text-indigo-700 hover:text-indigo-800 flex items-center gap-1"
                   >
                     <KeyRound className="w-3.5 h-3.5" />
-                    {showManualPasswordToggle ? 'Hide manual password override' : 'Or set a manual initial password'}
+                    {showManualPasswordToggle
+                      ? "Hide manual password override"
+                      : "Or set a manual initial password"}
                   </button>
 
                   {showManualPasswordToggle && (
@@ -935,7 +1117,7 @@ export default function UsersRolesPage() {
                       </label>
                       <div className="relative">
                         <input
-                          type={showInitialPassword ? 'text' : 'password'}
+                          type={showInitialPassword ? "text" : "password"}
                           placeholder="Leave empty to use email setup link only"
                           value={initialPassword}
                           onChange={(e) => setInitialPassword(e.target.value)}
@@ -943,10 +1125,16 @@ export default function UsersRolesPage() {
                         />
                         <button
                           type="button"
-                          onClick={() => setShowInitialPassword(!showInitialPassword)}
+                          onClick={() =>
+                            setShowInitialPassword(!showInitialPassword)
+                          }
                           className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
                         >
-                          {showInitialPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          {showInitialPassword ? (
+                            <EyeOff className="w-3.5 h-3.5" />
+                          ) : (
+                            <Eye className="w-3.5 h-3.5" />
+                          )}
                         </button>
                       </div>
                     </div>
@@ -966,39 +1154,116 @@ export default function UsersRolesPage() {
             maxWidth="md"
             footer={
               <div className="flex justify-end gap-2">
-                <Button variant="ghost" size="sm" onClick={() => setPasswordActionUser(null)}>Cancel</Button>
-                <Button variant="primary" size="sm" onClick={handlePasswordAction} isLoading={isSubmitting}>
-                  {passwordAction === 'link' ? 'Send setup link' : 'Set temporary password'}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPasswordActionUser(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handlePasswordAction}
+                  isLoading={isSubmitting}
+                >
+                  {passwordAction === "link"
+                    ? "Send setup link"
+                    : "Set temporary password"}
                 </Button>
               </div>
             }
           >
             <div className="space-y-4">
               <div className="grid gap-3 sm:grid-cols-2">
-                <button type="button" onClick={() => setPasswordAction('link')} className={`rounded-xl border p-4 text-left ${passwordAction === 'link' ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-100' : 'border-slate-200'}`}>
-                  <p className="text-sm font-semibold text-slate-900">Send password link</p>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">Email a secure link that lets the user create their own password.</p>
+                <button
+                  type="button"
+                  onClick={() => setPasswordAction("link")}
+                  className={`rounded-xl border p-4 text-left ${passwordAction === "link" ? "border-indigo-500 bg-indigo-50 ring-2 ring-indigo-100" : "border-slate-200"}`}
+                >
+                  <p className="text-sm font-semibold text-slate-900">
+                    Send password link
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    Email a secure link that lets the user create their own
+                    password.
+                  </p>
                 </button>
-                <button type="button" onClick={() => setPasswordAction('temporary')} className={`rounded-xl border p-4 text-left ${passwordAction === 'temporary' ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-100' : 'border-slate-200'}`}>
-                  <p className="text-sm font-semibold text-slate-900">Set temporary password</p>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">Set a temporary password for the user to use once.</p>
+                <button
+                  type="button"
+                  onClick={() => setPasswordAction("temporary")}
+                  className={`rounded-xl border p-4 text-left ${passwordAction === "temporary" ? "border-indigo-500 bg-indigo-50 ring-2 ring-indigo-100" : "border-slate-200"}`}
+                >
+                  <p className="text-sm font-semibold text-slate-900">
+                    Set temporary password
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    Set a temporary password for the user to use once.
+                  </p>
                 </button>
               </div>
-              {passwordAction === 'temporary' && (
+              {passwordAction === "temporary" && (
                 <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
-                  <p className="text-xs leading-5 text-amber-900">Selecting this will ask the user to set a new password after login with this password.</p>
+                  <p className="text-xs leading-5 text-amber-900">
+                    Selecting this will ask the user to set a new password after
+                    login with this password.
+                  </p>
                   <div className="relative">
-                    <label htmlFor="temporary-password" className="mb-1 block text-xs font-semibold text-slate-700">Temporary password</label>
-                    <input id="temporary-password" type={showTemporaryPassword ? 'text' : 'password'} value={temporaryPassword} onChange={(event) => setTemporaryPassword(event.target.value)} placeholder="At least 8 characters" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
-                    <button type="button" onClick={() => setShowTemporaryPassword((visible) => !visible)} className="absolute right-2 top-7 p-1 text-slate-400">{showTemporaryPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
+                    <label
+                      htmlFor="temporary-password"
+                      className="mb-1 block text-xs font-semibold text-slate-700"
+                    >
+                      Temporary password
+                    </label>
+                    <input
+                      id="temporary-password"
+                      type={showTemporaryPassword ? "text" : "password"}
+                      value={temporaryPassword}
+                      onChange={(event) =>
+                        setTemporaryPassword(event.target.value)
+                      }
+                      placeholder="At least 8 characters"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setShowTemporaryPassword((visible) => !visible)
+                      }
+                      className="absolute right-2 top-7 p-1 text-slate-400"
+                    >
+                      {showTemporaryPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
                   </div>
                   <div>
-                    <label htmlFor="confirm-temporary-password" className="mb-1 block text-xs font-semibold text-slate-700">Confirm temporary password</label>
-                    <input id="confirm-temporary-password" type={showTemporaryPassword ? 'text' : 'password'} value={confirmTemporaryPassword} onChange={(event) => setConfirmTemporaryPassword(event.target.value)} placeholder="Re-enter temporary password" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+                    <label
+                      htmlFor="confirm-temporary-password"
+                      className="mb-1 block text-xs font-semibold text-slate-700"
+                    >
+                      Confirm temporary password
+                    </label>
+                    <input
+                      id="confirm-temporary-password"
+                      type={showTemporaryPassword ? "text" : "password"}
+                      value={confirmTemporaryPassword}
+                      onChange={(event) =>
+                        setConfirmTemporaryPassword(event.target.value)
+                      }
+                      placeholder="Re-enter temporary password"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                    />
                   </div>
                 </div>
               )}
-              {formError && <Alert variant="danger" title="Password update failed">{formError}</Alert>}
+              {formError && (
+                <Alert variant="danger" title="Password update failed">
+                  {formError}
+                </Alert>
+              )}
             </div>
           </Modal>
         )}
@@ -1008,11 +1273,19 @@ export default function UsersRolesPage() {
           <Modal
             isOpen={showLinkSuccessModal}
             onClose={() => setShowLinkSuccessModal(false)}
-            title={generatedLinkData.isResend ? 'Password Link Dispatched' : 'User Account & Setup Link Ready'}
+            title={
+              generatedLinkData.isResend
+                ? "Password Link Dispatched"
+                : "User Account & Setup Link Ready"
+            }
             maxWidth="md"
             footer={
               <div className="flex justify-end gap-2">
-                <Button variant="primary" size="sm" onClick={() => setShowLinkSuccessModal(false)}>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setShowLinkSuccessModal(false)}
+                >
                   Done
                 </Button>
               </div>
@@ -1023,10 +1296,16 @@ export default function UsersRolesPage() {
                 <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
                 <div>
                   <p className="font-bold">
-                    {generatedLinkData.isResend ? 'Setup Link Generated & Sent' : 'Account Created Successfully'}
+                    {generatedLinkData.isResend
+                      ? "Setup Link Generated & Sent"
+                      : "Account Created Successfully"}
                   </p>
                   <p className="text-[11px] text-emerald-700 mt-0.5">
-                    An onboarding email was dispatched to <span className="font-semibold">{generatedLinkData.email}</span>.
+                    An onboarding email was dispatched to{" "}
+                    <span className="font-semibold">
+                      {generatedLinkData.email}
+                    </span>
+                    .
                   </p>
                 </div>
               </div>
@@ -1045,10 +1324,16 @@ export default function UsersRolesPage() {
                   variant="outline"
                   size="sm"
                   className="w-full justify-center"
-                  leftIcon={hasCopiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  leftIcon={
+                    hasCopiedLink ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )
+                  }
                   onClick={handleCopyLink}
                 >
-                  {hasCopiedLink ? 'Copied to Clipboard!' : 'Copy Direct Link'}
+                  {hasCopiedLink ? "Copied to Clipboard!" : "Copy Direct Link"}
                 </Button>
 
                 <Link
@@ -1072,10 +1357,19 @@ export default function UsersRolesPage() {
             title="Create Custom Security Role"
             footer={
               <div className="flex justify-end gap-2">
-                <Button variant="ghost" size="sm" onClick={() => setShowRoleModal(false)}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowRoleModal(false)}
+                >
                   Cancel
                 </Button>
-                <Button variant="primary" size="sm" onClick={handleCreateRole} disabled={!roleName.trim()}>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleCreateRole}
+                  disabled={!roleName.trim()}
+                >
                   Save Role
                 </Button>
               </div>
@@ -1083,7 +1377,9 @@ export default function UsersRolesPage() {
           >
             <div className="space-y-3 text-xs">
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Role Name *</label>
+                <label className="font-semibold text-slate-700 block mb-1">
+                  Role Name *
+                </label>
                 <input
                   type="text"
                   placeholder="e.g. Campus Compliance Auditor"
@@ -1093,7 +1389,9 @@ export default function UsersRolesPage() {
                 />
               </div>
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Role Description</label>
+                <label className="font-semibold text-slate-700 block mb-1">
+                  Role Description
+                </label>
                 <textarea
                   rows={2}
                   placeholder="Define the scope and responsibilities for this role..."

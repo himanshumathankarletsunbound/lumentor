@@ -7,6 +7,20 @@ import {
 
 const approvedStatuses = ["APPROVED", "LOCKED", "PAID"] as const;
 
+type EmployeePayrollInput = {
+  variablePercent?: unknown;
+  variableAmount?: unknown;
+  additionalPayment?: unknown;
+};
+
+function nonNegativeNumber(value: unknown, field: string): number {
+  const number = Number(value || 0);
+  if (!Number.isFinite(number) || number < 0) {
+    throw new Error(`${field} must be a non-negative number.`);
+  }
+  return number;
+}
+
 export async function POST(req: NextRequest) {
   const denied = await authorizationErrorAsync(
     req,
@@ -14,12 +28,29 @@ export async function POST(req: NextRequest) {
     "create",
   );
   if (denied) return denied;
-  const { month, lines = {} } = await req.json();
+  const { month, lines = {}, draft = false } = await req.json();
   if (!/^\d{4}-\d{2}$/.test(month || ""))
     return NextResponse.json(
       { error: "Choose a valid month." },
       { status: 400 },
     );
+
+  const existingBatch = await prisma.employeePayrollBatch.findUnique({
+    where: { month },
+    select: { status: true },
+  });
+  if (
+    existingBatch &&
+    ["APPROVED", "LOCKED", "PAID"].includes(existingBatch.status)
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "This employee payroll batch is already approved or paid and cannot be recalculated.",
+      },
+      { status: 409 },
+    );
+  }
 
   const [year, monthNumber] = month.split("-").map(Number);
   const periodStart = new Date(Date.UTC(year, monthNumber - 1, 1));
@@ -49,45 +80,84 @@ export async function POST(req: NextRequest) {
       (mentorPayoutByMentor.get(line.mentorId) || 0) + Number(line.netPayable),
     ),
   );
-  const create = staff.map((employee) => {
-    const attendance = employee.monthlyAttendance[0];
-    const totalWorkingDays = attendance?.totalWorkingDays || 30;
-    const daysWorked = attendance?.daysWorked || 0;
-    const variablePercent = Number(lines[employee.id]?.variablePercent || 0);
-    const fixedSalary = Number(employee.fixedPay);
-    const variablePay = (fixedSalary * variablePercent) / 100;
-    const beforeTds = Math.round(
-      (daysWorked / totalWorkingDays) * fixedSalary - variablePay,
+  let create;
+  try {
+    create = staff.map((employee) => {
+      const attendance = employee.monthlyAttendance[0];
+      const totalWorkingDays = attendance?.totalWorkingDays || 30;
+      const daysWorked = Math.min(
+        totalWorkingDays,
+        Math.max(0, attendance?.daysWorked || 0),
+      );
+      const input = (lines[employee.id] || {}) as EmployeePayrollInput;
+      const variablePercent = nonNegativeNumber(
+        input.variablePercent,
+        "Variable percentage",
+      );
+      if (variablePercent > 100) {
+        throw new Error("Variable percentage cannot exceed 100.");
+      }
+      const variableAmount = nonNegativeNumber(
+        input.variableAmount,
+        "Variable amount",
+      );
+      const additionalPayment = nonNegativeNumber(
+        input.additionalPayment,
+        "Additional payment",
+      );
+      const fixedSalary = Number(employee.fixedPay);
+      const variablePay = Math.round(
+        (fixedSalary * variablePercent) / 100 + variableAmount,
+      );
+      const beforeTds = Math.round(
+        (daysWorked / totalWorkingDays) * fixedSalary -
+          variablePay -
+          additionalPayment,
+      );
+      const tdsAmount = employee.tdsEnabled
+        ? Math.round(
+            (Math.max(0, beforeTds) * Number(employee.tdsPercent || 0)) / 100,
+          )
+        : 0;
+      return {
+        employeeId: employee.id,
+        totalWorkingDays,
+        daysWorked,
+        leaveDays: totalWorkingDays - daysWorked,
+        fixedSalary,
+        variablePercent,
+        variableAmount,
+        additionalPayment,
+        tdsPercent: employee.tdsEnabled
+          ? Number(employee.tdsPercent || 0)
+          : null,
+        tdsAmount,
+        variablePay,
+        totalPayable: Math.max(0, beforeTds - tdsAmount),
+      };
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error ? error.message : "Invalid payroll values.",
+      },
+      { status: 400 },
     );
-    const tdsAmount = employee.tdsEnabled
-      ? Math.round((beforeTds * Number(employee.tdsPercent || 0)) / 100)
-      : 0;
-    return {
-      employeeId: employee.id,
-      totalWorkingDays,
-      daysWorked,
-      leaveDays: totalWorkingDays - daysWorked,
-      fixedSalary,
-      variablePercent,
-      variableAmount: 0,
-      additionalPayment: 0,
-      tdsPercent: employee.tdsEnabled ? Number(employee.tdsPercent || 0) : null,
-      tdsAmount,
-      variablePay,
-      totalPayable: beforeTds - tdsAmount,
-    };
-  });
+  }
   const batch = await prisma.employeePayrollBatch.upsert({
     where: { month },
     update: {
-      status: "SUBMITTED",
-      submittedAt: new Date(),
+      status: draft ? "DRAFT" : "SUBMITTED",
+      submittedAt: draft ? null : new Date(),
+      approvedAt: null,
+      approvedBy: null,
       lines: { deleteMany: {}, create },
     },
     create: {
       month,
-      status: "SUBMITTED",
-      submittedAt: new Date(),
+      status: draft ? "DRAFT" : "SUBMITTED",
+      submittedAt: draft ? null : new Date(),
       lines: { create },
     },
     include: {

@@ -79,6 +79,7 @@ export async function GET(req: NextRequest) {
     100,
     Math.max(10, Number(url.searchParams.get("pageSize") || 25)),
   );
+  const exportAll = url.searchParams.get("export") === "1";
 
   const events = await prisma.classcardEvent.findMany({
     where: mentorId ? { mentorId } : undefined,
@@ -156,6 +157,7 @@ export async function GET(req: NextRequest) {
     string,
     {
       classId: string | null;
+      classIds: Set<string>;
       title: string;
       titles: Set<string>;
       eventCount: number;
@@ -180,6 +182,7 @@ export async function GET(req: NextRequest) {
         : `missing:${event.externalId}`;
     const group = groups.get(key) || {
       classId: classId || null,
+      classIds: new Set<string>(),
       title,
       titles: new Set<string>(),
       eventCount: 0,
@@ -192,6 +195,7 @@ export async function GET(req: NextRequest) {
       eventIds: [],
     };
     if (title) group.titles.add(title);
+    if (classId) group.classIds.add(classId);
     if (!group.title && title) group.title = title;
     group.eventCount++;
     group.eventIds.push(event.externalId);
@@ -220,6 +224,7 @@ export async function GET(req: NextRequest) {
       : mapping?.status || "UNMAPPED";
     return {
       classId: group.classId,
+      classIds: [...group.classIds],
       title: group.title || "Untitled event",
       titles: [...group.titles],
       eventCount: group.eventCount,
@@ -261,7 +266,7 @@ export async function GET(req: NextRequest) {
     total: rows.length,
     page,
     pageSize,
-    rows: rows.slice(start, start + pageSize),
+    rows: exportAll ? rows : rows.slice(start, start + pageSize),
   });
 }
 

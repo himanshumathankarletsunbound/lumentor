@@ -20,6 +20,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
+  Download,
   RefreshCw,
   Search,
 } from "lucide-react";
@@ -28,6 +29,7 @@ type Plan = { id: string; name: string; code: string };
 type Mentor = { id: string; firstName: string; lastName: string };
 type ClassRow = {
   classId: string | null;
+  classIds: string[];
   title: string;
   titles: string[];
   eventCount: number;
@@ -86,6 +88,7 @@ export default function TitleMapperPage() {
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [planSearch, setPlanSearch] = useState("");
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const load = useCallback(
     async (nextPage = 1) => {
@@ -201,6 +204,75 @@ export default function TitleMapperPage() {
     }
   };
 
+  const exportMappings = async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams({
+        export: "1",
+        page: "1",
+        pageSize: "100",
+      });
+      if (search.trim()) params.set("search", search.trim());
+      if (status) params.set("status", status);
+      if (payrollPlanId) params.set("payrollPlanId", payrollPlanId);
+      if (mentorId) params.set("mentorId", mentorId);
+      const response = await fetch(`/api/classcard/title-mapper?${params}`);
+      const payload = await response.json();
+      if (!response.ok || !payload.success)
+        throw new Error(payload.error || "Unable to export title mappings.");
+      const XLSX = await import("xlsx");
+      const values = (payload.rows as ClassRow[]).map((row) => ({
+        "Classcard Class ID": (row.classIds?.length
+          ? row.classIds
+          : row.classId
+            ? [row.classId]
+            : []
+        ).join(", "),
+        "Class title": row.title,
+        Events: row.eventCount,
+        "Mentors / students": `${row.mentors.map((mentor) => mentor.name).join(", ") || "Unmapped"} · ${row.studentCount} student${row.studentCount === 1 ? "" : "s"}`,
+        "Session range": `${new Date(row.firstSession).toLocaleDateString()} to ${new Date(row.lastSession).toLocaleDateString()}`,
+        "Payroll plan": row.payrollPlan
+          ? `${row.payrollPlan.name} · ${row.payrollPlan.code}`
+          : "",
+        Status: row.mappingStatus.replace("_", " "),
+      }));
+      const workbook = XLSX.utils.book_new();
+      const sheet = XLSX.utils.json_to_sheet(values, {
+        header: [
+          "Classcard Class ID",
+          "Class title",
+          "Events",
+          "Mentors / students",
+          "Session range",
+          "Payroll plan",
+          "Status",
+        ],
+      });
+      sheet["!cols"] = [
+        { wch: 30 },
+        { wch: 36 },
+        { wch: 10 },
+        { wch: 44 },
+        { wch: 25 },
+        { wch: 34 },
+        { wch: 16 },
+      ];
+      XLSX.utils.book_append_sheet(workbook, sheet, "Title Mapper");
+      XLSX.writeFile(workbook, "classcard-title-mapper.xlsx");
+    } catch (error) {
+      setNotice({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to export title mappings.",
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const pageCount = Math.max(1, Math.ceil(total / 25));
   const metrics = [
     ["Unique classes", summary.total],
@@ -220,13 +292,23 @@ export default function TitleMapperPage() {
               across every session range for that title.
             </p>
           </div>
-          <Button
-            variant="outline"
-            leftIcon={<RefreshCw className="h-4 w-4" />}
-            onClick={() => void load(page)}
-          >
-            Refresh
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              isLoading={exporting}
+              leftIcon={<Download className="h-4 w-4" />}
+              onClick={() => void exportMappings()}
+            >
+              Export title mapper
+            </Button>
+            <Button
+              variant="outline"
+              leftIcon={<RefreshCw className="h-4 w-4" />}
+              onClick={() => void load(page)}
+            >
+              Refresh
+            </Button>
+          </div>
         </div>
         {notice && (
           <Alert

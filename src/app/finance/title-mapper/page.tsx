@@ -41,7 +41,8 @@ type ClassRow = {
   payrollPlan: Plan | null;
 };
 type Detail = {
-  classId: string;
+  classId: string | null;
+  title: string;
   mapping: {
     payrollPlanId: string | null;
     status: string;
@@ -145,16 +146,8 @@ export default function TitleMapperPage() {
   }, [load]);
 
   const openDetail = async (row: ClassRow) => {
-    if (!row.classId) {
-      setNotice({
-        type: "error",
-        message:
-          "This event is missing gibbonCourseClassID and cannot be mapped. Review its source event data.",
-      });
-      return;
-    }
     const response = await fetch(
-      `/api/classcard/title-mapper?classId=${encodeURIComponent(row.classId)}`,
+      `/api/classcard/title-mapper?title=${encodeURIComponent(row.title)}`,
     );
     const payload = await response.json();
     if (!response.ok || !payload.success) {
@@ -175,12 +168,13 @@ export default function TitleMapperPage() {
     if (!detail || !selectedPlanId) return;
     setSaving(true);
     try {
-      const row = rows.find((item) => item.classId === detail.classId);
+      const row = rows.find((item) => item.title === detail.title);
       const response = await fetch("/api/classcard/title-mapper", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           classId: detail.classId,
+          title: detail.title,
           payrollPlanId: selectedPlanId,
           displayTitle: row?.title || detail.events[0]?.title || "",
         }),
@@ -315,39 +309,25 @@ export default function TitleMapperPage() {
             </Button>
             {loading ? (
               <p className="py-10 text-center text-sm text-slate-500">
-                Loading unique Classcard classes…
+                Loading unique Classcard titles…
               </p>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Classcard Class ID</TableHead>
-                    <TableHead>Class title</TableHead>
-                    <TableHead>Events</TableHead>
+                    <TableHead>Title</TableHead>
+                    <TableHead>Sessions</TableHead>
                     <TableHead>Mentors / students</TableHead>
-                    <TableHead>Session range</TableHead>
                     <TableHead>Payroll plan</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rows.map((row, index) => (
-                    <TableRow key={row.classId || `missing-${index}`}>
-                      <TableCell className="font-mono text-xs">
-                        {row.classId || (
-                          <span className="font-sans text-amber-700">
-                            Missing — review
-                          </span>
-                        )}
-                      </TableCell>
+                  {rows.map((row) => (
+                    <TableRow key={row.title.toLocaleLowerCase()}>
                       <TableCell>
                         <p className="font-medium">{row.title}</p>
-                        {row.titles.length > 1 && (
-                          <p className="text-xs text-amber-700">
-                            {row.titles.length} conflicting titles
-                          </p>
-                        )}
                       </TableCell>
                       <TableCell>{row.eventCount}</TableCell>
                       <TableCell>
@@ -359,12 +339,6 @@ export default function TitleMapperPage() {
                         <p className="text-xs text-slate-500">
                           {row.studentCount} student
                           {row.studentCount === 1 ? "" : "s"}
-                        </p>
-                      </TableCell>
-                      <TableCell>
-                        <p>{new Date(row.firstSession).toLocaleDateString()}</p>
-                        <p className="text-xs text-slate-500">
-                          to {new Date(row.lastSession).toLocaleDateString()}
                         </p>
                       </TableCell>
                       <TableCell>
@@ -392,7 +366,6 @@ export default function TitleMapperPage() {
                           variant="outline"
                           leftIcon={<Eye className="h-4 w-4" />}
                           onClick={() => void openDetail(row)}
-                          disabled={!row.classId}
                         >
                           View / assign
                         </Button>
@@ -402,10 +375,10 @@ export default function TitleMapperPage() {
                   {rows.length === 0 && (
                     <TableRow>
                       <TableCell
-                        colSpan={8}
+                        colSpan={6}
                         className="py-10 text-center text-sm text-slate-500"
                       >
-                        No stored Classcard events match these filters. Fetch
+                        No stored Classcard titles match these filters. Fetch
                         events first.
                       </TableCell>
                     </TableRow>
@@ -441,8 +414,8 @@ export default function TitleMapperPage() {
         <Modal
           isOpen={Boolean(detail)}
           onClose={() => setDetail(null)}
-          title="Classcard class details"
-          subtitle={detail?.classId}
+          title="Title mapping details"
+          subtitle={detail?.title}
           maxWidth="2xl"
           footer={
             <>

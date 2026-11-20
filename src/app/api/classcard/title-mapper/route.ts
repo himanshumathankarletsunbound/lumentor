@@ -38,6 +38,13 @@ function titleKey(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLocaleLowerCase();
 }
 
+function eventTitle(event: {
+  rawPayload: unknown;
+  subjectName?: string | null;
+}): string {
+  return rawTitle(event.rawPayload) || text(event.subjectName);
+}
+
 function rawStudentIds(payload: unknown): string[] {
   const record = object(payload);
   const values =
@@ -62,6 +69,7 @@ export async function GET(req: NextRequest) {
 
   const url = new URL(req.url);
   const requestedClassId = text(url.searchParams.get("classId"));
+  const requestedTitle = text(url.searchParams.get("title"));
   const search = text(url.searchParams.get("search")).toLowerCase();
   const status = text(url.searchParams.get("status"));
   const mentorId = text(url.searchParams.get("mentorId"));
@@ -98,17 +106,28 @@ export async function GET(req: NextRequest) {
       .map((mapping) => [titleKey(mapping.displayTitle || ""), mapping]),
   );
 
-  if (requestedClassId) {
-    const matchingEvents = events.filter(
-      (event) =>
-        (event.gibbonCourseClassId || rawClassId(event.rawPayload)) ===
-        requestedClassId,
+  if (requestedTitle || requestedClassId) {
+    const matchingEvents = events.filter((event) =>
+      requestedTitle
+        ? titleKey(eventTitle(event)) === titleKey(requestedTitle)
+        : (event.gibbonCourseClassId || rawClassId(event.rawPayload)) ===
+          requestedClassId,
     );
-    const mapping = mappingByClassId.get(requestedClassId);
+    const resolvedTitle =
+      requestedTitle ||
+      eventTitle(matchingEvents[0] || { rawPayload: {}, subjectName: "" });
+    const resolvedClassId =
+      matchingEvents[0]?.gibbonCourseClassId ||
+      (matchingEvents[0] ? rawClassId(matchingEvents[0].rawPayload) : "") ||
+      requestedClassId;
+    const mapping =
+      mappingByTitle.get(titleKey(resolvedTitle)) ||
+      mappingByClassId.get(resolvedClassId);
     return NextResponse.json({
       success: true,
       detail: {
-        classId: requestedClassId,
+        classId: resolvedClassId || null,
+        title: resolvedTitle,
         mapping: mapping
           ? {
               payrollPlanId: mapping.payrollPlanId,
@@ -119,7 +138,7 @@ export async function GET(req: NextRequest) {
           : null,
         events: matchingEvents.map((event) => ({
           externalId: event.externalId,
-          title: rawTitle(event.rawPayload),
+          title: eventTitle(event),
           startTime: event.startTime,
           endTime: event.endTime,
           subjectExternalId: event.subjectExternalId,
@@ -151,7 +170,7 @@ export async function GET(req: NextRequest) {
   >();
   for (const event of events) {
     const classId = event.gibbonCourseClassId || rawClassId(event.rawPayload);
-    const title = rawTitle(event.rawPayload);
+    const title = eventTitle(event);
     // A title is the payroll mapping key. Classcard may split the same class
     // across session ranges, but its payout plan must remain consistent.
     const key = title
@@ -253,11 +272,12 @@ export async function POST(req: NextRequest) {
   const user = await getSessionUserAsync(req);
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   const classId = text(body.classId);
+  const requestedTitle = text(body.title);
   const payrollPlanId = text(body.payrollPlanId);
   const displayTitle = text(body.displayTitle);
-  if (!classId)
+  if (!classId && !requestedTitle)
     return NextResponse.json(
-      { success: false, error: "A Classcard class ID is required." },
+      { success: false, error: "A Classcard title is required." },
       { status: 400 },
     );
   if (!payrollPlanId)
@@ -277,7 +297,7 @@ export async function POST(req: NextRequest) {
       },
       { status: 400 },
     );
-  const canonicalTitle = displayTitle || classId;
+  const canonicalTitle = displayTitle || requestedTitle;
   const titleEvents = await prisma.classcardEvent.findMany({
     select: { gibbonCourseClassId: true, rawPayload: true },
   });
@@ -285,8 +305,7 @@ export async function POST(req: NextRequest) {
     ...new Set(
       titleEvents
         .filter(
-          (event) =>
-            titleKey(rawTitle(event.rawPayload)) === titleKey(canonicalTitle),
+          (event) => titleKey(eventTitle(event)) === titleKey(canonicalTitle),
         )
         .map(
           (event) => event.gibbonCourseClassId || rawClassId(event.rawPayload),
@@ -294,7 +313,17 @@ export async function POST(req: NextRequest) {
         .filter(Boolean),
     ),
   ];
-  const classIds = [...new Set([classId, ...relatedClassIds])];
+  const classIds = [
+    ...new Set([...(classId ? [classId] : []), ...relatedClassIds]),
+  ];
+  if (!classIds.length)
+    return NextResponse.json(
+      {
+        success: false,
+        error: "No Classcard sessions were found for this title.",
+      },
+      { status: 404 },
+    );
   const mappedAt = new Date();
   const saved = await prisma.$transaction(
     classIds.map((currentClassId) =>

@@ -383,14 +383,12 @@ export async function POST(req: NextRequest) {
   ];
   const storedClassIds = (
     await prisma.classcardClassMapping.findMany({
-      select: { gibbonCourseClassId: true, displayTitle: true },
+      where: {
+        displayTitle: { equals: canonicalTitle, mode: "insensitive" },
+      },
+      select: { gibbonCourseClassId: true },
     })
-  )
-    .filter(
-      (mapping) =>
-        titleKey(mapping.displayTitle || "") === titleKey(canonicalTitle),
-    )
-    .map((mapping) => mapping.gibbonCourseClassId);
+  ).map((mapping) => mapping.gibbonCourseClassId);
   const classIds = [
     ...new Set([
       ...(classId ? [classId] : []),
@@ -406,6 +404,16 @@ export async function POST(req: NextRequest) {
       },
       { status: 404 },
     );
+  const existingClassMappings = await prisma.classcardClassMapping.findMany({
+    where: { gibbonCourseClassId: { in: classIds } },
+    select: { gibbonCourseClassId: true },
+  });
+  const existingClassIds = existingClassMappings.map(
+    (mapping) => mapping.gibbonCourseClassId,
+  );
+  const missingClassIds = classIds.filter(
+    (currentClassId) => !existingClassIds.includes(currentClassId),
+  );
   const mappedAt = new Date();
   const saved = await prisma.$transaction([
     prisma.classcardTitleMapping.upsert({
@@ -429,7 +437,17 @@ export async function POST(req: NextRequest) {
         payrollPlan: { select: { id: true, name: true, code: true } },
       },
     }),
-    ...classIds.map((currentClassId) =>
+    prisma.classcardClassMapping.updateMany({
+      where: { gibbonCourseClassId: { in: existingClassIds } },
+      data: {
+        displayTitle: canonicalTitle,
+        payrollPlanId: plan.id,
+        status: "MAPPED",
+        mappedById: user?.id,
+        mappedAt,
+      },
+    }),
+    ...missingClassIds.map((currentClassId) =>
       prisma.classcardClassMapping.upsert({
         where: { gibbonCourseClassId: currentClassId },
         create: {

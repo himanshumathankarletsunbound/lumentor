@@ -373,3 +373,90 @@ export async function POST(req: NextRequest) {
     mappedClassIds: classIds,
   });
 }
+
+export async function DELETE(req: NextRequest) {
+  await ensureServerPersistence();
+  const denied = await authorizationErrorAsync(req, "payroll_rules", "edit");
+  if (denied) return denied;
+
+  const url = new URL(req.url);
+  const requestedTitle = text(url.searchParams.get("title"));
+  const requestedClassId = text(url.searchParams.get("classId"));
+  if (!requestedTitle && !requestedClassId) {
+    return NextResponse.json(
+      { success: false, error: "A Classcard title is required." },
+      { status: 400 },
+    );
+  }
+
+  const [user, titleEvents, storedMappings] = await Promise.all([
+    getSessionUserAsync(req),
+    requestedTitle
+      ? prisma.classcardEvent.findMany({
+          select: { gibbonCourseClassId: true, rawPayload: true },
+        })
+      : Promise.resolve([]),
+    prisma.classcardClassMapping.findMany({
+      select: { id: true, gibbonCourseClassId: true, displayTitle: true },
+    }),
+  ]);
+  const relatedClassIds = requestedTitle
+    ? titleEvents
+        .filter(
+          (event) => titleKey(eventTitle(event)) === titleKey(requestedTitle),
+        )
+        .map(
+          (event) => event.gibbonCourseClassId || rawClassId(event.rawPayload),
+        )
+        .filter(Boolean)
+    : [];
+  const storedTitleClassIds = requestedTitle
+    ? storedMappings
+        .filter(
+          (mapping) =>
+            titleKey(mapping.displayTitle || "") === titleKey(requestedTitle),
+        )
+        .map((mapping) => mapping.gibbonCourseClassId)
+    : [];
+  const classIds = [
+    ...new Set([
+      ...(requestedClassId ? [requestedClassId] : []),
+      ...relatedClassIds,
+      ...storedTitleClassIds,
+    ]),
+  ];
+  if (!classIds.length) {
+    return NextResponse.json(
+      { success: false, error: "No stored Classcard mapping was found." },
+      { status: 404 },
+    );
+  }
+
+  const mappedAt = new Date();
+  const result = await prisma.classcardClassMapping.updateMany({
+    where: { gibbonCourseClassId: { in: classIds } },
+    data: {
+      payrollPlanId: null,
+      status: "UNMAPPED",
+      mappedById: user?.id,
+      mappedAt,
+    },
+  });
+  if (user) {
+    await prisma.auditEvent.create({
+      data: {
+        id: crypto.randomUUID(),
+        userId: user.id,
+        action: "CLASSCARD_TITLE_PAYROLL_PLAN_UNMAPPED",
+        entityType: "ClasscardClassMapping",
+        entityId: classIds[0],
+        details: `Unmapped payroll plan from title "${requestedTitle || requestedClassId}" across ${result.count} Classcard class ID(s).`,
+      },
+    });
+  }
+  return NextResponse.json({
+    success: true,
+    unmappedClassIds: classIds,
+    count: result.count,
+  });
+}

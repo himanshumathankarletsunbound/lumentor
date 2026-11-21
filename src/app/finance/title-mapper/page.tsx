@@ -23,6 +23,7 @@ import {
   Download,
   RefreshCw,
   Search,
+  Unlink,
 } from "lucide-react";
 
 type Plan = { id: string; name: string; code: string };
@@ -88,6 +89,7 @@ export default function TitleMapperPage() {
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [planSearch, setPlanSearch] = useState("");
   const [saving, setSaving] = useState(false);
+  const [unmapping, setUnmapping] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   const load = useCallback(
@@ -201,6 +203,45 @@ export default function TitleMapperPage() {
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const unmapPayrollPlan = async () => {
+    if (!detail) return;
+    if (
+      !window.confirm(
+        `Unmap the payroll plan from "${detail.title}"? This affects every Classcard session range for this title but does not change historical payouts.`,
+      )
+    )
+      return;
+    setUnmapping(true);
+    try {
+      const params = new URLSearchParams({ title: detail.title });
+      if (detail.classId) params.set("classId", detail.classId);
+      const response = await fetch(
+        `/api/classcard/title-mapper?${params.toString()}`,
+        { method: "DELETE" },
+      );
+      const payload = await response.json();
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error || "Unable to unmap payroll plan.");
+      }
+      setNotice({
+        type: "success",
+        message: `Unmapped the payroll plan from ${payload.count} Classcard class ID(s) for "${detail.title}".`,
+      });
+      setDetail(null);
+      await load(page);
+    } catch (error) {
+      setNotice({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to unmap payroll plan.",
+      });
+    } finally {
+      setUnmapping(false);
     }
   };
 
@@ -501,11 +542,21 @@ export default function TitleMapperPage() {
           maxWidth="2xl"
           footer={
             <>
+              {detail?.mapping?.status === "MAPPED" && (
+                <Button
+                  variant="danger"
+                  disabled={saving || unmapping}
+                  leftIcon={<Unlink className="h-4 w-4" />}
+                  onClick={() => void unmapPayrollPlan()}
+                >
+                  {unmapping ? "Unmapping…" : "Unmap payroll plan"}
+                </Button>
+              )}
               <Button variant="outline" onClick={() => setDetail(null)}>
                 Cancel
               </Button>
               <Button
-                disabled={!selectedPlanId || saving}
+                disabled={!selectedPlanId || saving || unmapping}
                 leftIcon={<Check className="h-4 w-4" />}
                 onClick={() => void saveMapping()}
               >

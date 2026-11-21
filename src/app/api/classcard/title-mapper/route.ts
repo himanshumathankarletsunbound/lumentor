@@ -81,65 +81,103 @@ export async function GET(req: NextRequest) {
   );
   const exportAll = url.searchParams.get("export") === "1";
 
-  const events = await prisma.classcardEvent.findMany({
-    where: mentorId ? { mentorId } : undefined,
-    orderBy: { startTime: "desc" },
-    select: {
-      externalId: true,
-      gibbonCourseClassId: true,
-      subjectExternalId: true,
-      subjectName: true,
-      startTime: true,
-      endTime: true,
-      rawPayload: true,
-      mentor: { select: { id: true, firstName: true, lastName: true } },
-    },
-  });
-  const mappings = await prisma.classcardClassMapping.findMany({
-    include: { payrollPlan: { select: { id: true, name: true, code: true } } },
-  });
-  const mappingByClassId = new Map(
-    mappings.map((mapping) => [mapping.gibbonCourseClassId, mapping]),
-  );
-  const mappingByTitle = new Map(
-    mappings
-      .filter((mapping) => mapping.status === "MAPPED" && mapping.displayTitle)
-      .map((mapping) => [titleKey(mapping.displayTitle || ""), mapping]),
-  );
-
+  // Details are a targeted, indexed lookup. The paginated list below still
+  // aggregates all titles, but opening one title must never scan every event.
   if (requestedTitle || requestedClassId) {
-    const matchingEvents = events.filter((event) =>
-      requestedTitle
-        ? titleKey(eventTitle(event)) === titleKey(requestedTitle)
-        : (event.gibbonCourseClassId || rawClassId(event.rawPayload)) ===
-          requestedClassId,
-    );
+    const normalizedTitle = requestedTitle ? titleKey(requestedTitle) : "";
+    let matchingEvents = requestedTitle
+      ? await prisma.classcardEvent.findMany({
+          where: { titleKey: normalizedTitle },
+          orderBy: { startTime: "desc" },
+          select: {
+            externalId: true,
+            gibbonCourseClassId: true,
+            subjectExternalId: true,
+            subjectName: true,
+            classcardTitle: true,
+            startTime: true,
+            endTime: true,
+            rawPayload: true,
+            mentor: { select: { id: true, firstName: true, lastName: true } },
+          },
+        })
+      : await prisma.classcardEvent.findMany({
+          where: { gibbonCourseClassId: requestedClassId },
+          orderBy: { startTime: "desc" },
+          select: {
+            externalId: true,
+            gibbonCourseClassId: true,
+            subjectExternalId: true,
+            subjectName: true,
+            classcardTitle: true,
+            startTime: true,
+            endTime: true,
+            rawPayload: true,
+            mentor: { select: { id: true, firstName: true, lastName: true } },
+          },
+        });
+    // Backward-compatible one-time fallback while existing events are being
+    // backfilled with the new indexed title key.
+    if (requestedTitle && matchingEvents.length === 0) {
+      const legacyEvents = await prisma.classcardEvent.findMany({
+        where: { titleKey: null },
+        select: {
+          externalId: true,
+          gibbonCourseClassId: true,
+          subjectExternalId: true,
+          subjectName: true,
+          classcardTitle: true,
+          startTime: true,
+          endTime: true,
+          rawPayload: true,
+          mentor: { select: { id: true, firstName: true, lastName: true } },
+        },
+      });
+      matchingEvents = legacyEvents.filter(
+        (event) => titleKey(eventTitle(event)) === normalizedTitle,
+      );
+    }
     const resolvedTitle =
       requestedTitle ||
+      matchingEvents[0]?.classcardTitle ||
       eventTitle(matchingEvents[0] || { rawPayload: {}, subjectName: "" });
+    const [mapping, legacyMapping] = await Promise.all([
+      resolvedTitle
+        ? prisma.classcardTitleMapping.findUnique({
+            where: { normalizedTitle: titleKey(resolvedTitle) },
+            include: {
+              payrollPlan: { select: { id: true, name: true, code: true } },
+            },
+          })
+        : Promise.resolve(null),
+      requestedClassId
+        ? prisma.classcardClassMapping.findUnique({
+            where: { gibbonCourseClassId: requestedClassId },
+            include: {
+              payrollPlan: { select: { id: true, name: true, code: true } },
+            },
+          })
+        : Promise.resolve(null),
+    ]);
     const resolvedClassId =
-      matchingEvents[0]?.gibbonCourseClassId ||
-      (matchingEvents[0] ? rawClassId(matchingEvents[0].rawPayload) : "") ||
-      requestedClassId;
-    const mapping =
-      mappingByTitle.get(titleKey(resolvedTitle)) ||
-      mappingByClassId.get(resolvedClassId);
+      matchingEvents[0]?.gibbonCourseClassId || requestedClassId || null;
+    const effectiveMapping = mapping || legacyMapping;
     return NextResponse.json({
       success: true,
       detail: {
-        classId: resolvedClassId || null,
+        classId: resolvedClassId,
         title: resolvedTitle,
-        mapping: mapping
+        mapping: effectiveMapping
           ? {
-              payrollPlanId: mapping.payrollPlanId,
-              payrollPlan: mapping.payrollPlan,
-              status: mapping.status,
-              displayTitle: mapping.displayTitle,
+              payrollPlanId: effectiveMapping.payrollPlanId,
+              payrollPlan: effectiveMapping.payrollPlan,
+              status: effectiveMapping.status,
+              displayTitle: effectiveMapping.displayTitle,
             }
           : null,
         events: matchingEvents.map((event) => ({
           externalId: event.externalId,
-          title: eventTitle(event),
+          title: event.classcardTitle || eventTitle(event),
           startTime: event.startTime,
           endTime: event.endTime,
           subjectExternalId: event.subjectExternalId,
@@ -152,6 +190,35 @@ export async function GET(req: NextRequest) {
       },
     });
   }
+
+  const events = await prisma.classcardEvent.findMany({
+    where: mentorId ? { mentorId } : undefined,
+    orderBy: { startTime: "desc" },
+    select: {
+      externalId: true,
+      gibbonCourseClassId: true,
+      subjectExternalId: true,
+      subjectName: true,
+      classcardTitle: true,
+      titleKey: true,
+      startTime: true,
+      endTime: true,
+      rawPayload: true,
+      mentor: { select: { id: true, firstName: true, lastName: true } },
+    },
+  });
+  const mappings = await prisma.classcardClassMapping.findMany({
+    include: { payrollPlan: { select: { id: true, name: true, code: true } } },
+  });
+  const mappingByClassId = new Map(
+    mappings.map((mapping) => [mapping.gibbonCourseClassId, mapping]),
+  );
+  const titleMappings = await prisma.classcardTitleMapping.findMany({
+    include: { payrollPlan: { select: { id: true, name: true, code: true } } },
+  });
+  const mappingByTitle = new Map(
+    titleMappings.map((mapping) => [mapping.normalizedTitle, mapping]),
+  );
 
   const groups = new Map<
     string,
@@ -304,22 +371,32 @@ export async function POST(req: NextRequest) {
     );
   const canonicalTitle = displayTitle || requestedTitle;
   const titleEvents = await prisma.classcardEvent.findMany({
-    select: { gibbonCourseClassId: true, rawPayload: true },
+    where: { titleKey: titleKey(canonicalTitle) },
+    select: { gibbonCourseClassId: true },
   });
   const relatedClassIds = [
     ...new Set(
       titleEvents
-        .filter(
-          (event) => titleKey(eventTitle(event)) === titleKey(canonicalTitle),
-        )
-        .map(
-          (event) => event.gibbonCourseClassId || rawClassId(event.rawPayload),
-        )
-        .filter(Boolean),
+        .map((event) => event.gibbonCourseClassId)
+        .filter((classId): classId is string => Boolean(classId)),
     ),
   ];
+  const storedClassIds = (
+    await prisma.classcardClassMapping.findMany({
+      select: { gibbonCourseClassId: true, displayTitle: true },
+    })
+  )
+    .filter(
+      (mapping) =>
+        titleKey(mapping.displayTitle || "") === titleKey(canonicalTitle),
+    )
+    .map((mapping) => mapping.gibbonCourseClassId);
   const classIds = [
-    ...new Set([...(classId ? [classId] : []), ...relatedClassIds]),
+    ...new Set([
+      ...(classId ? [classId] : []),
+      ...relatedClassIds,
+      ...storedClassIds,
+    ]),
   ];
   if (!classIds.length)
     return NextResponse.json(
@@ -330,8 +407,29 @@ export async function POST(req: NextRequest) {
       { status: 404 },
     );
   const mappedAt = new Date();
-  const saved = await prisma.$transaction(
-    classIds.map((currentClassId) =>
+  const saved = await prisma.$transaction([
+    prisma.classcardTitleMapping.upsert({
+      where: { normalizedTitle: titleKey(canonicalTitle) },
+      create: {
+        normalizedTitle: titleKey(canonicalTitle),
+        displayTitle: canonicalTitle,
+        payrollPlanId: plan.id,
+        status: "MAPPED",
+        mappedById: user?.id,
+        mappedAt,
+      },
+      update: {
+        displayTitle: canonicalTitle,
+        payrollPlanId: plan.id,
+        status: "MAPPED",
+        mappedById: user?.id,
+        mappedAt,
+      },
+      include: {
+        payrollPlan: { select: { id: true, name: true, code: true } },
+      },
+    }),
+    ...classIds.map((currentClassId) =>
       prisma.classcardClassMapping.upsert({
         where: { gibbonCourseClassId: currentClassId },
         create: {
@@ -354,7 +452,7 @@ export async function POST(req: NextRequest) {
         },
       }),
     ),
-  );
+  ]);
   const mapping = saved[0];
   if (user)
     await prisma.auditEvent.create({
@@ -393,7 +491,8 @@ export async function DELETE(req: NextRequest) {
     getSessionUserAsync(req),
     requestedTitle
       ? prisma.classcardEvent.findMany({
-          select: { gibbonCourseClassId: true, rawPayload: true },
+          where: { titleKey: titleKey(requestedTitle) },
+          select: { gibbonCourseClassId: true },
         })
       : Promise.resolve([]),
     prisma.classcardClassMapping.findMany({
@@ -402,13 +501,8 @@ export async function DELETE(req: NextRequest) {
   ]);
   const relatedClassIds = requestedTitle
     ? titleEvents
-        .filter(
-          (event) => titleKey(eventTitle(event)) === titleKey(requestedTitle),
-        )
-        .map(
-          (event) => event.gibbonCourseClassId || rawClassId(event.rawPayload),
-        )
-        .filter(Boolean)
+        .map((event) => event.gibbonCourseClassId)
+        .filter((classId): classId is string => Boolean(classId))
     : [];
   const storedTitleClassIds = requestedTitle
     ? storedMappings
@@ -433,15 +527,33 @@ export async function DELETE(req: NextRequest) {
   }
 
   const mappedAt = new Date();
-  const result = await prisma.classcardClassMapping.updateMany({
-    where: { gibbonCourseClassId: { in: classIds } },
-    data: {
-      payrollPlanId: null,
-      status: "UNMAPPED",
-      mappedById: user?.id,
-      mappedAt,
-    },
-  });
+  const [result] = await prisma.$transaction([
+    prisma.classcardClassMapping.updateMany({
+      where: { gibbonCourseClassId: { in: classIds } },
+      data: {
+        payrollPlanId: null,
+        status: "UNMAPPED",
+        mappedById: user?.id,
+        mappedAt,
+      },
+    }),
+    prisma.classcardTitleMapping.upsert({
+      where: { normalizedTitle: titleKey(requestedTitle || requestedClassId) },
+      create: {
+        normalizedTitle: titleKey(requestedTitle || requestedClassId),
+        displayTitle: requestedTitle || requestedClassId,
+        status: "UNMAPPED",
+        mappedById: user?.id,
+        mappedAt,
+      },
+      update: {
+        payrollPlanId: null,
+        status: "UNMAPPED",
+        mappedById: user?.id,
+        mappedAt,
+      },
+    }),
+  ]);
   if (user) {
     await prisma.auditEvent.create({
       data: {
@@ -449,7 +561,7 @@ export async function DELETE(req: NextRequest) {
         userId: user.id,
         action: "CLASSCARD_TITLE_PAYROLL_PLAN_UNMAPPED",
         entityType: "ClasscardClassMapping",
-        entityId: classIds[0],
+        entityId: classIds[0]!,
         details: `Unmapped payroll plan from title "${requestedTitle || requestedClassId}" across ${result.count} Classcard class ID(s).`,
       },
     });

@@ -270,6 +270,13 @@ async function main(): Promise<void> {
         .filter((classId) => !conflictedClassIds.has(classId))
         .map((classId) => ({ ...assignment, classId })),
     );
+    // A title is authoritative. Classcard IDs are maintained as compatibility
+    // mirrors for existing payroll records and integrations.
+    const titleMappings = planned.map((assignment) => ({
+      normalizedTitle: key(assignment.row.title),
+      displayTitle: assignment.row.title,
+      payrollPlanId: assignment.planId,
+    }));
     const existingByClassId = new Map(
       existingMappings.map((mapping) => [mapping.gibbonCourseClassId, mapping]),
     );
@@ -291,8 +298,9 @@ async function main(): Promise<void> {
       duplicateTitleRows: rows.length - uniqueRows.length,
       conflictingTitles: conflictingTitles.size,
       titlesWithPlanMappings: new Set(
-        mappings.map((mapping) => key(mapping.row.title)),
+        titleMappings.map((mapping) => mapping.normalizedTitle),
       ).size,
+      authoritativeTitleMappings: titleMappings.length,
       classcardClassMappings: mappings.length,
       create: created,
       update: updated,
@@ -332,24 +340,42 @@ async function main(): Promise<void> {
 
     const mappedAt = new Date();
     await prisma.$transaction(
-      mappings.map((mapping) =>
-        prisma.classcardClassMapping.upsert({
-          where: { gibbonCourseClassId: mapping.classId },
-          create: {
-            gibbonCourseClassId: mapping.classId,
-            displayTitle: mapping.row.title,
-            payrollPlanId: mapping.planId,
-            status: "MAPPED",
-            mappedAt,
-          },
-          update: {
-            displayTitle: mapping.row.title,
-            payrollPlanId: mapping.planId,
-            status: "MAPPED",
-            mappedAt,
-          },
-        }),
-      ),
+      [
+        ...titleMappings.map((mapping) =>
+          prisma.classcardTitleMapping.upsert({
+            where: { normalizedTitle: mapping.normalizedTitle },
+            create: {
+              ...mapping,
+              status: "MAPPED",
+              mappedAt,
+            },
+            update: {
+              displayTitle: mapping.displayTitle,
+              payrollPlanId: mapping.payrollPlanId,
+              status: "MAPPED",
+              mappedAt,
+            },
+          }),
+        ),
+        ...mappings.map((mapping) =>
+          prisma.classcardClassMapping.upsert({
+            where: { gibbonCourseClassId: mapping.classId },
+            create: {
+              gibbonCourseClassId: mapping.classId,
+              displayTitle: mapping.row.title,
+              payrollPlanId: mapping.planId,
+              status: "MAPPED",
+              mappedAt,
+            },
+            update: {
+              displayTitle: mapping.row.title,
+              payrollPlanId: mapping.planId,
+              status: "MAPPED",
+              mappedAt,
+            },
+          }),
+        ),
+      ],
       { timeout: 30_000 },
     );
     console.log(JSON.stringify({ success: true, ...summary }, null, 2));

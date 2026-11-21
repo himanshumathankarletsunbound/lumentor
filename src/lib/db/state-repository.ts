@@ -21,6 +21,10 @@ import type {
 } from "../types/payroll";
 import type { AuditEvent } from "../types/models";
 import type { EmailConfig } from "../types/email";
+import {
+  classcardTitleFromPayload,
+  normalizeClasscardTitle,
+} from "../classcard/title";
 
 export async function nextMentorId(): Promise<string> {
   const rows = await prisma.$queryRaw<Array<{ id: string }>>`
@@ -775,7 +779,11 @@ export async function listClasses(
   const classcardEvents = classEventIds.length
     ? await prisma.classcardEvent.findMany({
         where: { classEventId: { in: classEventIds } },
-        select: { classEventId: true, gibbonCourseClassId: true },
+        select: {
+          classEventId: true,
+          gibbonCourseClassId: true,
+          titleKey: true,
+        },
       })
     : [];
   const classcardByEventId = new Map(
@@ -788,7 +796,10 @@ export async function listClasses(
           gibbonCourseClassId: string;
         } => Boolean(item.classEventId && item.gibbonCourseClassId),
       )
-      .map((item) => [item.classEventId, item.gibbonCourseClassId]),
+      .map((item) => [
+        item.classEventId,
+        { classId: item.gibbonCourseClassId, titleKey: item.titleKey },
+      ]),
   );
   const mappings = await prisma.classcardClassMapping.findMany({
     where: { status: "MAPPED" },
@@ -797,26 +808,20 @@ export async function listClasses(
   const mappingByClassId = new Map(
     mappings.map((item) => [item.gibbonCourseClassId, item]),
   );
+  const titleMappings = await prisma.classcardTitleMapping.findMany({
+    include: { payrollPlan: { select: { id: true, name: true } } },
+  });
   const mappingByTitle = new Map(
-    mappings
-      .filter((item) => item.displayTitle)
-      .map((item) => [
-        String(item.displayTitle)
-          .trim()
-          .replace(/\s+/g, " ")
-          .toLocaleLowerCase(),
-        item,
-      ]),
+    titleMappings.map((item) => [item.normalizedTitle, item]),
   );
   return classes.map((item) => {
-    const classcardClassId = classcardByEventId.get(item.id) || undefined;
-    const titleKey = String(item.title || "")
-      .trim()
-      .replace(/\s+/g, " ")
-      .toLocaleLowerCase();
+    const classcard = classcardByEventId.get(item.id);
+    const classcardClassId = classcard?.classId;
+    const titleKey =
+      classcard?.titleKey || normalizeClasscardTitle(item.title || "");
     const mapping =
-      (classcardClassId ? mappingByClassId.get(classcardClassId) : undefined) ||
-      mappingByTitle.get(titleKey);
+      mappingByTitle.get(titleKey) ||
+      (classcardClassId ? mappingByClassId.get(classcardClassId) : undefined);
     const statuses = item.attendances.map((attendance) => attendance.status);
     const summary: ClassEvent["attendanceStatusSummary"] =
       statuses.length === 0 || statuses.some((status) => status === "UNMARKED")
@@ -1599,10 +1604,18 @@ export async function upsertClasscardEventRecord(input: {
   attendanceStatus?: string;
   rawPayload: Prisma.InputJsonValue;
 }) {
+  const classcardTitle = classcardTitleFromPayload(
+    input.rawPayload,
+    input.subjectName,
+  );
+  const titleKey = classcardTitle
+    ? normalizeClasscardTitle(classcardTitle)
+    : null;
+  const data = { ...input, classcardTitle: classcardTitle || null, titleKey };
   return prisma.classcardEvent.upsert({
     where: { externalId: input.externalId },
-    create: input,
-    update: input,
+    create: data,
+    update: data,
   });
 }
 

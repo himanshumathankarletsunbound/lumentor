@@ -454,17 +454,24 @@ export async function POST(req: NextRequest) {
     ),
   ]);
   const mapping = saved[0];
-  if (user)
-    await prisma.auditEvent.create({
-      data: {
-        id: crypto.randomUUID(),
-        userId: user.id,
-        action: "CLASSCARD_TITLE_PAYROLL_PLAN_MAPPED",
-        entityType: "ClasscardClassMapping",
-        entityId: mapping.id,
-        details: `Mapped title "${canonicalTitle}" across ${classIds.length} Classcard class ID(s) to payroll plan ${plan.code}.`,
-      },
-    });
+  if (user) {
+    try {
+      await prisma.auditEvent.create({
+        data: {
+          id: crypto.randomUUID(),
+          userId: user.id,
+          action: "CLASSCARD_TITLE_PAYROLL_PLAN_MAPPED",
+          entityType: "ClasscardTitleMapping",
+          entityId: mapping.id,
+          details: `Mapped title "${canonicalTitle}" across ${classIds.length} Classcard class ID(s) to payroll plan ${plan.code}.`,
+        },
+      });
+    } catch (error) {
+      // A completed mapping must not be reported as failed if only audit
+      // logging is unavailable. The primary write is already committed.
+      console.error("Unable to audit Classcard title mapping", error);
+    }
+  }
   return NextResponse.json({
     success: true,
     mapping,
@@ -555,16 +562,20 @@ export async function DELETE(req: NextRequest) {
     }),
   ]);
   if (user) {
-    await prisma.auditEvent.create({
-      data: {
-        id: crypto.randomUUID(),
-        userId: user.id,
-        action: "CLASSCARD_TITLE_PAYROLL_PLAN_UNMAPPED",
-        entityType: "ClasscardClassMapping",
-        entityId: classIds[0]!,
-        details: `Unmapped payroll plan from title "${requestedTitle || requestedClassId}" across ${result.count} Classcard class ID(s).`,
-      },
-    });
+    try {
+      await prisma.auditEvent.create({
+        data: {
+          id: crypto.randomUUID(),
+          userId: user.id,
+          action: "CLASSCARD_TITLE_PAYROLL_PLAN_UNMAPPED",
+          entityType: "ClasscardTitleMapping",
+          entityId: requestedTitle || requestedClassId,
+          details: `Unmapped payroll plan from title "${requestedTitle || requestedClassId}" across ${result.count} Classcard class ID(s).`,
+        },
+      });
+    } catch (error) {
+      console.error("Unable to audit Classcard title unmapping", error);
+    }
   }
   return NextResponse.json({
     success: true,

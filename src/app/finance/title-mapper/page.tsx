@@ -63,6 +63,26 @@ type Detail = {
   }>;
 };
 
+async function readApiPayload(
+  response: Response,
+): Promise<Record<string, any>> {
+  const body = await response.text();
+  if (!body.trim()) {
+    return {
+      success: false,
+      error: `The server returned an empty response (HTTP ${response.status}). Please retry.`,
+    };
+  }
+  try {
+    return JSON.parse(body) as Record<string, any>;
+  } catch {
+    return {
+      success: false,
+      error: `The server returned an invalid response (HTTP ${response.status}). Please retry.`,
+    };
+  }
+}
+
 export default function TitleMapperPage() {
   const [rows, setRows] = useState<ClassRow[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -110,8 +130,8 @@ export default function TitleMapperPage() {
             fetch("/api/payroll-plans"),
             fetch("/api/records?type=mentor"),
           ]);
-        const classesPayload = await classesResponse.json();
-        const plansPayload = await plansResponse.json();
+        const classesPayload = await readApiPayload(classesResponse);
+        const plansPayload = await readApiPayload(plansResponse);
         if (!classesResponse.ok || !classesPayload.success)
           throw new Error(
             classesPayload.error || "Unable to load Classcard classes.",
@@ -127,7 +147,7 @@ export default function TitleMapperPage() {
             ),
           );
         if (mentorsResponse.ok) {
-          const mentorsPayload = await mentorsResponse.json();
+          const mentorsPayload = await readApiPayload(mentorsResponse);
           if (mentorsPayload.success) setMentors(mentorsPayload.records || []);
         }
       } catch (error) {
@@ -154,7 +174,7 @@ export default function TitleMapperPage() {
     const response = await fetch(
       `/api/classcard/title-mapper?title=${encodeURIComponent(row.title)}`,
     );
-    const payload = await response.json();
+    const payload = await readApiPayload(response);
     if (!response.ok || !payload.success) {
       setNotice({
         type: "error",
@@ -184,7 +204,7 @@ export default function TitleMapperPage() {
           displayTitle: row?.title || detail.events[0]?.title || "",
         }),
       });
-      const payload = await response.json();
+      const payload = await readApiPayload(response);
       if (!response.ok || !payload.success)
         throw new Error(
           payload.error || "Unable to save payroll-plan mapping.",
@@ -222,7 +242,7 @@ export default function TitleMapperPage() {
         `/api/classcard/title-mapper?${params.toString()}`,
         { method: "DELETE" },
       );
-      const payload = await response.json();
+      const payload = await readApiPayload(response);
       if (!response.ok || !payload.success) {
         throw new Error(payload.error || "Unable to unmap payroll plan.");
       }
@@ -258,7 +278,7 @@ export default function TitleMapperPage() {
       if (payrollPlanId) params.set("payrollPlanId", payrollPlanId);
       if (mentorId) params.set("mentorId", mentorId);
       const response = await fetch(`/api/classcard/title-mapper?${params}`);
-      const payload = await response.json();
+      const payload = await readApiPayload(response);
       if (!response.ok || !payload.success)
         throw new Error(payload.error || "Unable to export title mappings.");
       const XLSX = await import("xlsx");

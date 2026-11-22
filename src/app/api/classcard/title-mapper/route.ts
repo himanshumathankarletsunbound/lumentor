@@ -75,10 +75,13 @@ export async function GET(req: NextRequest) {
   const mentorId = text(url.searchParams.get("mentorId"));
   const payrollPlanId = text(url.searchParams.get("payrollPlanId"));
   const page = Math.max(1, Number(url.searchParams.get("page") || 1));
-  const pageSize = Math.min(
-    100,
-    Math.max(10, Number(url.searchParams.get("pageSize") || 25)),
-  );
+  const showAllRows = url.searchParams.get("pageSize") === "all";
+  const pageSize = showAllRows
+    ? 0
+    : Math.min(
+        100,
+        Math.max(1, Number(url.searchParams.get("pageSize") || 20)),
+      );
   const exportAll = url.searchParams.get("export") === "1";
 
   // Details are a targeted, indexed lookup. The paginated list below still
@@ -326,14 +329,14 @@ export async function GET(req: NextRequest) {
       return matchesSearch && matchesStatus && matchesPlan;
     })
     .sort((a, b) => b.lastSession.getTime() - a.lastSession.getTime());
-  const start = (page - 1) * pageSize;
+  const start = showAllRows ? 0 : (page - 1) * pageSize;
   return NextResponse.json({
     success: true,
     summary,
     total: rows.length,
-    page,
-    pageSize,
-    rows: exportAll ? rows : rows.slice(start, start + pageSize),
+    page: showAllRows ? 1 : page,
+    pageSize: showAllRows ? rows.length : pageSize,
+    rows: exportAll || showAllRows ? rows : rows.slice(start, start + pageSize),
   });
 }
 

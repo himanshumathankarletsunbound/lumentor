@@ -63,6 +63,8 @@ type Detail = {
   }>;
 };
 
+type RowLimitOption = "20" | "30" | "custom" | "all";
+
 async function readApiPayload(
   response: Response,
 ): Promise<Record<string, any>> {
@@ -95,6 +97,9 @@ export default function TitleMapperPage() {
   });
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [rowLimit, setRowLimit] = useState<RowLimitOption>("20");
+  const [customRowLimit, setCustomRowLimit] = useState("50");
+  const [goToPage, setGoToPage] = useState("");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [payrollPlanId, setPayrollPlanId] = useState("");
@@ -111,6 +116,12 @@ export default function TitleMapperPage() {
   const [saving, setSaving] = useState(false);
   const [unmapping, setUnmapping] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const resolvedRowLimit =
+    rowLimit === "all"
+      ? "all"
+      : rowLimit === "custom"
+        ? Math.min(100, Math.max(1, Number(customRowLimit) || 20))
+        : Number(rowLimit);
 
   const load = useCallback(
     async (nextPage = 1) => {
@@ -118,7 +129,7 @@ export default function TitleMapperPage() {
       try {
         const params = new URLSearchParams({
           page: String(nextPage),
-          pageSize: "25",
+          pageSize: String(resolvedRowLimit),
         });
         if (search.trim()) params.set("search", search.trim());
         if (status) params.set("status", status);
@@ -162,7 +173,7 @@ export default function TitleMapperPage() {
         setLoading(false);
       }
     },
-    [mentorId, payrollPlanId, search, status],
+    [mentorId, payrollPlanId, resolvedRowLimit, search, status],
   );
 
   useEffect(() => {
@@ -334,7 +345,19 @@ export default function TitleMapperPage() {
     }
   };
 
-  const pageCount = Math.max(1, Math.ceil(total / 25));
+  const pageCount =
+    resolvedRowLimit === "all"
+      ? 1
+      : Math.max(1, Math.ceil(total / resolvedRowLimit));
+  const applyGoToPage = () => {
+    const requestedPage = Number(goToPage);
+    if (!Number.isInteger(requestedPage) || requestedPage < 1) {
+      setNotice({ type: "error", message: "Enter a valid page number." });
+      return;
+    }
+    setGoToPage("");
+    void load(Math.min(requestedPage, pageCount));
+  };
   const metrics = [
     ["Unique classes", summary.total],
     ["Mapped", summary.mapped],
@@ -529,28 +552,87 @@ export default function TitleMapperPage() {
                 </TableBody>
               </Table>
             )}
-            <div className="flex items-center justify-end gap-3 text-sm">
-              <span>
-                Page {page} of {pageCount}
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
-                leftIcon={<ChevronLeft className="h-4 w-4" />}
-                disabled={page <= 1}
-                onClick={() => void load(page - 1)}
-              >
-                Previous
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                rightIcon={<ChevronRight className="h-4 w-4" />}
-                disabled={page >= pageCount}
-                onClick={() => void load(page + 1)}
-              >
-                Next
-              </Button>
+            <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 text-sm lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="text-slate-600" htmlFor="title-mapper-rows">
+                  Rows per page
+                </label>
+                <select
+                  id="title-mapper-rows"
+                  className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm"
+                  value={rowLimit}
+                  onChange={(event) =>
+                    setRowLimit(event.target.value as RowLimitOption)
+                  }
+                >
+                  <option value="20">20</option>
+                  <option value="30">30</option>
+                  <option value="custom">Custom</option>
+                  <option value="all">All</option>
+                </select>
+                {rowLimit === "custom" && (
+                  <label className="flex items-center gap-2 text-slate-600">
+                    <span className="sr-only">Custom rows per page</span>
+                    <input
+                      className="w-20 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={customRowLimit}
+                      onChange={(event) =>
+                        setCustomRowLimit(event.target.value)
+                      }
+                    />
+                    <span className="text-xs">max 100</span>
+                  </label>
+                )}
+                <span className="text-slate-600">
+                  Page {page} of {pageCount}
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="flex items-center gap-2 text-slate-600">
+                  <span>Go to page</span>
+                  <input
+                    className="w-16 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+                    type="number"
+                    min="1"
+                    max={pageCount}
+                    value={goToPage}
+                    disabled={pageCount <= 1}
+                    onChange={(event) => setGoToPage(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") applyGoToPage();
+                    }}
+                  />
+                </label>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={pageCount <= 1 || !goToPage}
+                  onClick={applyGoToPage}
+                >
+                  Go
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  leftIcon={<ChevronLeft className="h-4 w-4" />}
+                  disabled={page <= 1}
+                  onClick={() => void load(page - 1)}
+                >
+                  Previous
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  rightIcon={<ChevronRight className="h-4 w-4" />}
+                  disabled={page >= pageCount}
+                  onClick={() => void load(page + 1)}
+                >
+                  Next
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>

@@ -30,6 +30,7 @@ import type {
   InitiativeEntry,
   InitiativePlan,
   Penalty,
+  PenaltyPolicy,
   PayrollBatch,
   PayrollLineItem,
   PayrollPlan,
@@ -114,6 +115,28 @@ type SessionPayoutDetail = {
   calculation: string;
 };
 
+type AdjustmentDraft = {
+  key: string;
+  type: "INCENTIVE" | "FIXED_PAYOUT";
+  planId: string;
+  name: string;
+  count: string;
+  unitAmount: string;
+  payoutFactor: string;
+};
+
+type PenaltyDraft = {
+  key: string;
+  policyId: string;
+  type: string;
+  count: string;
+  unitAmount: string;
+  payoutFactor: string;
+};
+
+const newAdjustmentRow = (key: string): AdjustmentDraft => ({ key, type: "INCENTIVE", planId: "", name: "", count: "1", unitAmount: "", payoutFactor: "1" });
+const newPenaltyRow = (key: string): PenaltyDraft => ({ key, policyId: "", type: "", count: "1", unitAmount: "", payoutFactor: "1" });
+
 export function BulkPayrollWorkspace() {
   const [month, setMonth] = useState("2000-01");
   const [tab, setTab] = useState<"mentors" | "employees">("mentors");
@@ -135,13 +158,11 @@ export function BulkPayrollWorkspace() {
   const [entries, setEntries] = useState<InitiativeEntry[]>([]);
   const [plans, setPlans] = useState<InitiativePlan[]>([]);
   const [penalties, setPenalties] = useState<Penalty[]>([]);
+  const [penaltyPolicies, setPenaltyPolicies] = useState<PenaltyPolicy[]>([]);
   const [adjustmentOpen, setAdjustmentOpen] = useState(false);
   const [penaltyOpen, setPenaltyOpen] = useState(false);
-  const [adjustmentPlanId, setAdjustmentPlanId] = useState("");
-  const [adjustmentName, setAdjustmentName] = useState("");
-  const [adjustmentAmount, setAdjustmentAmount] = useState("");
-  const [penaltyReason, setPenaltyReason] = useState("");
-  const [penaltyAmount, setPenaltyAmount] = useState("");
+  const [adjustmentRows, setAdjustmentRows] = useState<AdjustmentDraft[]>([newAdjustmentRow("adjustment-1")]);
+  const [penaltyRows, setPenaltyRows] = useState<PenaltyDraft[]>([newPenaltyRow("penalty-1")]);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<{
     type: "success" | "error";
@@ -355,7 +376,7 @@ export function BulkPayrollWorkspace() {
   useEffect(() => {
     if (!selectedMentorId) return;
     void (async () => {
-      const [entryResponse, planResponse, penaltyResponse] = await Promise.all([
+      const [entryResponse, planResponse, penaltyResponse, policyResponse] = await Promise.all([
         fetch(
           `/api/payroll/initiatives?startDate=${encodeURIComponent(range.start)}&endDate=${encodeURIComponent(range.end)}&mentorId=${encodeURIComponent(selectedMentorId)}`,
         ),
@@ -363,15 +384,18 @@ export function BulkPayrollWorkspace() {
         fetch(
           `/api/penalties?mentorId=${encodeURIComponent(selectedMentorId)}`,
         ),
+        fetch("/api/penalty-policies"),
       ]);
-      const [entryData, planData, penaltyData] = await Promise.all([
+      const [entryData, planData, penaltyData, policyData] = await Promise.all([
         entryResponse.json(),
         planResponse.json(),
         penaltyResponse.json(),
+        policyResponse.json(),
       ]);
       if (entryResponse.ok && entryData.success) setEntries(entryData.entries);
       if (planResponse.ok && planData.success) setPlans(planData.plans);
       if (penaltyResponse.ok) setPenalties(penaltyData);
+      if (policyResponse.ok && policyData.success) setPenaltyPolicies(policyData.policies.filter((policy: PenaltyPolicy) => policy.isActive !== false));
     })();
   }, [range.end, range.start, selectedMentorId]);
 
@@ -577,40 +601,29 @@ export function BulkPayrollWorkspace() {
     if (entryResponse.ok && entryData.success) setEntries(entryData.entries);
     if (penaltyResponse.ok) setPenalties(penaltyData);
   };
-  const addAdjustment = async () => {
+  const addAdjustments = async () => {
     if (!selectedMentorId) return;
     try {
-      const selectedPlan = plans.find((plan) => plan.id === adjustmentPlanId);
-      const amount = selectedPlan
-        ? selectedPlan.amount
-        : Number(adjustmentAmount);
-      const name = selectedPlan?.name || adjustmentName.trim();
-      if (!name || !Number.isFinite(amount) || amount <= 0)
-        throw new Error(
-          "Choose a configured type or enter a custom name and positive amount.",
-        );
       await removeDraftForChange();
-      const response = await fetch("/api/payroll/initiatives", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mentorId: selectedMentorId,
-          planId: selectedPlan?.id,
-          name,
-          amount,
-          count: 1,
-          payoutFactor: selectedPlan?.payoutFactor || 1,
-          periodStart: range.start,
-          periodEnd: range.end,
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok || !data.success)
-        throw new Error(data.error || "Unable to add adjustment.");
+      for (const row of adjustmentRows) {
+        const selectedPlan = plans.find((plan) => plan.id === row.planId);
+        const count = Number(row.count);
+        const amount = Number(row.unitAmount);
+        const payoutFactor = Number(row.payoutFactor);
+        const name = selectedPlan?.name || row.name.trim();
+        if (!name || !Number.isInteger(count) || count < 1 || !Number.isFinite(amount) || amount < 0 || !Number.isFinite(payoutFactor) || payoutFactor < 0) {
+          throw new Error("Every adjustment row needs a name, whole count, unit price, and payout factor.");
+        }
+        const response = await fetch("/api/payroll/initiatives", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mentorId: selectedMentorId, planId: selectedPlan?.id, name, amount, count, payoutFactor, periodStart: range.start, periodEnd: range.end }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.error || "Unable to add adjustment.");
+      }
       setAdjustmentOpen(false);
-      setAdjustmentPlanId("");
-      setAdjustmentName("");
-      setAdjustmentAmount("");
+      setAdjustmentRows([newAdjustmentRow(`adjustment-${Date.now()}`)]);
       await refreshAdjustments();
       await calculate();
     } catch (error) {
@@ -648,34 +661,34 @@ export function BulkPayrollWorkspace() {
       });
     }
   };
-  const addPenalty = async () => {
+  const addPenalties = async () => {
     if (!selectedMentor || !selectedMentorId) return;
     try {
-      const amount = Number(penaltyAmount);
       if (!selectedMentor.branchId)
         throw new Error(
           "This mentor needs a branch before a penalty can be added.",
         );
-      if (!penaltyReason.trim() || !Number.isFinite(amount) || amount <= 0)
-        throw new Error("Enter a penalty reason and positive amount.");
       await removeDraftForChange();
-      const response = await fetch("/api/penalties", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mentorId: selectedMentorId,
-          branchId: selectedMentor.branchId,
-          category: "OTHER",
-          reason: penaltyReason.trim(),
-          amount,
-          approveImmediately: true,
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Unable to add penalty.");
+      for (const row of penaltyRows) {
+        const policy = penaltyPolicies.find((item) => item.id === row.policyId);
+        const count = Number(row.count);
+        const unitAmount = Number(row.unitAmount);
+        const payoutFactor = Number(row.payoutFactor);
+        const type = policy?.name || row.type.trim();
+        const amount = Math.round(unitAmount * count * payoutFactor * 100) / 100;
+        if (!type || !Number.isInteger(count) || count < 1 || !Number.isFinite(unitAmount) || unitAmount < 0 || !Number.isFinite(payoutFactor) || payoutFactor < 0) {
+          throw new Error("Every penalty row needs a type, whole count, unit price, and payout factor.");
+        }
+        const response = await fetch("/api/penalties", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mentorId: selectedMentorId, branchId: selectedMentor.branchId, category: policy?.name || "OTHER", reason: type, amount, evidenceNote: `Count ${count} × unit ${unitAmount} × factor ${payoutFactor}`, approveImmediately: true }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Unable to add penalty.");
+      }
       setPenaltyOpen(false);
-      setPenaltyReason("");
-      setPenaltyAmount("");
+      setPenaltyRows([newPenaltyRow(`penalty-${Date.now()}`)]);
       await refreshAdjustments();
       await calculate();
     } catch (error) {
@@ -1272,7 +1285,7 @@ export function BulkPayrollWorkspace() {
                           size="sm"
                           variant="outline"
                           leftIcon={<Plus className="h-3.5 w-3.5" />}
-                          onClick={() => setAdjustmentOpen(true)}
+                          onClick={() => { setAdjustmentRows([newAdjustmentRow("adjustment-new")]); setAdjustmentOpen(true); }}
                         >
                           Add incentive or fixed payout
                         </Button>
@@ -1343,7 +1356,7 @@ export function BulkPayrollWorkspace() {
                           size="sm"
                           variant="outline"
                           leftIcon={<Plus className="h-3.5 w-3.5" />}
-                          onClick={() => setPenaltyOpen(true)}
+                          onClick={() => { setPenaltyRows([newPenaltyRow("penalty-new")]); setPenaltyOpen(true); }}
                         >
                           Add approved penalty
                         </Button>
@@ -1469,9 +1482,9 @@ export function BulkPayrollWorkspace() {
         })()}
         {adjustmentOpen && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/40 p-4">
-            <div className="w-full max-w-md space-y-4 rounded-xl bg-white p-5 shadow-xl">
+            <div className="w-full max-w-6xl space-y-4 rounded-xl bg-white p-5 shadow-xl">
               <div className="flex items-center justify-between">
-                <h2 className="font-bold">Add incentive or fixed payout</h2>
+                <div><h2 className="font-bold">Add incentives and fixed payouts</h2><p className="text-xs text-slate-500">Total = count × unit price × payout factor.</p></div>
                 <Button
                   size="sm"
                   variant="ghost"
@@ -1480,61 +1493,16 @@ export function BulkPayrollWorkspace() {
                   Close
                 </Button>
               </div>
-              <label className="block text-sm font-medium">
-                Configured type
-                <select
-                  value={adjustmentPlanId}
-                  onChange={(event) => {
-                    const id = event.target.value;
-                    const plan = plans.find((item) => item.id === id);
-                    setAdjustmentPlanId(id);
-                    setAdjustmentName(plan?.name || "");
-                    setAdjustmentAmount(plan ? String(plan.amount) : "");
-                  }}
-                  className="mt-1 w-full rounded-lg border p-2"
-                >
-                  <option value="">Custom adjustment</option>
-                  {plans.map((plan) => (
-                    <option key={plan.id} value={plan.id}>
-                      {plan.planType === "FIXED_PAYOUT"
-                        ? "Fixed payout"
-                        : "Incentive"}{" "}
-                      · {plan.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block text-sm font-medium">
-                Name
-                <input
-                  value={adjustmentName}
-                  disabled={Boolean(adjustmentPlanId)}
-                  onChange={(event) => setAdjustmentName(event.target.value)}
-                  className="mt-1 w-full rounded-lg border p-2"
-                />
-              </label>
-              <label className="block text-sm font-medium">
-                Amount
-                <input
-                  type="number"
-                  min="0"
-                  value={adjustmentAmount}
-                  disabled={Boolean(adjustmentPlanId)}
-                  onChange={(event) => setAdjustmentAmount(event.target.value)}
-                  className="mt-1 w-full rounded-lg border p-2"
-                />
-              </label>
-              <Button variant="primary" onClick={() => void addAdjustment()}>
-                Add and recalculate
-              </Button>
+              <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Type</TableHead><TableHead>Name / saved plan</TableHead><TableHead>Count</TableHead><TableHead>Unit price</TableHead><TableHead>Pay factor</TableHead><TableHead>Total</TableHead><TableHead /></TableRow></TableHeader><TableBody>{adjustmentRows.map((row) => <TableRow key={row.key}><TableCell><select value={row.type} onChange={(e) => setAdjustmentRows((current) => current.map((item) => item.key === row.key ? { ...item, type: e.target.value as AdjustmentDraft["type"], planId: "" } : item))} className="rounded border p-2 text-xs"><option value="INCENTIVE">Incentive</option><option value="FIXED_PAYOUT">Fixed payout</option></select></TableCell><TableCell><select value={row.planId} onChange={(e) => { const plan = plans.find((item) => item.id === e.target.value); setAdjustmentRows((current) => current.map((item) => item.key === row.key ? { ...item, planId: e.target.value, name: plan?.name || item.name, unitAmount: plan ? String(plan.amount) : item.unitAmount, payoutFactor: plan ? String(plan.payoutFactor) : item.payoutFactor } : item)); }} className="mb-1 w-full rounded border p-2 text-xs"><option value="">Custom</option>{plans.filter((plan) => plan.planType === row.type).map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select><input value={row.name} disabled={Boolean(row.planId)} onChange={(e) => setAdjustmentRows((current) => current.map((item) => item.key === row.key ? { ...item, name: e.target.value } : item))} placeholder="Custom name" className="w-full rounded border p-2 text-xs disabled:bg-slate-100" /></TableCell><TableCell><input type="number" min="1" value={row.count} onChange={(e) => setAdjustmentRows((current) => current.map((item) => item.key === row.key ? { ...item, count: e.target.value } : item))} className="w-20 rounded border p-2 text-xs" /></TableCell><TableCell><input type="number" min="0" value={row.unitAmount} disabled={Boolean(row.planId)} onChange={(e) => setAdjustmentRows((current) => current.map((item) => item.key === row.key ? { ...item, unitAmount: e.target.value } : item))} className="w-24 rounded border p-2 text-xs disabled:bg-slate-100" /></TableCell><TableCell><input type="number" min="0" step="0.01" value={row.payoutFactor} onChange={(e) => setAdjustmentRows((current) => current.map((item) => item.key === row.key ? { ...item, payoutFactor: e.target.value } : item))} className="w-20 rounded border p-2 text-xs" /></TableCell><TableCell className="font-semibold text-emerald-700">{formatCurrency(Number(row.count || 0) * Number(row.unitAmount || 0) * Number(row.payoutFactor || 0))}</TableCell><TableCell><Button size="sm" variant="ghost" disabled={adjustmentRows.length === 1} onClick={() => setAdjustmentRows((current) => current.filter((item) => item.key !== row.key))}>Remove</Button></TableCell></TableRow>)}</TableBody></Table></div>
+              <div className="flex justify-between"><Button variant="outline" leftIcon={<Plus className="h-4 w-4" />} onClick={() => setAdjustmentRows((current) => [...current, newAdjustmentRow(`adjustment-${Date.now()}`)])}>Add row</Button><Button variant="primary" onClick={() => void addAdjustments()}>Add and recalculate</Button></div>
             </div>
           </div>
         )}
         {penaltyOpen && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/40 p-4">
-            <div className="w-full max-w-md space-y-4 rounded-xl bg-white p-5 shadow-xl">
+            <div className="w-full max-w-5xl space-y-4 rounded-xl bg-white p-5 shadow-xl">
               <div className="flex items-center justify-between">
-                <h2 className="font-bold">Add approved penalty</h2>
+                <div><h2 className="font-bold">Add approved penalties</h2><p className="text-xs text-slate-500">Total = count × unit price × payout factor.</p></div>
                 <Button
                   size="sm"
                   variant="ghost"
@@ -1543,27 +1511,8 @@ export function BulkPayrollWorkspace() {
                   Close
                 </Button>
               </div>
-              <label className="block text-sm font-medium">
-                Reason
-                <input
-                  value={penaltyReason}
-                  onChange={(event) => setPenaltyReason(event.target.value)}
-                  className="mt-1 w-full rounded-lg border p-2"
-                />
-              </label>
-              <label className="block text-sm font-medium">
-                Amount
-                <input
-                  type="number"
-                  min="0"
-                  value={penaltyAmount}
-                  onChange={(event) => setPenaltyAmount(event.target.value)}
-                  className="mt-1 w-full rounded-lg border p-2"
-                />
-              </label>
-              <Button variant="primary" onClick={() => void addPenalty()}>
-                Add and recalculate
-              </Button>
+              <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Type / saved policy</TableHead><TableHead>Count</TableHead><TableHead>Unit price</TableHead><TableHead>Pay factor</TableHead><TableHead>Total</TableHead><TableHead /></TableRow></TableHeader><TableBody>{penaltyRows.map((row) => <TableRow key={row.key}><TableCell><select value={row.policyId} onChange={(e) => { const policy = penaltyPolicies.find((item) => item.id === e.target.value); setPenaltyRows((current) => current.map((item) => item.key === row.key ? { ...item, policyId: e.target.value, type: policy?.name || item.type, unitAmount: policy ? String(policy.defaultAmount || policy.rateValue || 0) : item.unitAmount } : item)); }} className="mb-1 w-full rounded border p-2 text-xs"><option value="">Custom penalty</option>{penaltyPolicies.map((policy) => <option key={policy.id} value={policy.id}>{policy.name}</option>)}</select><input value={row.type} disabled={Boolean(row.policyId)} onChange={(e) => setPenaltyRows((current) => current.map((item) => item.key === row.key ? { ...item, type: e.target.value } : item))} placeholder="Custom type" className="w-full rounded border p-2 text-xs disabled:bg-slate-100" /></TableCell><TableCell><input type="number" min="1" value={row.count} onChange={(e) => setPenaltyRows((current) => current.map((item) => item.key === row.key ? { ...item, count: e.target.value } : item))} className="w-20 rounded border p-2 text-xs" /></TableCell><TableCell><input type="number" min="0" value={row.unitAmount} onChange={(e) => setPenaltyRows((current) => current.map((item) => item.key === row.key ? { ...item, unitAmount: e.target.value } : item))} className="w-24 rounded border p-2 text-xs" /></TableCell><TableCell><input type="number" min="0" step="0.01" value={row.payoutFactor} onChange={(e) => setPenaltyRows((current) => current.map((item) => item.key === row.key ? { ...item, payoutFactor: e.target.value } : item))} className="w-20 rounded border p-2 text-xs" /></TableCell><TableCell className="font-semibold text-rose-700">-{formatCurrency(Number(row.count || 0) * Number(row.unitAmount || 0) * Number(row.payoutFactor || 0))}</TableCell><TableCell><Button size="sm" variant="ghost" disabled={penaltyRows.length === 1} onClick={() => setPenaltyRows((current) => current.filter((item) => item.key !== row.key))}>Remove</Button></TableCell></TableRow>)}</TableBody></Table></div>
+              <div className="flex justify-between"><Button variant="outline" leftIcon={<Plus className="h-4 w-4" />} onClick={() => setPenaltyRows((current) => [...current, newPenaltyRow(`penalty-${Date.now()}`)])}>Add row</Button><Button variant="primary" onClick={() => void addPenalties()}>Add and recalculate</Button></div>
             </div>
           </div>
         )}

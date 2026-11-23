@@ -177,8 +177,9 @@ export function BulkPayrollWorkspace() {
   const selectedClasses = classes.filter(
     (event) => event.mentorId === selectedMentorId,
   );
+  const activeMentorReview = mentorReviewBatch || batch;
   const selectedLines =
-    (mentorReviewBatch || batch)?.lineItems.filter((item) => item.mentorId === selectedMentorId) || [];
+    activeMentorReview?.lineItems.filter((item) => item.mentorId === selectedMentorId) || [];
   const selectedTotal = selectedLines.reduce(
     (sum, item) => sum + item.netPayable,
     0,
@@ -1175,7 +1176,7 @@ export function BulkPayrollWorkspace() {
                       <div className="rounded-lg border border-indigo-100 bg-indigo-50 p-3 text-xs">
                         <p>Class payout</p>
                         <strong className="text-xl">
-                          {batch
+                          {activeMentorReview
                             ? formatCurrency(
                                 selectedLines.reduce(
                                   (sum, item) =>
@@ -1194,7 +1195,7 @@ export function BulkPayrollWorkspace() {
                       <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs">
                         <p>Total payout</p>
                         <strong className="text-xl">
-                          {batch ? formatCurrency(selectedTotal) : "—"}
+                          {activeMentorReview ? formatCurrency(selectedTotal) : "—"}
                         </strong>
                         <p>After adjustments</p>
                       </div>

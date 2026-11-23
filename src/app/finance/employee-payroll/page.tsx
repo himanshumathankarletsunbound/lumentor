@@ -31,14 +31,18 @@ type L = {
 export default function P() {
   const [month, setMonth] = useState("");
   const [b, setB] = useState<{ lines: L[]; status?: string } | null>(null);
+  const [isPreview, setIsPreview] = useState(false);
   const [c, setC] = useState<Record<string, { variablePercent: string }>>({});
-  const load = async () => {
+  const load = async (persist = false, submit = false) => {
     const r = await fetch("/api/employee-payroll", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ month, lines: c }),
+      body: JSON.stringify({ month, lines: c, persist, submit }),
     });
-    setB(await r.json());
+    const result = await r.json();
+    if (!r.ok) return;
+    setB(result);
+    setIsPreview(!persist);
   };
   const preview = (x: L) => {
     const variable = Number(c[x.employeeId]?.variablePercent || 0);
@@ -77,7 +81,7 @@ export default function P() {
               className="border rounded p-2"
               type="month"
               value={month}
-              onChange={(e) => setMonth(e.target.value)}
+              onChange={(e) => { setMonth(e.target.value); setB(null); setIsPreview(false); }}
             />
             <Button disabled={!month} onClick={() => void load()}>
               Fetch attendance
@@ -154,9 +158,18 @@ export default function P() {
               </Table>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button onClick={() => void load()}>
-                  Recalculate & send for approval
+                  Recalculate
                 </Button>
-                {b.status === "SUBMITTED" && (
+                {isPreview ? (
+                  <Button variant="primary" onClick={() => void load(true)}>
+                    Create draft
+                  </Button>
+                ) : b.status === "DRAFT" ? (
+                  <Button variant="primary" onClick={() => void load(true, true)}>
+                    Save for approval
+                  </Button>
+                ) : null}
+                {b.status === "SUBMITTED" && !isPreview && (
                   <Button
                     variant="outline"
                     onClick={() => void approveEmploymentSalary()}

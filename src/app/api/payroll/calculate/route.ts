@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { periodId, startDate, endDate, branchId, mentorIds, payrollPlanId, classPayrollPlanOverrides, excludedClassIds } = body;
+    const { periodId, startDate, endDate, branchId, mentorIds, payrollPlanId, classPayrollPlanOverrides, excludedClassIds, persist = false } = body;
 
     const parsedStart = new Date(startDate);
     const parsedEnd = new Date(endDate);
@@ -38,6 +38,9 @@ export async function POST(req: NextRequest) {
     )) {
       return NextResponse.json({ error: 'excludedClassIds must be a list of unique class IDs.' }, { status: 400 });
     }
+    if (typeof persist !== 'boolean') {
+      return NextResponse.json({ error: 'persist must be a boolean.' }, { status: 400 });
+    }
 
     const batch = await generateBatchFromPostgres({
       periodId,
@@ -48,9 +51,9 @@ export async function POST(req: NextRequest) {
       payrollPlanId,
       classPayrollPlanOverrides,
       excludedClassIds,
-    });
+    }, { persist });
 
-    return NextResponse.json(batch);
+    return NextResponse.json({ ...batch, isPreview: !persist });
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: errorMsg }, { status: 500 });

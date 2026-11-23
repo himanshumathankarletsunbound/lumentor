@@ -110,8 +110,10 @@ export function BulkPayrollWorkspace() {
   const [mentors, setMentors] = useState<Mentor[]>([]);
   const [classes, setClasses] = useState<ClassEvent[]>([]);
   const [batch, setBatch] = useState<PayrollBatch | null>(null);
+  const [isPreview, setIsPreview] = useState(false);
   const [employeeBatch, setEmployeeBatch] =
     useState<EmployeePayrollBatch | null>(null);
+  const [employeeIsPreview, setEmployeeIsPreview] = useState(false);
   const [employeeInputs, setEmployeeInputs] = useState<
     Record<string, EmployeePayrollInput>
   >({});
@@ -258,7 +260,9 @@ export function BulkPayrollWorkspace() {
           throw new Error(data.error || "Unable to load sessions.");
         setClasses(data.classes);
         setBatch(null);
+        setIsPreview(false);
         setEmployeeBatch(null);
+        setEmployeeIsPreview(false);
         setEmployeeInputs({});
         setExcludedClassIds([]);
         setClassPayrollPlanOverrides({});
@@ -294,7 +298,7 @@ export function BulkPayrollWorkspace() {
     })();
   }, [range.end, range.start, selectedMentorId]);
 
-  const calculate = async () => {
+  const calculate = async (persist = false) => {
     setLoading(true);
     try {
       const response = await fetch("/api/payroll/calculate", {
@@ -307,15 +311,19 @@ export function BulkPayrollWorkspace() {
           mentorIds: mentors.map((mentor) => mentor.id),
           classPayrollPlanOverrides,
           excludedClassIds,
+          persist,
         }),
       });
       const data = await response.json();
       if (!response.ok || data.error)
         throw new Error(data.error || "Unable to calculate mentor payouts.");
       setBatch(data);
+      setIsPreview(!persist);
       setNotice({
         type: "success",
-        message: `Calculated ${data.totalMentors} mentor payout line(s). Review each mentor before saving.`,
+        message: persist
+          ? `Created a draft with ${data.totalMentors} mentor payout line(s).`
+          : `Calculated ${data.totalMentors} mentor payout line(s). Review each mentor, then create a draft when ready.`,
       });
     } catch (error) {
       setNotice({
@@ -329,7 +337,7 @@ export function BulkPayrollWorkspace() {
       setLoading(false);
     }
   };
-  const calculateEmployeePayroll = async (submit = false) => {
+  const calculateEmployeePayroll = async (persist = false, submit = false) => {
     setLoading(true);
     try {
       const response = await fetch("/api/employee-payroll", {
@@ -338,7 +346,8 @@ export function BulkPayrollWorkspace() {
         body: JSON.stringify({
           month,
           lines: employeeRequestLines,
-          draft: !submit,
+          persist,
+          submit,
         }),
       });
       const data = await response.json();
@@ -346,6 +355,7 @@ export function BulkPayrollWorkspace() {
         throw new Error(data.error || "Unable to calculate employee payroll.");
       }
       setEmployeeBatch(data);
+      setEmployeeIsPreview(!persist);
       setEmployeeInputs(
         Object.fromEntries(
           data.lines.map((line: EmployeePayrollLine) => [
@@ -362,7 +372,9 @@ export function BulkPayrollWorkspace() {
         type: "success",
         message: submit
           ? "Employee payroll has been submitted for approval."
-          : `Calculated ${data.lines.length} employee salary line(s). Review and adjust before submitting.`,
+          : persist
+            ? "Employee payroll draft created."
+            : `Calculated ${data.lines.length} employee salary line(s). Review and adjust before creating a draft.`,
       });
     } catch (error) {
       setNotice({
@@ -395,10 +407,19 @@ export function BulkPayrollWorkspace() {
     if (
       !batch ||
       !window.confirm(
-        `Discard ${batch.batchNumber}? This deletes the entire generated batch.`,
+        isPreview
+          ? "Discard this calculated preview? No draft has been created."
+          : `Discard ${batch.batchNumber}? This deletes the entire generated batch.`,
       )
     )
       return;
+    if (isPreview) {
+      setBatch(null);
+      setIsPreview(false);
+      setSelectedMentorId(null);
+      setNotice({ type: "success", message: "Calculated preview discarded." });
+      return;
+    }
     const response = await fetch("/api/payroll/batches", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
@@ -413,10 +434,11 @@ export function BulkPayrollWorkspace() {
       return;
     }
     setBatch(null);
+    setIsPreview(false);
     setSelectedMentorId(null);
     setNotice({ type: "success", message: "Draft payroll batch discarded." });
   };
-  const save = async () => {
+  const submitForApproval = async () => {
     if (!batch) return;
     const response = await fetch("/api/payroll/approve", {
       method: "POST",
@@ -443,6 +465,11 @@ export function BulkPayrollWorkspace() {
   };
   const removeDraftForChange = async () => {
     if (!batch) return;
+    if (isPreview) {
+      setBatch(null);
+      setIsPreview(false);
+      return;
+    }
     if (batch.status !== "DRAFT")
       throw new Error(
         "This payout is already submitted or finalized. Create a new batch before changing it.",
@@ -456,6 +483,7 @@ export function BulkPayrollWorkspace() {
     if (!response.ok || !data.success)
       throw new Error(data.error || "Unable to clear the draft payout.");
     setBatch(null);
+    setIsPreview(false);
   };
   const refreshAdjustments = async () => {
     if (!selectedMentorId) return;
@@ -877,7 +905,7 @@ export function BulkPayrollWorkspace() {
                   </Table>
                   <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
                     <p className="text-sm text-slate-600">
-                      Draft total:{" "}
+                      {employeeIsPreview ? "Preview total" : "Draft total"}:{" "}
                       {formatCurrency(
                         employeeBatch.lines.reduce(
                           (sum, line) =>
@@ -892,15 +920,25 @@ export function BulkPayrollWorkspace() {
                         isLoading={loading}
                         onClick={() => void calculateEmployeePayroll()}
                       >
-                        Recalculate draft
+                        Recalculate
                       </Button>
-                      <Button
-                        variant="primary"
-                        isLoading={loading}
-                        onClick={() => void calculateEmployeePayroll(true)}
-                      >
-                        Save for approval
-                      </Button>
+                      {employeeIsPreview ? (
+                        <Button
+                          variant="primary"
+                          isLoading={loading}
+                          onClick={() => void calculateEmployeePayroll(true)}
+                        >
+                          Create draft
+                        </Button>
+                      ) : employeeBatch.status === "DRAFT" ? (
+                        <Button
+                          variant="primary"
+                          isLoading={loading}
+                          onClick={() => void calculateEmployeePayroll(true, true)}
+                        >
+                          Save for approval
+                        </Button>
+                      ) : null}
                     </div>
                   </div>
                 </>
@@ -1306,16 +1344,26 @@ export function BulkPayrollWorkspace() {
                   <Button variant="outline" onClick={() => void calculate()}>
                     Recalculate
                   </Button>
-                  <Button variant="danger" onClick={() => void discard()}>
-                    Discard batch
+                  <Button variant="danger" disabled={!batch} onClick={() => void discard()}>
+                    {isPreview ? "Discard preview" : "Discard batch"}
                   </Button>
-                  <Button
-                    variant="primary"
-                    disabled={!batch}
-                    onClick={() => void save()}
-                  >
-                    Save for approval
-                  </Button>
+                  {isPreview ? (
+                    <Button
+                      variant="primary"
+                      disabled={!batch || loading}
+                      onClick={() => void calculate(true)}
+                    >
+                      Create draft
+                    </Button>
+                  ) : batch?.status === "DRAFT" ? (
+                    <Button
+                      variant="primary"
+                      disabled={!batch || loading}
+                      onClick={() => void submitForApproval()}
+                    >
+                      Save for approval
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             </div>

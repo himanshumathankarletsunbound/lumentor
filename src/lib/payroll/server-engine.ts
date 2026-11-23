@@ -5,7 +5,10 @@ import type { PayrollBatch } from '../types/payroll';
 
 const engine = new PayrollEngine();
 
-export async function generateBatchFromPostgres(options: CalculatePayrollOptions): Promise<PayrollBatch> {
+export async function generateBatchFromPostgres(
+  options: CalculatePayrollOptions,
+  { persist = false }: { persist?: boolean } = {},
+): Promise<PayrollBatch> {
   const batchId = `batch-${Date.now()}`;
   const [allMentors, allClasses, plans, penalties, initiatives, orgSettings] = await Promise.all([
     listMentors(options.branchId),
@@ -118,14 +121,16 @@ export async function generateBatchFromPostgres(options: CalculatePayrollOptions
     totalNet: lineItems.reduce((sum, item) => sum + item.netPayable, 0),
     currency: orgSettings.currency || 'INR', paymentStatus: 'UNPAID', lineItems, warnings, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
   };
-  await prisma.payrollBatch.create({
-    data: {
-      id: batch.id, batchNumber: batch.batchNumber, periodName: batch.periodName, startDate: new Date(batch.startDate), endDate: new Date(batch.endDate),
-      branchId: batch.branchId, totalMentors: batch.totalMentors, totalEligibleClasses: batch.totalEligibleClasses, totalGross: batch.totalGross,
-      totalPenalties: batch.totalPenalties, totalAdjustments: batch.totalAdjustments, totalNet: batch.totalNet, currency: batch.currency,
-      lineItems: { create: lineItems.map((item) => ({ id: item.id, mentorId: item.mentorId, payrollPlanId: item.payrollPlanId, planVersion: item.planVersion, planName: item.planName, compensationModel: item.compensationModel, eligibleClassesCount: item.eligibleClassesCount, eligibleDurationMinutes: item.eligibleDurationMinutes, baseSalaryAmount: item.baseSalaryAmount, classEarnings: item.classEarnings, durationEarnings: item.durationEarnings, studentEarnings: item.studentEarnings, revenueShareEarnings: item.revenueShareEarnings, bonusAmount: item.bonusAmount, penaltyDeductions: item.penaltyDeductions, appliedPenaltyIds: item.appliedPenaltyIds, grossEarnings: item.grossEarnings, netPayable: item.netPayable, calculationDetails: item.calculationDetails })) },
-    },
-  });
+  if (persist) {
+    await prisma.payrollBatch.create({
+      data: {
+        id: batch.id, batchNumber: batch.batchNumber, periodName: batch.periodName, startDate: new Date(batch.startDate), endDate: new Date(batch.endDate),
+        branchId: batch.branchId, totalMentors: batch.totalMentors, totalEligibleClasses: batch.totalEligibleClasses, totalGross: batch.totalGross,
+        totalPenalties: batch.totalPenalties, totalAdjustments: batch.totalAdjustments, totalNet: batch.totalNet, currency: batch.currency,
+        lineItems: { create: lineItems.map((item) => ({ id: item.id, mentorId: item.mentorId, payrollPlanId: item.payrollPlanId, planVersion: item.planVersion, planName: item.planName, compensationModel: item.compensationModel, eligibleClassesCount: item.eligibleClassesCount, eligibleDurationMinutes: item.eligibleDurationMinutes, baseSalaryAmount: item.baseSalaryAmount, classEarnings: item.classEarnings, durationEarnings: item.durationEarnings, studentEarnings: item.studentEarnings, revenueShareEarnings: item.revenueShareEarnings, bonusAmount: item.bonusAmount, penaltyDeductions: item.penaltyDeductions, appliedPenaltyIds: item.appliedPenaltyIds, grossEarnings: item.grossEarnings, netPayable: item.netPayable, calculationDetails: item.calculationDetails })) },
+      },
+    });
+  }
   return batch;
 }
 

@@ -28,12 +28,18 @@ export async function POST(req: NextRequest) {
     "create",
   );
   if (denied) return denied;
-  const { month, lines = {}, draft = false } = await req.json();
+  const { month, lines = {}, persist = false, submit = false } = await req.json();
   if (!/^\d{4}-\d{2}$/.test(month || ""))
     return NextResponse.json(
       { error: "Choose a valid month." },
       { status: 400 },
     );
+  if (typeof persist !== "boolean" || typeof submit !== "boolean") {
+    return NextResponse.json(
+      { error: "persist and submit must be boolean values." },
+      { status: 400 },
+    );
+  }
 
   const existingBatch = await prisma.employeePayrollBatch.findUnique({
     where: { month },
@@ -145,19 +151,41 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
+  if (!persist) {
+    return NextResponse.json({
+      id: `preview-${month}`,
+      status: "PREVIEW",
+      lines: create.map((line, index) => {
+        const employee = staff[index];
+        return {
+          ...line,
+          employee: {
+            employeeCode: employee.employeeCode,
+            firstName: employee.firstName,
+            lastName: employee.lastName,
+            tdsEnabled: employee.tdsEnabled,
+            tdsPercent: employee.tdsPercent,
+          },
+          mentorPayout: employee.user?.mentorId
+            ? mentorPayoutByMentor.get(employee.user.mentorId) || 0
+            : 0,
+        };
+      }),
+    });
+  }
   const batch = await prisma.employeePayrollBatch.upsert({
     where: { month },
     update: {
-      status: draft ? "DRAFT" : "SUBMITTED",
-      submittedAt: draft ? null : new Date(),
+      status: submit ? "SUBMITTED" : "DRAFT",
+      submittedAt: submit ? new Date() : null,
       approvedAt: null,
       approvedBy: null,
       lines: { deleteMany: {}, create },
     },
     create: {
       month,
-      status: draft ? "DRAFT" : "SUBMITTED",
-      submittedAt: draft ? null : new Date(),
+      status: submit ? "SUBMITTED" : "DRAFT",
+      submittedAt: submit ? new Date() : null,
       lines: { create },
     },
     include: {

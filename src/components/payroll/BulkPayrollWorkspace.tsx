@@ -32,6 +32,7 @@ import type {
   Penalty,
   PayrollBatch,
   PayrollLineItem,
+  PayrollPlan,
 } from "../../lib/types/payroll";
 
 const monthRange = (month: string) => {
@@ -116,6 +117,8 @@ export function BulkPayrollWorkspace() {
   >({});
   const [selectedMentorId, setSelectedMentorId] = useState<string | null>(null);
   const [excludedClassIds, setExcludedClassIds] = useState<string[]>([]);
+  const [classPayrollPlanOverrides, setClassPayrollPlanOverrides] = useState<Record<string, string>>({});
+  const [payrollPlans, setPayrollPlans] = useState<PayrollPlan[]>([]);
   const [entries, setEntries] = useState<InitiativeEntry[]>([]);
   const [plans, setPlans] = useState<InitiativePlan[]>([]);
   const [penalties, setPenalties] = useState<Penalty[]>([]);
@@ -226,6 +229,24 @@ export function BulkPayrollWorkspace() {
     })();
   }, []);
   useEffect(() => {
+    void (async () => {
+      try {
+        const response = await fetch("/api/payroll-plans");
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || "Unable to load payroll plans.");
+        }
+        setPayrollPlans(data.plans);
+      } catch (error) {
+        setNotice({
+          type: "error",
+          message:
+            error instanceof Error ? error.message : "Unable to load payroll plans.",
+        });
+      }
+    })();
+  }, []);
+  useEffect(() => {
     if (month === "2000-01") return;
     void (async () => {
       try {
@@ -240,6 +261,7 @@ export function BulkPayrollWorkspace() {
         setEmployeeBatch(null);
         setEmployeeInputs({});
         setExcludedClassIds([]);
+        setClassPayrollPlanOverrides({});
       } catch (error) {
         setNotice({
           type: "error",
@@ -283,6 +305,7 @@ export function BulkPayrollWorkspace() {
           startDate: range.start,
           endDate: range.end,
           mentorIds: mentors.map((mentor) => mentor.id),
+          classPayrollPlanOverrides,
           excludedClassIds,
         }),
       });
@@ -1035,6 +1058,7 @@ export function BulkPayrollWorkspace() {
                           <TableHead>Session</TableHead>
                           <TableHead>Date</TableHead>
                           <TableHead>Attendance</TableHead>
+                          <TableHead>Billable plan</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Action</TableHead>
                         </TableRow>
@@ -1042,6 +1066,9 @@ export function BulkPayrollWorkspace() {
                       <TableBody>
                         {selectedClasses.map((event) => {
                           const excluded = excludedClassIds.includes(event.id);
+                          const billableAbsence = event.students.some(
+                            (student) => student.attendanceStatus === "ABSENT_BILLABLE",
+                          );
                           return (
                             <TableRow
                               key={event.id}
@@ -1067,6 +1094,34 @@ export function BulkPayrollWorkspace() {
                                 >
                                   {statusText(event)}
                                 </Badge>
+                              </TableCell>
+                              <TableCell>
+                                {billableAbsence ? (
+                                  <select
+                                    aria-label={`Billable payroll plan for ${event.title}`}
+                                    value={classPayrollPlanOverrides[event.id] || ""}
+                                    onChange={(changeEvent) => {
+                                      const planId = changeEvent.target.value;
+                                      setClassPayrollPlanOverrides((current) => {
+                                        const next = { ...current };
+                                        if (planId) next[event.id] = planId;
+                                        else delete next[event.id];
+                                        return next;
+                                      });
+                                      setBatch(null);
+                                    }}
+                                    className="w-48 rounded-lg border border-slate-300 bg-white p-2 text-xs"
+                                  >
+                                    <option value="">Select billable plan</option>
+                                    {payrollPlans.map((plan) => (
+                                      <option key={plan.id} value={plan.id}>
+                                        {plan.name} (v{plan.version})
+                                      </option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span className="text-xs text-slate-400">Not required</span>
+                                )}
                               </TableCell>
                               <TableCell>
                                 {excluded ? (

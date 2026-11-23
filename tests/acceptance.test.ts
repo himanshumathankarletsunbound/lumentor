@@ -291,6 +291,26 @@ async function runAcceptanceTests() {
     assert.equal(lineItem.classEarnings, plan.defaultClassRate, 'The mapped per-class rate must be paid in full');
   });
 
+  test('Scenario 9C: A billable absence pays its session rate without duration proration', () => {
+    const mentor = db.createMentor({
+      firstName: 'Billable', lastName: 'Absence', email: 'billable-absence@academyapex.com', phone: '+1 555 8801',
+      branchId: 'branch-nyc', branchName: 'NYC Flagship', subjectIds: [], payrollPlanId: 'plan-duration-hourly',
+      status: 'ACTIVE', provenance: 'LOCALLY_CREATED', teachingHoursThisMonth: 0, completedClassesCount: 0, attendanceRate: 100,
+    });
+    const billableClass = db.createClass({
+      title: 'Billable Absence Session', subjectId: 'subj-cs', subjectName: 'Computer Science', mentorId: mentor.id,
+      mentorName: `${mentor.firstName} ${mentor.lastName}`, branchId: 'branch-nyc', branchName: 'NYC Flagship',
+      startTime: '2026-10-10T10:00:00Z', endTime: '2026-10-10T10:55:00Z', durationMinutes: 55, isGroup: false, capacity: 1,
+      students: [{ studentId: 'billable-student', studentName: 'Billable Student', studentEmail: 'billable-student@test.com', attendanceStatus: 'ABSENT_BILLABLE' }],
+      status: 'COMPLETED', attendanceStatusSummary: 'ALL_ABSENT', isLateCancellation: false, provenance: 'LOCALLY_CREATED',
+    });
+    const plan = db.getPayrollPlanById('plan-duration-hourly')!;
+    const lineItem = payrollEngine.calculateMentorPayroll(mentor, plan, [billableClass], '2026-10-01', '2026-10-31', 'test-billable-session-rate');
+
+    assert.equal(lineItem.eligibleClassesCount, 1, 'A payable billable absence must not be removed by duration');
+    assert.equal(lineItem.durationEarnings, plan.hourlyRate, 'A duration-model plan must pay its configured session rate once, not prorate by minutes');
+  });
+
   // --- 10. REPRODUCIBLE RECALCULATION & PLAN VERSIONING ---
   test('Scenario 10: Payroll calculations are reproducible and preserve plan version snapshots', () => {
     const testMentor = db.createMentor({

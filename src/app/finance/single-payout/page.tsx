@@ -429,14 +429,9 @@ export default function SinglePayoutPage() {
               : undefined;
         const plan = planId ? plansById.get(planId) : undefined;
         const statusIsPayable = Boolean(plan?.payableClassStatuses.includes(classEvent.status));
-        const durationMinimumApplies = !hasPresent
-          && (plan?.compensationModel === 'DURATION_BASED' || plan?.compensationModel === 'HYBRID')
-          && Boolean(plan.minEligibleDurationMinutes && plan.minEligibleDurationMinutes > 0);
-        const meetsDurationMinimum = !durationMinimumApplies || classEvent.durationMinutes >= (plan?.minEligibleDurationMinutes || 0);
-        const isPayable = Boolean(plan && statusIsPayable && meetsDurationMinimum && !isExcluded);
+        const isPayable = Boolean(plan && statusIsPayable && !isExcluded);
         const lateFactor = classEvent.isLateCancellation ? (plan?.lateCancellationPayPercent || 0) / 100 : 1;
         const groupFactor = classEvent.isGroup ? (plan?.groupMultiplier || 1) : 1;
-        const durationHours = classEvent.durationMinutes / 60;
         const paidStudents = classEvent.students.filter((student) => ['PRESENT', 'LATE', 'ABSENT_BILLABLE'].includes(student.attendanceStatus)).length;
         const baseRate = plan ? Number(plan.subjectRates?.[classEvent.subjectId] ?? plan.branchRates?.[classEvent.branchId] ?? plan.defaultClassRate) : 0;
         let unitRate = 0;
@@ -455,9 +450,9 @@ export default function SinglePayoutPage() {
           } else if (plan.compensationModel === 'DURATION_BASED') {
             unitRate = Number(plan.hourlyRate);
             payoutFactor = lateFactor;
-            quantity = durationHours;
+            quantity = 1;
             sessionPayout = quantity * unitRate * payoutFactor;
-            calculation = 'hours × hourly rate × factor';
+            calculation = '1 session × plan rate × factor';
           } else if (plan.compensationModel === 'PER_STUDENT') {
             unitRate = Number(plan.perStudentRate);
             payoutFactor = lateFactor;
@@ -472,7 +467,7 @@ export default function SinglePayoutPage() {
             calculation = 'revenue basis × percentage × factor';
           } else if (plan.compensationModel === 'HYBRID') {
             const classAmount = baseRate * groupFactor * lateFactor;
-            const durationAmount = durationHours * Number(plan.hourlyRate) * lateFactor;
+            const durationAmount = Number(plan.hourlyRate) * lateFactor;
             const studentAmount = paidStudents * Number(plan.perStudentRate) * lateFactor;
             unitRate = baseRate;
             payoutFactor = groupFactor * lateFactor;
@@ -486,8 +481,6 @@ export default function SinglePayoutPage() {
           calculation = 'Removed from this payout';
         } else if (!plan) {
           calculation = hasBillable ? 'Billable plan not selected' : hasPresent ? 'Title Mapper plan not assigned' : 'Attendance is not payable';
-        } else if (!meetsDurationMinimum) {
-          calculation = `Below plan minimum (${plan.minEligibleDurationMinutes} minutes)`;
         } else if (!statusIsPayable) {
           calculation = `Class status ${classEvent.status} is not payable in this plan`;
         }

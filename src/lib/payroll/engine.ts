@@ -83,19 +83,6 @@ export class PayrollEngine {
         continue;
       }
 
-      // A marked present/late session is payable whenever its mapped plan and
-      // class status are payable. Do not apply a global duration cut-off here:
-      // short sessions are still completed teaching sessions. Duration minimums
-      // are reserved for non-present, duration-based plans (for example,
-      // billable-absence hourly plans).
-      const appliesDurationMinimum = !hasPresentAttendance
-        && (plan.compensationModel === 'DURATION_BASED' || plan.compensationModel === 'HYBRID')
-        && plan.minEligibleDurationMinutes > 0;
-      if (appliesDurationMinimum && cls.durationMinutes < plan.minEligibleDurationMinutes) {
-        calculationNotes.push(`Class ${cls.id} (${cls.title}) excluded: ${cls.durationMinutes}m is below minimum threshold ${plan.minEligibleDurationMinutes}m.`);
-        continue;
-      }
-
       eligibleClassesCount++;
       eligibleDurationMinutes += cls.durationMinutes;
 
@@ -113,11 +100,13 @@ export class PayrollEngine {
         classEarnings += sessionPay;
       }
 
-      // 2. Duration Based Component ($/hour)
+      // 2. Session-rate component. The legacy DURATION_BASED identifier and
+      // hourlyRate field are retained for data compatibility, but duration is
+      // never used as a payroll multiplier. Every payable session earns the
+      // configured rate once.
       if (plan.compensationModel === 'DURATION_BASED' || plan.compensationModel === 'HYBRID') {
         if (plan.hourlyRate > 0) {
-          const hours = cls.durationMinutes / 60;
-          const durationPay = hours * plan.hourlyRate * lateMultiplier;
+          const durationPay = plan.hourlyRate * lateMultiplier;
           durationEarnings += durationPay;
         }
       }
@@ -354,10 +343,9 @@ export class PayrollEngine {
         });
       }
       if (item.durationEarnings > 0) {
-        const hours = item.eligibleDurationMinutes / 60;
         earningsItems.push({
-          description: `Teaching Duration (${hours.toFixed(1)} hours)`,
-          quantity: hours,
+          description: `Session-rate earnings (${item.eligibleClassesCount} sessions)`,
+          quantity: item.eligibleClassesCount,
           amount: item.durationEarnings,
         });
       }

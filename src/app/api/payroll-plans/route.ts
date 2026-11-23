@@ -146,7 +146,7 @@ export async function POST(req: NextRequest) {
       compensationModel: body.compensationModel,
       currency: body.currency || 'INR',
       ...compensationValues,
-      minEligibleDurationMinutes: numberOrDefault(body.minEligibleDurationMinutes, body.compensationModel === 'DURATION_BASED' ? 30 : 0),
+      minEligibleDurationMinutes: 0,
       payableClassStatuses: body.payableClassStatuses || ['COMPLETED', 'LATE_CANCELLED'],
       lateCancellationPayPercent: numberOrDefault(body.lateCancellationPayPercent, 50),
       groupMultiplier: numberOrDefault(body.groupMultiplier, 1.25),
@@ -242,9 +242,9 @@ export async function PUT(req: NextRequest) {
       hourlyRate: body.hourlyRate !== undefined ? Number(body.hourlyRate) : current.hourlyRate,
       perStudentRate: body.perStudentRate !== undefined ? Number(body.perStudentRate) : current.perStudentRate,
       revenuePercentage: body.revenuePercentage !== undefined ? Number(body.revenuePercentage) : current.revenuePercentage,
-      minEligibleDurationMinutes: body.minEligibleDurationMinutes !== undefined
-        ? Number(body.minEligibleDurationMinutes)
-        : current.minEligibleDurationMinutes,
+      // Kept in the schema for backward compatibility only. Session duration
+      // is operational metadata and never changes payroll eligibility/pay.
+      minEligibleDurationMinutes: current.minEligibleDurationMinutes,
       lateCancellationPayPercent: body.lateCancellationPayPercent !== undefined
         ? Number(body.lateCancellationPayPercent)
         : current.lateCancellationPayPercent,
@@ -291,11 +291,6 @@ export async function PUT(req: NextRequest) {
         hourlyRate: nextValues.hourlyRate,
         perStudentRate: nextValues.perStudentRate,
         revenuePercentage: nextValues.revenuePercentage,
-        ...(body.minEligibleDurationMinutes !== undefined && {
-          minEligibleDurationMinutes: Number.isFinite(Number(body.minEligibleDurationMinutes))
-            ? Number(body.minEligibleDurationMinutes)
-            : current.compensationModel === 'DURATION_BASED' ? 30 : 0,
-        }),
         ...(body.lateCancellationPayPercent !== undefined && { lateCancellationPayPercent: Number(body.lateCancellationPayPercent) }),
         ...(body.groupMultiplier !== undefined && { groupMultiplier: Number(body.groupMultiplier) }),
         ...(body.formula !== undefined && { formula: body.formula.trim() }),

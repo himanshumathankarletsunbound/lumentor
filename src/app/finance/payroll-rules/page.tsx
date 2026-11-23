@@ -33,8 +33,8 @@ const FORMULA_TOKENS: FormulaToken[] = [
   { label: 'Base', token: '[Base Salary]', desc: 'Fixed monthly base salary' },
   { label: 'Classes', token: '[Classes Count]', desc: 'Completed sessions' },
   { label: 'Class Rate', token: '[Class Rate]', desc: 'Rate per class' },
-  { label: 'Hours', token: '[Teaching Hours]', desc: 'Instructional teaching hours' },
-  { label: 'Hourly Rate', token: '[Hourly Rate]', desc: 'Hourly pay rate' },
+  { label: 'Sessions', token: '[Payable Sessions]', desc: 'Payable class sessions' },
+  { label: 'Session Rate', token: '[Session Rate]', desc: 'Pay per payable session' },
   { label: 'Students', token: '[Attending Students]', desc: 'Present learners count' },
   { label: 'Student Rate', token: '[Student Rate]', desc: 'Per-student rate' },
   { label: 'Group Multiplier', token: '[Group Multiplier]', desc: 'Group multiplier' },
@@ -48,6 +48,10 @@ const parseNumericInput = (value: string, fallback = 0) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
+
+function compensationModelLabel(model: CompensationModel) {
+  return model === 'DURATION_BASED' ? 'PER SESSION' : model.replace(/_/g, ' ');
+}
 
 export function computeStandardFormula(params: {
   compensationModel: CompensationModel;
@@ -75,7 +79,7 @@ export function computeStandardFormula(params: {
     }
 
     case 'DURATION_BASED': {
-      return `Gross = (Hours × ${cur}${hRate.toFixed(2)}/hr) - Deductions`;
+      return `Gross = (Payable Sessions × ${cur}${hRate.toFixed(2)}/session) - Deductions`;
     }
     case 'PER_STUDENT': {
       return `Gross = (Students × ${cur}${sRate.toFixed(2)}/student) - Deductions`;
@@ -90,7 +94,7 @@ export function computeStandardFormula(params: {
       const parts: string[] = [];
       if (base > 0) parts.push(`Base (${cur}${base.toFixed(2)})`);
       if (cRate > 0) parts.push(`(Classes × ${cur}${cRate.toFixed(2)}${grp !== 1.0 ? ` × ${grp.toFixed(2)}x` : ''})`);
-      if (hRate > 0) parts.push(`(Hours × ${cur}${hRate.toFixed(2)})`);
+      if (hRate > 0) parts.push(`(Sessions × ${cur}${hRate.toFixed(2)})`);
       if (sRate > 0) parts.push(`(Students × ${cur}${sRate.toFixed(2)})`);
       if (rev > 0) parts.push(`(Revenue × ${rev.toFixed(1)}%)`);
       if (parts.length === 0) parts.push(`Base (${cur}0.00)`);
@@ -111,7 +115,6 @@ export function simulateGrossPayout(params: {
   groupMultiplier: number;
 }): number {
   const sampleClasses = 10;
-  const sampleHours = 15;
   const sampleStudents = 8;
   const sampleTuition = 1500;
 
@@ -121,7 +124,7 @@ export function simulateGrossPayout(params: {
       total = sampleClasses * params.classRate * (Number.isFinite(params.groupMultiplier) ? params.groupMultiplier : 1.0);
       break;
     case 'DURATION_BASED':
-      total = sampleHours * params.hourlyRate;
+      total = sampleClasses * params.hourlyRate;
       break;
     case 'PER_STUDENT':
       total = sampleStudents * params.perStudentRate;
@@ -136,7 +139,7 @@ export function simulateGrossPayout(params: {
       total =
         params.baseSalary +
         sampleClasses * params.classRate * (Number.isFinite(params.groupMultiplier) ? params.groupMultiplier : 1.0) +
-        sampleHours * params.hourlyRate +
+        sampleClasses * params.hourlyRate +
         sampleStudents * params.perStudentRate +
         sampleTuition * (params.revenuePercentage / 100);
       break;
@@ -166,7 +169,6 @@ export default function PayrollRulesPage() {
   const [perStudentRate, setPerStudentRate] = useState('0');
   const [revenuePercentage, setRevenuePercentage] = useState('0');
   const [groupMultiplier, setGroupMultiplier] = useState('1');
-  const [minDuration, setMinDuration] = useState('30');
   const [lateCancelPercent, setLateCancelPercent] = useState('0');
 
   // Formula state
@@ -230,7 +232,6 @@ export default function PayrollRulesPage() {
     setPerStudentRate('0');
     setRevenuePercentage('0');
     setGroupMultiplier('1');
-    setMinDuration('30');
     setLateCancelPercent('0');
     setIsCustomFormula(false);
     setCustomFormulaText('');
@@ -250,7 +251,6 @@ export default function PayrollRulesPage() {
     setPerStudentRate(String(p.perStudentRate || 0));
     setRevenuePercentage(String(p.revenuePercentage || 0));
     setGroupMultiplier(String(p.groupMultiplier ?? 1.25));
-    setMinDuration(String(p.minEligibleDurationMinutes > 0 ? p.minEligibleDurationMinutes : 30));
     setLateCancelPercent(String(p.lateCancellationPayPercent ?? 0));
 
     if (p.formula && p.formula.trim().length > 0) {
@@ -305,7 +305,6 @@ export default function PayrollRulesPage() {
             hourlyRate: parseNumericInput(hourlyRate),
             perStudentRate: parseNumericInput(perStudentRate),
             revenuePercentage: parseNumericInput(revenuePercentage),
-            minEligibleDurationMinutes: parseNumericInput(minDuration, model === 'DURATION_BASED' ? 30 : 0),
             lateCancellationPayPercent: Number.isFinite(parseFloat(lateCancelPercent)) ? parseFloat(lateCancelPercent) : 0,
             groupMultiplier: parseNumericInput(groupMultiplier, 1),
             formula: formulaToSave,
@@ -329,7 +328,6 @@ export default function PayrollRulesPage() {
           hourlyRate: parseNumericInput(hourlyRate),
           perStudentRate: parseNumericInput(perStudentRate),
           revenuePercentage: parseNumericInput(revenuePercentage),
-          minEligibleDurationMinutes: parseNumericInput(minDuration, model === 'DURATION_BASED' ? 30 : 0),
           payableClassStatuses: ['COMPLETED', 'LATE_CANCELLED'],
           lateCancellationPayPercent: Number.isFinite(parseFloat(lateCancelPercent)) ? parseFloat(lateCancelPercent) : 0,
           groupMultiplier: parseNumericInput(groupMultiplier, 1),
@@ -525,7 +523,7 @@ export default function PayrollRulesPage() {
                         <span className="text-[11px] text-slate-400 font-mono">{p.code}</span>
                         <span className="text-slate-300">•</span>
                         <Badge variant="default" size="sm">
-                          {p.compensationModel.replace(/_/g, ' ')}
+                          {compensationModelLabel(p.compensationModel)}
                         </Badge>
                       </div>
                     </TableCell>
@@ -543,7 +541,7 @@ export default function PayrollRulesPage() {
                             <span>{getCurrencySymbol()}{p.defaultClassRate}/class</span>
                           )}
                           {p.compensationModel === 'DURATION_BASED' && p.hourlyRate > 0 && (
-                            <span>{getCurrencySymbol()}{p.hourlyRate}/hr</span>
+                            <span>{getCurrencySymbol()}{p.hourlyRate}/session</span>
                           )}
                           {p.compensationModel === 'PER_STUDENT' && p.perStudentRate > 0 && (
                             <span>+{getCurrencySymbol()}{p.perStudentRate}/student</span>
@@ -554,7 +552,7 @@ export default function PayrollRulesPage() {
                           {p.compensationModel === 'HYBRID' && (
                             <>
                               {p.defaultClassRate > 0 && <span>{getCurrencySymbol()}{p.defaultClassRate}/class</span>}
-                              {p.hourlyRate > 0 && <span>{getCurrencySymbol()}{p.hourlyRate}/hr</span>}
+                              {p.hourlyRate > 0 && <span>{getCurrencySymbol()}{p.hourlyRate}/session</span>}
                               {p.perStudentRate > 0 && <span>+{getCurrencySymbol()}{p.perStudentRate}/student</span>}
                               {p.revenuePercentage > 0 && <span>{p.revenuePercentage}% rev</span>}
                             </>
@@ -598,7 +596,7 @@ export default function PayrollRulesPage() {
 
                     {/* Column 4: Eligibility & Policy */}
                     <TableCell className="text-xs text-slate-600">
-                      <div>Min {p.minEligibleDurationMinutes}m</div>
+                      <div>Session duration does not affect payout</div>
                       <div className="text-[11px] text-slate-400">{p.lateCancellationPayPercent}% late pay</div>
                     </TableCell>
 
@@ -719,7 +717,7 @@ export default function PayrollRulesPage() {
                   className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium focus:border-indigo-500 focus:outline-none text-slate-800"
                 >
                   <option value="PER_CLASS">A. Per-Class Payroll (Fixed payment per completed session)</option>
-                  <option value="DURATION_BASED">B. Duration-Based Payroll (Hourly teaching rate)</option>
+                  <option value="DURATION_BASED">B. Per-session payroll (session rate)</option>
                   <option value="PER_STUDENT">C. Per-Student Payroll (Direct rate per attending student)</option>
                   <option value="FIXED_SALARY">D. Fixed Monthly Salary (Guaranteed base salary with proration)</option>
                   <option value="PERCENTAGE_BASED">E. Percentage-Based (Direct tuition revenue share)</option>
@@ -776,7 +774,7 @@ export default function PayrollRulesPage() {
                   {(model === 'DURATION_BASED' || model === 'HYBRID') && (
                     <div>
                       <label className="text-[11px] font-semibold text-slate-700 block mb-1">
-                        Hourly Teaching Rate
+                        Rate per Payable Session
                       </label>
                       <div className="relative">
                         <span className="absolute left-3 top-2 text-xs text-slate-400">{getCurrencySymbol(currency)}</span>
@@ -787,7 +785,7 @@ export default function PayrollRulesPage() {
                           className="w-full pl-7 pr-10 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono focus:border-indigo-500 focus:outline-none"
                           placeholder="50"
                         />
-                        <span className="absolute right-3 top-2 text-[10px] text-slate-400">/hr</span>
+                        <span className="absolute right-3 top-2 text-[10px] text-slate-400">/session</span>
                       </div>
                     </div>
                   )}
@@ -850,19 +848,12 @@ export default function PayrollRulesPage() {
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-semibold text-slate-700 block mb-1">
-                      Min Duration
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        value={minDuration}
-                        onChange={(e) => setMinDuration(e.target.value)}
-                        className="w-full pl-3 pr-10 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono focus:border-indigo-500 focus:outline-none"
-                        placeholder="45"
-                      />
-                      <span className="absolute right-3 top-2 text-[10px] text-slate-400">mins</span>
-                    </div>
+                      <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                        Session duration
+                      </label>
+                      <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-500">
+                        Recorded for scheduling only. It does not affect payout.
+                      </p>
                   </div>
 
                   <div>
@@ -1082,7 +1073,7 @@ export default function PayrollRulesPage() {
                   <div>
                     <span className="text-slate-400 block text-[10px]">Model</span>
                     <span className="font-semibold text-slate-800">
-                      {selectedPlan.compensationModel.replace(/_/g, ' ')}
+                      {compensationModelLabel(selectedPlan.compensationModel)}
                     </span>
                   </div>
                   {selectedPlan.compensationModel === 'FIXED_SALARY' && (
@@ -1103,7 +1094,7 @@ export default function PayrollRulesPage() {
                   )}
                   {(selectedPlan.compensationModel === 'DURATION_BASED' || selectedPlan.compensationModel === 'HYBRID') && (
                   <div>
-                    <span className="text-slate-400 block text-[10px]">Hourly Rate</span>
+                    <span className="text-slate-400 block text-[10px]">Per-session Rate</span>
                     <span className="font-mono font-semibold text-slate-800">
                       {selectedPlan.hourlyRate > 0 ? formatCurrency(selectedPlan.hourlyRate) : '-'}
                     </span>
@@ -1138,10 +1129,8 @@ export default function PayrollRulesPage() {
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block text-[10px]">Min Duration</span>
-                    <span className="font-semibold text-slate-800">
-                      {selectedPlan.minEligibleDurationMinutes} mins
-                    </span>
+                    <span className="text-slate-400 block text-[10px]">Session duration</span>
+                    <span className="font-semibold text-slate-800">Not used in payout</span>
                   </div>
                 </div>
               </div>

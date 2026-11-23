@@ -104,6 +104,16 @@ type EmployeePayrollInput = {
   additionalPayment: string;
 };
 
+type SessionPayoutDetail = {
+  plan?: PayrollPlan;
+  quantity: number;
+  unitRate: number;
+  payoutFactor: number;
+  sessionPayout: number;
+  payoutStatus: "PAYABLE" | "NOT PAYABLE" | "EXCLUDED";
+  calculation: string;
+};
+
 export function BulkPayrollWorkspace() {
   const [month, setMonth] = useState("2000-01");
   const [tab, setTab] = useState<"mentors" | "employees">("mentors");
@@ -118,6 +128,7 @@ export function BulkPayrollWorkspace() {
     Record<string, EmployeePayrollInput>
   >({});
   const [selectedMentorId, setSelectedMentorId] = useState<string | null>(null);
+  const [selectedSession, setSelectedSession] = useState<ClassEvent | null>(null);
   const [excludedClassIds, setExcludedClassIds] = useState<string[]>([]);
   const [classPayrollPlanOverrides, setClassPayrollPlanOverrides] = useState<Record<string, string>>({});
   const [payrollPlans, setPayrollPlans] = useState<PayrollPlan[]>([]);
@@ -149,6 +160,72 @@ export function BulkPayrollWorkspace() {
     (sum, item) => sum + item.netPayable,
     0,
   );
+
+  const attendanceLabel = (event: ClassEvent) => event.students.length
+    ? event.students
+      .reduce<Record<string, number>>((counts, student) => {
+        const label = student.attendanceStatus === "ABSENT_BILLABLE"
+          ? "Absent billable"
+          : student.attendanceStatus === "LATE"
+            ? "Present"
+            : student.attendanceStatus.charAt(0) + student.attendanceStatus.slice(1).toLowerCase();
+        counts[label] = (counts[label] || 0) + 1;
+        return counts;
+      }, {})
+    : { Unmarked: 1 };
+
+  const sessionPayoutDetail = (event: ClassEvent): SessionPayoutDetail => {
+    const excluded = excludedClassIds.includes(event.id);
+    const hasPresent = event.students.some(
+      (student) => student.attendanceStatus === "PRESENT" || student.attendanceStatus === "LATE",
+    );
+    const hasBillable = event.students.some(
+      (student) => student.attendanceStatus === "ABSENT_BILLABLE",
+    );
+    const planId = hasBillable
+      ? classPayrollPlanOverrides[event.id]
+      : hasPresent
+        ? event.mappedPayrollPlanId
+        : undefined;
+    const plan = planId ? payrollPlans.find((item) => item.id === planId) : undefined;
+    const statusIsPayable = Boolean(plan?.payableClassStatuses.includes(event.status));
+    const payable = Boolean(plan && statusIsPayable && !excluded);
+    const lateFactor = event.isLateCancellation ? (plan?.lateCancellationPayPercent || 0) / 100 : 1;
+    const groupFactor = event.isGroup ? (plan?.groupMultiplier || 1) : 1;
+    const paidStudents = event.students.filter((student) =>
+      ["PRESENT", "LATE", "ABSENT_BILLABLE"].includes(student.attendanceStatus),
+    ).length;
+    const baseRate = plan
+      ? Number(plan.subjectRates?.[event.subjectId] ?? plan.branchRates?.[event.branchId] ?? plan.defaultClassRate)
+      : 0;
+    if (excluded) return { plan, quantity: 0, unitRate: 0, payoutFactor: 0, sessionPayout: 0, payoutStatus: "EXCLUDED", calculation: "Removed from this payout" };
+    if (!plan) return { plan, quantity: 0, unitRate: 0, payoutFactor: 0, sessionPayout: 0, payoutStatus: "NOT PAYABLE", calculation: hasBillable ? "Billable plan not selected" : hasPresent ? "Title Mapper plan not assigned" : "Attendance is not payable" };
+    if (!statusIsPayable) return { plan, quantity: 0, unitRate: 0, payoutFactor: 0, sessionPayout: 0, payoutStatus: "NOT PAYABLE", calculation: `Class status ${event.status} is not payable in this plan` };
+    if (!payable) return { plan, quantity: 0, unitRate: 0, payoutFactor: 0, sessionPayout: 0, payoutStatus: "NOT PAYABLE", calculation: "Session is not payable" };
+    if (plan.compensationModel === "PER_CLASS") {
+      const factor = groupFactor * lateFactor;
+      return { plan, quantity: 1, unitRate: baseRate, payoutFactor: factor, sessionPayout: baseRate * factor, payoutStatus: "PAYABLE", calculation: "1 session × rate × factor" };
+    }
+    if (plan.compensationModel === "DURATION_BASED") {
+      const rate = Number(plan.hourlyRate);
+      return { plan, quantity: 1, unitRate: rate, payoutFactor: lateFactor, sessionPayout: rate * lateFactor, payoutStatus: "PAYABLE", calculation: "1 session × plan rate × factor" };
+    }
+    if (plan.compensationModel === "PER_STUDENT") {
+      const rate = Number(plan.perStudentRate);
+      return { plan, quantity: paidStudents, unitRate: rate, payoutFactor: lateFactor, sessionPayout: paidStudents * rate * lateFactor, payoutStatus: "PAYABLE", calculation: "paid students × rate × factor" };
+    }
+    if (plan.compensationModel === "PERCENTAGE_BASED") {
+      const rate = Number(plan.sessionRevenueBasis || 0);
+      const factor = (Number(plan.revenuePercentage) / 100) * lateFactor;
+      return { plan, quantity: 1, unitRate: rate, payoutFactor: factor, sessionPayout: rate * factor, payoutStatus: "PAYABLE", calculation: "revenue basis × percentage × factor" };
+    }
+    if (plan.compensationModel === "HYBRID") {
+      const factor = groupFactor * lateFactor;
+      const payout = baseRate * factor + Number(plan.hourlyRate) * lateFactor + paidStudents * Number(plan.perStudentRate) * lateFactor;
+      return { plan, quantity: 1, unitRate: baseRate, payoutFactor: factor, sessionPayout: payout, payoutStatus: "PAYABLE", calculation: "class + duration + student components" };
+    }
+    return { plan, quantity: 0, unitRate: 0, payoutFactor: 0, sessionPayout: 0, payoutStatus: "NOT PAYABLE", calculation: "Fixed salary is shown in the payout summary, not per session" };
+  };
 
   const employeePreview = (line: EmployeePayrollLine) => {
     const input = employeeInputs[line.employeeId];
@@ -1096,8 +1173,7 @@ export function BulkPayrollWorkspace() {
                           <TableHead>Session</TableHead>
                           <TableHead>Date</TableHead>
                           <TableHead>Attendance</TableHead>
-                          <TableHead>Billable plan</TableHead>
-                          <TableHead>Status</TableHead>
+                          <TableHead>Payroll plan</TableHead>
                           <TableHead>Action</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -1158,56 +1234,29 @@ export function BulkPayrollWorkspace() {
                                     ))}
                                   </select>
                                 ) : (
-                                  <span className="text-xs text-slate-400">Not required</span>
+                                  <span className="text-xs font-medium text-emerald-700">
+                                    {event.mappedPayrollPlanName
+                                      || payrollPlans.find((plan) => plan.id === event.mappedPayrollPlanId)?.name
+                                      || "Not mapped"}
+                                  </span>
                                 )}
                               </TableCell>
                               <TableCell>
-                                {excluded ? (
-                                  <Badge size="sm" variant="warning">
-                                    Excluded
-                                  </Badge>
-                                ) : (
-                                  <Badge size="sm" variant="neutral">
-                                    {event.status}
-                                  </Badge>
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                {event.attendanceStatusSummary === "UNMARKED" &&
-                                  (excluded ? (
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      leftIcon={
-                                        <RotateCcw className="h-3.5 w-3.5" />
-                                      }
-                                      onClick={() =>
-                                        setExcludedClassIds((current) =>
-                                          current.filter(
-                                            (id) => id !== event.id,
-                                          ),
-                                        )
-                                      }
-                                    >
-                                      Restore
-                                    </Button>
-                                  ) : (
-                                    <Button
-                                      size="sm"
-                                      variant="danger"
-                                      leftIcon={
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                      }
-                                      onClick={() =>
-                                        setExcludedClassIds((current) => [
-                                          ...current,
-                                          event.id,
-                                        ])
-                                      }
-                                    >
-                                      Remove
-                                    </Button>
-                                  ))}
+                                <div className="flex flex-col items-start gap-1">
+                                  {event.attendanceStatusSummary === "UNMARKED" &&
+                                    (excluded ? (
+                                      <Button size="sm" variant="ghost" leftIcon={<RotateCcw className="h-3.5 w-3.5" />} onClick={() => setExcludedClassIds((current) => current.filter((id) => id !== event.id))}>
+                                        Restore
+                                      </Button>
+                                    ) : (
+                                      <Button size="sm" variant="danger" leftIcon={<Trash2 className="h-3.5 w-3.5" />} onClick={() => setExcludedClassIds((current) => [...current, event.id])}>
+                                        Remove
+                                      </Button>
+                                    ))}
+                                  <Button size="sm" variant="ghost" leftIcon={<Eye className="h-3.5 w-3.5" />} onClick={() => setSelectedSession(event)}>
+                                    View details
+                                  </Button>
+                                </div>
                               </TableCell>
                             </TableRow>
                           );
@@ -1369,6 +1418,55 @@ export function BulkPayrollWorkspace() {
             </div>
           </div>
         )}
+        {selectedSession && (() => {
+          const detail = sessionPayoutDetail(selectedSession);
+          const attendance = Object.entries(attendanceLabel(selectedSession)).map(([label, count]) => `${label} (${count})`).join(", ");
+          const rows: Array<[string, string | number]> = [
+            ["Session ID", selectedSession.externalId || selectedSession.id],
+            ["Classcard Class ID", selectedSession.classcardClassId || "—"],
+            ["Class title", selectedSession.title],
+            ["Subject", selectedSession.subjectName || "—"],
+            ["Start date & time", formatDateTime(selectedSession.startTime)],
+            ["End date & time", formatDateTime(selectedSession.endTime)],
+            ["Duration (minutes)", selectedSession.durationMinutes],
+            ["Session quantity", detail.quantity],
+            ["Attendance", attendance],
+            ["Class status", selectedSession.status],
+            ["Payroll plan", detail.plan?.name || "Not mapped"],
+            ["Plan code", detail.plan?.code || "—"],
+            ["Compensation model", detail.plan?.compensationModel || "—"],
+            ["Unit rate", formatCurrency(detail.unitRate)],
+            ["Payout factor", detail.payoutFactor],
+            ["Calculated session payout", formatCurrency(detail.sessionPayout)],
+            ["Payout status", detail.payoutStatus],
+            ["Calculation", detail.calculation],
+          ];
+          return (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/40 p-4">
+              <div className="w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+                <div className="flex items-center justify-between border-b p-5">
+                  <div>
+                    <h2 className="text-lg font-bold">Session payout details</h2>
+                    <p className="text-sm text-slate-500">{selectedSession.title}</p>
+                  </div>
+                  <Button size="sm" variant="ghost" leftIcon={<X className="h-4 w-4" />} onClick={() => setSelectedSession(null)}>
+                    Close
+                  </Button>
+                </div>
+                <div className="max-h-[70vh] overflow-y-auto p-5">
+                  <dl className="grid gap-x-6 gap-y-0 sm:grid-cols-2">
+                    {rows.map(([label, value]) => (
+                      <div key={label} className="border-b border-slate-100 py-3">
+                        <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</dt>
+                        <dd className="mt-1 break-words text-sm font-medium text-slate-900">{value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
         {adjustmentOpen && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/40 p-4">
             <div className="w-full max-w-md space-y-4 rounded-xl bg-white p-5 shadow-xl">

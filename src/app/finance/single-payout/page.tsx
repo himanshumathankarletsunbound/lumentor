@@ -11,7 +11,7 @@ import { Tabs } from '../../../components/ui/Tabs';
 import { formatCurrency, formatDateTime } from '../../../lib/utils/formatters';
 import { ClassEvent, Mentor, Branch, Subject } from '../../../lib/types/models';
 import { InitiativeEntry, InitiativePlan, Penalty, PenaltyPolicy, PayrollBatch, PayrollPlan } from '../../../lib/types/payroll';
-import { Plus, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
+import { Download, Plus, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
 
 function monthBounds(month: string) {
   const [year, monthNumber] = month.split('-').map(Number);
@@ -39,6 +39,25 @@ function attendanceBadges(classEvent: ClassEvent) {
 
 function hasBillableAbsence(classEvent: ClassEvent) {
   return classEvent.students.some((student) => student.attendanceStatus === 'ABSENT_BILLABLE');
+}
+
+function attendanceSummaryForExport(classEvent: ClassEvent) {
+  const counts = new Map<string, number>();
+  for (const student of classEvent.students) {
+    const label = student.attendanceStatus === 'ABSENT_BILLABLE'
+      ? 'Absent billable'
+      : student.attendanceStatus === 'UNMARKED'
+        ? 'Unmarked'
+        : student.attendanceStatus === 'LATE'
+          ? 'Present'
+          : student.attendanceStatus.charAt(0) + student.attendanceStatus.slice(1).toLowerCase();
+    counts.set(label, (counts.get(label) || 0) + 1);
+  }
+  return counts.size ? Array.from(counts.entries()).map(([label, count]) => `${label} (${count})`).join(', ') : 'Unmarked (0)';
+}
+
+function roundMoney(value: number) {
+  return Math.round(value * 100) / 100;
 }
 
 function batchStatusVariant(status: PayrollBatch['status']): 'warning' | 'info' | 'success' | 'neutral' {
@@ -82,6 +101,7 @@ export default function SinglePayoutPage() {
   const [savedBatches, setSavedBatches] = useState<PayrollBatch[]>([]);
   const [batchesLoading, setBatchesLoading] = useState(false);
   const [deletingBatchId, setDeletingBatchId] = useState<string | null>(null);
+  const [exportingPayout, setExportingPayout] = useState(false);
 
   const bounds = useMemo(() => monthBounds(month), [month]);
   const payoutSummary = useMemo(() => {
@@ -379,6 +399,156 @@ export default function SinglePayoutPage() {
     setNotice({ type: 'success', message: 'Approved penalty added. Calculate the payout to include it.' });
   };
 
+  const exportPayout = async () => {
+    if (!batch) throw new Error('Calculate the payout before exporting it.');
+    const mentor = mentors.find((item) => item.id === mentorId);
+    if (!mentor) throw new Error('Select a mentor before exporting the payout.');
+
+    setExportingPayout(true);
+    try {
+      const XLSX = await import('xlsx');
+      const plansById = new Map(plans.map((plan) => [plan.id, plan]));
+      const uniqueClasses = Array.from(new Map(classes.map((item) => [item.id, item])).values());
+      const sessionRows = uniqueClasses.map((classEvent) => {
+        const isExcluded = excludedClassIds.includes(classEvent.id);
+        const hasPresent = classEvent.students.some((student) => student.attendanceStatus === 'PRESENT' || student.attendanceStatus === 'LATE');
+        const hasBillable = hasBillableAbsence(classEvent);
+        const planId = isExcluded
+          ? undefined
+          : hasBillable
+            ? classPayrollPlanOverrides[classEvent.id]
+            : hasPresent
+              ? classEvent.mappedPayrollPlanId
+              : undefined;
+        const plan = planId ? plansById.get(planId) : undefined;
+        const statusIsPayable = Boolean(plan?.payableClassStatuses.includes(classEvent.status));
+        const durationMinimumApplies = !hasPresent
+          && (plan?.compensationModel === 'DURATION_BASED' || plan?.compensationModel === 'HYBRID')
+          && Boolean(plan.minEligibleDurationMinutes && plan.minEligibleDurationMinutes > 0);
+        const meetsDurationMinimum = !durationMinimumApplies || classEvent.durationMinutes >= (plan?.minEligibleDurationMinutes || 0);
+        const isPayable = Boolean(plan && statusIsPayable && meetsDurationMinimum && !isExcluded);
+        const lateFactor = classEvent.isLateCancellation ? (plan?.lateCancellationPayPercent || 0) / 100 : 1;
+        const groupFactor = classEvent.isGroup ? (plan?.groupMultiplier || 1) : 1;
+        const durationHours = classEvent.durationMinutes / 60;
+        const paidStudents = classEvent.students.filter((student) => ['PRESENT', 'LATE', 'ABSENT_BILLABLE'].includes(student.attendanceStatus)).length;
+        const baseRate = plan ? Number(plan.subjectRates?.[classEvent.subjectId] ?? plan.branchRates?.[classEvent.branchId] ?? plan.defaultClassRate) : 0;
+        let unitRate = 0;
+        let payoutFactor = 0;
+        let quantity = 0;
+        let sessionPayout = 0;
+        let calculation = 'Not payable';
+
+        if (isPayable && plan) {
+          if (plan.compensationModel === 'PER_CLASS') {
+            unitRate = baseRate;
+            payoutFactor = groupFactor * lateFactor;
+            quantity = 1;
+            sessionPayout = unitRate * payoutFactor;
+            calculation = '1 session × rate × factor';
+          } else if (plan.compensationModel === 'DURATION_BASED') {
+            unitRate = Number(plan.hourlyRate);
+            payoutFactor = lateFactor;
+            quantity = durationHours;
+            sessionPayout = quantity * unitRate * payoutFactor;
+            calculation = 'hours × hourly rate × factor';
+          } else if (plan.compensationModel === 'PER_STUDENT') {
+            unitRate = Number(plan.perStudentRate);
+            payoutFactor = lateFactor;
+            quantity = paidStudents;
+            sessionPayout = quantity * unitRate * payoutFactor;
+            calculation = 'paid students × rate × factor';
+          } else if (plan.compensationModel === 'PERCENTAGE_BASED') {
+            unitRate = Number(plan.sessionRevenueBasis || 0);
+            payoutFactor = (Number(plan.revenuePercentage) / 100) * lateFactor;
+            quantity = 1;
+            sessionPayout = unitRate * payoutFactor;
+            calculation = 'revenue basis × percentage × factor';
+          } else if (plan.compensationModel === 'HYBRID') {
+            const classAmount = baseRate * groupFactor * lateFactor;
+            const durationAmount = durationHours * Number(plan.hourlyRate) * lateFactor;
+            const studentAmount = paidStudents * Number(plan.perStudentRate) * lateFactor;
+            unitRate = baseRate;
+            payoutFactor = groupFactor * lateFactor;
+            quantity = 1;
+            sessionPayout = classAmount + durationAmount + studentAmount;
+            calculation = 'class + duration + student components';
+          } else {
+            calculation = 'Fixed salary is shown in payout summary, not per session';
+          }
+        } else if (isExcluded) {
+          calculation = 'Removed from this payout';
+        } else if (!plan) {
+          calculation = hasBillable ? 'Billable plan not selected' : hasPresent ? 'Title Mapper plan not assigned' : 'Attendance is not payable';
+        } else if (!meetsDurationMinimum) {
+          calculation = `Below plan minimum (${plan.minEligibleDurationMinutes} minutes)`;
+        } else if (!statusIsPayable) {
+          calculation = `Class status ${classEvent.status} is not payable in this plan`;
+        }
+
+        return {
+          'Session ID': classEvent.externalId || classEvent.id,
+          'Classcard Class ID': classEvent.classcardClassId || '',
+          'Class title': classEvent.title,
+          Subject: classEvent.subjectName,
+          'Start date & time': formatDateTime(classEvent.startTime),
+          'End date & time': formatDateTime(classEvent.endTime),
+          'Duration (minutes)': classEvent.durationMinutes,
+          'Session quantity': quantity,
+          Attendance: attendanceSummaryForExport(classEvent),
+          'Class status': classEvent.status,
+          'Payroll plan': plan?.name || '',
+          'Plan code': plan?.code || '',
+          'Compensation model': plan?.compensationModel || '',
+          'Unit rate': roundMoney(unitRate),
+          'Payout factor': roundMoney(payoutFactor),
+          'Calculated session payout': roundMoney(sessionPayout),
+          'Payout status': isExcluded ? 'EXCLUDED' : isPayable ? 'PAYABLE' : 'NOT PAYABLE',
+          Calculation: calculation,
+        };
+      });
+      const classPayout = batch.lineItems.reduce((sum, item) => sum + Number(item.classEarnings) + Number(item.durationEarnings) + Number(item.studentEarnings) + Number(item.revenueShareEarnings), 0);
+      const approvedPenalties = penalties.filter((item) => item.status === 'APPROVED');
+      const adjustmentRows = [
+        ...incentives.map((item) => ({ Type: 'Incentive / fixed payout', Name: item.name, 'Plan / category': item.planName || 'Custom', Quantity: item.count, 'Unit amount': roundMoney(item.amount), Factor: roundMoney(item.payoutFactor), Amount: roundMoney(item.totalAmount), Status: 'Included' })),
+        ...approvedPenalties.map((item) => ({ Type: 'Penalty', Name: item.reason, 'Plan / category': item.category, Quantity: 1, 'Unit amount': roundMoney(item.amount), Factor: 1, Amount: -roundMoney(item.amount), Status: 'Approved and included' })),
+      ];
+      const payoutRows = batch.lineItems.map((item) => ({
+        'Payroll plan': item.planName,
+        'Compensation model': item.compensationModel,
+        'Payable sessions': item.eligibleClassesCount,
+        'Eligible minutes': item.eligibleDurationMinutes,
+        'Fixed/base salary': roundMoney(item.baseSalaryAmount),
+        'Per-class earnings': roundMoney(item.classEarnings),
+        'Duration earnings': roundMoney(item.durationEarnings),
+        'Per-student earnings': roundMoney(item.studentEarnings),
+        'Revenue-share earnings': roundMoney(item.revenueShareEarnings),
+        'Plan subtotal': roundMoney(Number(item.baseSalaryAmount) + Number(item.classEarnings) + Number(item.durationEarnings) + Number(item.studentEarnings) + Number(item.revenueShareEarnings)),
+      }));
+      const summaryRows = [
+        { Item: 'Mentor', Amount: `${mentor.firstName} ${mentor.lastName}`, Notes: mentor.id },
+        { Item: 'Payout', Amount: batch.batchNumber, Notes: batch.status },
+        { Item: 'Period', Amount: month, Notes: `${formatDateTime(bounds.startDate).split(' at ')[0]} – ${formatDateTime(bounds.endDate).split(' at ')[0]}` },
+        { Item: 'Unique sessions', Amount: uniqueClasses.length, Notes: 'Each class event appears once, regardless of student roster size.' },
+        { Item: 'Present sessions', Amount: uniqueClasses.filter((item) => item.students.some((student) => student.attendanceStatus === 'PRESENT' || student.attendanceStatus === 'LATE')).length, Notes: '' },
+        { Item: 'Absent billable sessions', Amount: uniqueClasses.filter(hasBillableAbsence).length, Notes: '' },
+        { Item: 'Unmarked sessions', Amount: uniqueClasses.filter((item) => item.attendanceStatusSummary === 'UNMARKED').length, Notes: '' },
+        { Item: 'Class payout', Amount: roundMoney(classPayout), Notes: 'Session earnings only' },
+        { Item: 'Incentives / fixed payouts', Amount: roundMoney(incentives.reduce((sum, item) => sum + item.totalAmount, 0)), Notes: '' },
+        { Item: 'Approved penalties', Amount: -roundMoney(approvedPenalties.reduce((sum, item) => sum + item.amount, 0)), Notes: '' },
+        { Item: 'Total payout', Amount: roundMoney(batch.totalNet), Notes: 'Net payable in this generated payout' },
+      ];
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summaryRows), 'Payout summary');
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(sessionRows), 'Unique sessions');
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(payoutRows), 'Plan totals');
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(adjustmentRows), 'Adjustments');
+      XLSX.writeFile(workbook, `single-payout-${month}-${mentor.id}-${batch.batchNumber}.xlsx`);
+      setNotice({ type: 'success', message: 'Payroll workbook downloaded with unique sessions, calculations, and adjustments.' });
+    } finally {
+      setExportingPayout(false);
+    }
+  };
+
   return (
     <AppShell>
       <div className="space-y-5">
@@ -472,7 +642,7 @@ export default function SinglePayoutPage() {
         </Card>
         {addingClass && <Card><CardHeader title="Add class to payout" /><CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs"><input placeholder="Class title" value={classForm.title} onChange={(e) => setClassForm({ ...classForm, title: e.target.value })} className="p-2 border rounded-lg" /><select value={classForm.subjectId} onChange={(e) => setClassForm({ ...classForm, subjectId: e.target.value })} className="p-2 border rounded-lg"><option value="">Select subject</option>{subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}</select><select value={classForm.branchId} onChange={(e) => setClassForm({ ...classForm, branchId: e.target.value })} className="p-2 border rounded-lg"><option value="">Select branch</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select><input type="datetime-local" value={classForm.startTime} onChange={(e) => setClassForm({ ...classForm, startTime: e.target.value })} className="p-2 border rounded-lg" /><input type="number" min="1" value={classForm.durationMinutes} onChange={(e) => setClassForm({ ...classForm, durationMinutes: e.target.value })} className="p-2 border rounded-lg" /><div className="flex gap-2"><Button size="sm" variant="primary" onClick={() => void addClass().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to add class.' }))}>Save class</Button><Button size="sm" variant="ghost" onClick={() => setAddingClass(false)}>Cancel</Button></div></CardContent></Card>}
         <Card><CardHeader title="3. Incentives, penalties, and approval" subtitle="Select a configured type or add a custom adjustment. Added entries appear below and are included on the next calculation." /><CardContent className="space-y-4 text-xs">
-          <div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" disabled={!mentorId} onClick={() => { setIncentiveOpen(true); setPenaltyOpen(false); }}>Add incentive</Button><Button variant="outline" size="sm" disabled={!mentorId} onClick={() => { setPenaltyOpen(true); setIncentiveOpen(false); }}>Add penalty</Button><Button variant="primary" size="sm" disabled={!mentorId} onClick={() => void calculate().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to calculate payout.' }))}>Calculate payout</Button>{batch && <><span className="px-3 py-2 rounded-lg bg-slate-100">Status: <strong>{batch.status}</strong> · Net: <strong>{formatCurrency(batch.totalNet)}</strong></span>{batch.status === 'DRAFT' && <Button size="sm" variant="outline" onClick={() => void (async () => { const response = await fetch('/api/payroll/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ batchId: batch.id, approverId: 'current-admin', approverName: 'Payroll preparer', action: 'SUBMIT' }) }); const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Unable to submit payout.'); setBatch(result); setNotice({ type: 'success', message: 'Payout submitted for administrator approval.' }); })().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to submit payout.' }))}>Submit for approval</Button>}{batch.status === 'SUBMITTED' && <Button size="sm" variant="success" onClick={() => void approve().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to approve payout.' }))}>Approve payout</Button>}{batch.status === 'APPROVED' && <Button size="sm" variant="success" onClick={() => void lock().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to finalize payout.' }))}>Finalize & generate payslip</Button>}</>}</div>
+          <div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" disabled={!mentorId} onClick={() => { setIncentiveOpen(true); setPenaltyOpen(false); }}>Add incentive</Button><Button variant="outline" size="sm" disabled={!mentorId} onClick={() => { setPenaltyOpen(true); setIncentiveOpen(false); }}>Add penalty</Button><Button variant="primary" size="sm" disabled={!mentorId} onClick={() => void calculate().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to calculate payout.' }))}>Calculate payout</Button>{batch && <><Button variant="outline" size="sm" isLoading={exportingPayout} leftIcon={<Download className="h-4 w-4" />} onClick={() => void exportPayout().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to export payout.' }))}>Export payroll</Button><span className="px-3 py-2 rounded-lg bg-slate-100">Status: <strong>{batch.status}</strong> · Net: <strong>{formatCurrency(batch.totalNet)}</strong></span>{batch.status === 'DRAFT' && <Button size="sm" variant="outline" onClick={() => void (async () => { const response = await fetch('/api/payroll/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ batchId: batch.id, approverId: 'current-admin', approverName: 'Payroll preparer', action: 'SUBMIT' }) }); const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Unable to submit payout.'); setBatch(result); setNotice({ type: 'success', message: 'Payout submitted for administrator approval.' }); })().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to submit payout.' }))}>Submit for approval</Button>}{batch.status === 'SUBMITTED' && <Button size="sm" variant="success" onClick={() => void approve().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to approve payout.' }))}>Approve payout</Button>}{batch.status === 'APPROVED' && <Button size="sm" variant="success" onClick={() => void lock().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to finalize payout.' }))}>Finalize & generate payslip</Button>}</>}</div>
 
           {incentiveOpen && <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4"><p className="mb-3 font-semibold text-emerald-900">Add incentive</p><div className="grid grid-cols-1 gap-2 sm:grid-cols-4"><select value={incentivePlanId} onChange={(event) => selectIncentiveType(event.target.value)} className="rounded-lg border p-2"><option value="">Custom incentive</option>{initiativePlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} · {formatCurrency(plan.amount)}</option>)}</select><input value={incentiveReason} disabled={Boolean(incentivePlanId)} onChange={(event) => setIncentiveReason(event.target.value)} placeholder="Custom incentive name" className="rounded-lg border p-2 disabled:bg-slate-100" /><input value={incentiveAmount} disabled={Boolean(incentivePlanId)} onChange={(event) => setIncentiveAmount(event.target.value)} type="number" min="0" step="0.01" placeholder="Amount" className="rounded-lg border p-2 disabled:bg-slate-100" /><Button size="sm" variant="success" onClick={() => void addIncentive().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to add incentive.' }))}>Add incentive</Button></div></div>}
           {penaltyOpen && <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-4"><p className="mb-1 font-semibold text-rose-900">Add approved penalty</p><p className="mb-3 text-slate-600">This deduction is approved by the payroll administrator and will be included when the payout is calculated.</p><div className="grid grid-cols-1 gap-2 sm:grid-cols-4"><select value={penaltyPolicyId} onChange={(event) => selectPenaltyType(event.target.value)} className="rounded-lg border p-2"><option value="">Custom penalty</option>{penaltyPolicies.map((policy) => <option key={policy.id} value={policy.id}>{policy.name} · {formatCurrency(policy.defaultAmount || policy.rateValue || 0)}</option>)}</select><input value={penaltyReason} disabled={Boolean(penaltyPolicyId)} onChange={(event) => setPenaltyReason(event.target.value)} placeholder="Custom penalty name" className="rounded-lg border p-2 disabled:bg-slate-100" /><input value={penaltyAmount} onChange={(event) => setPenaltyAmount(event.target.value)} type="number" min="0" step="0.01" placeholder="Amount" className="rounded-lg border p-2" /><Button size="sm" variant="danger" onClick={() => void addPenalty().catch((error: unknown) => setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Unable to add penalty.' }))}>Add penalty</Button></div></div>}

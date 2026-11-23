@@ -151,6 +151,8 @@ export function BulkPayrollWorkspace() {
     Record<string, EmployeePayrollInput>
   >({});
   const [selectedMentorId, setSelectedMentorId] = useState<string | null>(null);
+  const [mentorReviewBatch, setMentorReviewBatch] = useState<PayrollBatch | null>(null);
+  const [mentorReviewSnapshot, setMentorReviewSnapshot] = useState<Record<string, { excluded: string[]; overrides: Record<string, string> }>>({});
   const [selectedSession, setSelectedSession] = useState<ClassEvent | null>(null);
   const [excludedClassIds, setExcludedClassIds] = useState<string[]>([]);
   const [classPayrollPlanOverrides, setClassPayrollPlanOverrides] = useState<Record<string, string>>({});
@@ -176,7 +178,7 @@ export function BulkPayrollWorkspace() {
     (event) => event.mentorId === selectedMentorId,
   );
   const selectedLines =
-    batch?.lineItems.filter((item) => item.mentorId === selectedMentorId) || [];
+    (mentorReviewBatch || batch)?.lineItems.filter((item) => item.mentorId === selectedMentorId) || [];
   const selectedTotal = selectedLines.reduce(
     (sum, item) => sum + item.netPayable,
     0,
@@ -437,6 +439,35 @@ export function BulkPayrollWorkspace() {
     } finally {
       setLoading(false);
     }
+  };
+  const recalculateMentor = async () => {
+    if (!selectedMentorId) return;
+    setLoading(true);
+    try {
+      const response = await fetch("/api/payroll/calculate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ periodId: `mentor-review-${month}`, startDate: range.start, endDate: range.end, mentorIds: [selectedMentorId], classPayrollPlanOverrides, excludedClassIds, persist: false }) });
+      const data = await response.json();
+      if (!response.ok || data.error) throw new Error(data.error || "Unable to recalculate this mentor.");
+      setMentorReviewBatch(data);
+      setNotice({ type: "success", message: "This mentor's payout was recalculated." });
+    } catch (error) {
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to recalculate this mentor." });
+    } finally { setLoading(false); }
+  };
+  const discardMentorReview = () => {
+    if (!selectedMentorId) return;
+    const snapshot = mentorReviewSnapshot[selectedMentorId];
+    const mentorClassIds = new Set(classes.filter((item) => item.mentorId === selectedMentorId).map((item) => item.id));
+    setExcludedClassIds((current) => [...current.filter((id) => !mentorClassIds.has(id)), ...(snapshot?.excluded || [])]);
+    setClassPayrollPlanOverrides((current) => ({ ...Object.fromEntries(Object.entries(current).filter(([id]) => !mentorClassIds.has(id))), ...(snapshot?.overrides || {}) }));
+    setMentorReviewBatch(null);
+    setNotice({ type: "success", message: "Unsaved changes for this mentor were discarded." });
+  };
+  const saveMentorReview = async () => {
+    if (!selectedMentorId) return;
+    const mentorClassIds = new Set(classes.filter((item) => item.mentorId === selectedMentorId).map((item) => item.id));
+    setMentorReviewSnapshot((current) => ({ ...current, [selectedMentorId]: { excluded: excludedClassIds.filter((id) => mentorClassIds.has(id)), overrides: Object.fromEntries(Object.entries(classPayrollPlanOverrides).filter(([id]) => mentorClassIds.has(id))) } }));
+    await recalculateMentor();
+    setNotice({ type: "success", message: "This mentor's review changes were saved and recalculated." });
   };
   const calculateEmployeePayroll = async (persist = false, submit = false) => {
     setLoading(true);
@@ -1085,6 +1116,9 @@ export function BulkPayrollWorkspace() {
                             variant="ghost"
                             leftIcon={<Eye className="h-4 w-4" />}
                             onClick={() => {
+                              const mentorClassIds = new Set(classes.filter((item) => item.mentorId === mentor.id).map((item) => item.id));
+                              setMentorReviewSnapshot((current) => current[mentor.id] ? current : { ...current, [mentor.id]: { excluded: excludedClassIds.filter((id) => mentorClassIds.has(id)), overrides: Object.fromEntries(Object.entries(classPayrollPlanOverrides).filter(([id]) => mentorClassIds.has(id))) } });
+                              setMentorReviewBatch(null);
                               setSelectedMentorId(mentor.id);
                             }}
                           >
@@ -1403,7 +1437,11 @@ export function BulkPayrollWorkspace() {
                     ? formatCurrency(selectedTotal)
                     : "Calculate payroll first"}
                 </strong>
-                <span className="text-sm text-slate-500">Review this mentor’s sessions and adjustments, then use the batch actions at the top when every mentor is ready.</span>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" isLoading={loading} onClick={() => void recalculateMentor()}>Recalculate</Button>
+                  <Button variant="danger" disabled={loading} onClick={discardMentorReview}>Discard</Button>
+                  <Button variant="primary" isLoading={loading} onClick={() => void saveMentorReview()}>Save</Button>
+                </div>
               </div>
             </div>
           </div>

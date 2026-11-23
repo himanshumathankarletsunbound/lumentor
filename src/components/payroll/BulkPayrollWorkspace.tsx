@@ -866,14 +866,6 @@ export function BulkPayrollWorkspace() {
               completed batch for approval.
             </p>
           </div>
-          {batch && tab === "mentors" && (
-            <div className="flex flex-wrap justify-end gap-2">
-              <Button variant="outline" leftIcon={<Download className="h-4 w-4" />} onClick={() => void exportLatest()}>Export latest payout</Button>
-              <Button variant="outline" isLoading={loading} onClick={() => void calculate()}>Recalculate</Button>
-              <Button variant="danger" disabled={loading} onClick={() => void discard()}>{isPreview ? "Discard" : "Discard draft"}</Button>
-              {isPreview ? <Button variant="primary" isLoading={loading} onClick={() => void calculate(true)}>Save draft</Button> : batch.status === "DRAFT" ? <Button variant="primary" isLoading={loading} onClick={() => void submitForApproval()}>Send for approval</Button> : null}
-            </div>
-          )}
         </div>
         {notice && (
           <Alert
@@ -884,30 +876,22 @@ export function BulkPayrollWorkspace() {
         )}
         <Card>
           <CardHeader title="1. Select month" />
-          <CardContent className="flex flex-wrap items-end gap-3">
-            <label className="text-sm font-semibold text-slate-700">
-              Payroll month
-              <input
-                type="month"
-                value={month}
-                onChange={(event) => setMonth(event.target.value)}
-                className="mt-1 block rounded-lg border border-slate-300 p-2 font-normal"
-              />
-            </label>
-            <Button
-              variant="primary"
-              isLoading={loading}
-              leftIcon={<RefreshCw className="h-4 w-4" />}
-              onClick={() =>
-                void (tab === "employees"
-                  ? calculateEmployeePayroll()
-                  : calculate())
-              }
-            >
-              {tab === "employees"
-                ? "Calculate employee payroll"
-                : "Calculate payroll"}
-            </Button>
+          <CardContent className="grid gap-5 lg:grid-cols-2">
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="text-sm font-semibold text-slate-700">Payroll month<input type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="mt-1 block rounded-lg border border-slate-300 p-2 font-normal" /></label>
+              <Button variant="primary" isLoading={loading} leftIcon={<RefreshCw className="h-4 w-4" />} onClick={() => void (tab === "employees" ? calculateEmployeePayroll() : calculate())}>{tab === "employees" ? "Calculate employee payroll" : "Calculate payroll"}</Button>
+            </div>
+            {batch && tab === "mentors" && (
+              <div className="border-t pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
+                <p className="mb-2 text-sm font-semibold text-slate-700">Batch controls</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" leftIcon={<Download className="h-4 w-4" />} onClick={() => void exportLatest()}>Export latest payout</Button>
+                  <Button variant="outline" isLoading={loading} onClick={() => void calculate()}>Recalculate</Button>
+                  <Button variant="danger" disabled={loading} onClick={() => void discard()}>{isPreview ? "Discard" : "Discard draft"}</Button>
+                  {isPreview ? <Button variant="primary" isLoading={loading} onClick={() => void calculate(true)}>Save draft</Button> : batch.status === "DRAFT" ? <Button variant="primary" isLoading={loading} onClick={() => void submitForApproval()}>Send for approval</Button> : null}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
         <Tabs

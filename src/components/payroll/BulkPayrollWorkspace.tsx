@@ -835,14 +835,13 @@ export function BulkPayrollWorkspace() {
               completed batch for approval.
             </p>
           </div>
-          {batch && (
-            <Button
-              variant="outline"
-              leftIcon={<Download className="h-4 w-4" />}
-              onClick={() => void exportLatest()}
-            >
-              Export latest payout
-            </Button>
+          {batch && tab === "mentors" && (
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button variant="outline" leftIcon={<Download className="h-4 w-4" />} onClick={() => void exportLatest()}>Export latest payout</Button>
+              <Button variant="outline" isLoading={loading} onClick={() => void calculate()}>Recalculate</Button>
+              <Button variant="danger" disabled={loading} onClick={() => void discard()}>{isPreview ? "Discard" : "Discard draft"}</Button>
+              {isPreview ? <Button variant="primary" isLoading={loading} onClick={() => void calculate(true)}>Save draft</Button> : batch.status === "DRAFT" ? <Button variant="primary" isLoading={loading} onClick={() => void submitForApproval()}>Send for approval</Button> : null}
+            </div>
           )}
         </div>
         {notice && (
@@ -876,7 +875,7 @@ export function BulkPayrollWorkspace() {
             >
               {tab === "employees"
                 ? "Calculate employee payroll"
-                : "Calculate mentor payouts"}
+                : "Calculate payroll"}
             </Button>
           </CardContent>
         </Card>
@@ -1096,23 +1095,6 @@ export function BulkPayrollWorkspace() {
                     ))}
                   </TableBody>
                 </Table>
-              {batch && (
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-                  <div className="text-sm text-slate-600">
-                    Batch total: <strong className="text-slate-900">{formatCurrency(batch.totalNet)}</strong>
-                    {isPreview ? " · Preview only — no draft has been saved." : ` · ${batch.status}`}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button variant="outline" isLoading={loading} onClick={() => void calculate()}>Recalculate</Button>
-                    <Button variant="danger" disabled={loading} onClick={() => void discard()}>{isPreview ? "Discard preview" : "Discard draft"}</Button>
-                    {isPreview ? (
-                      <Button variant="primary" isLoading={loading} onClick={() => void calculate(true)}>Save draft</Button>
-                    ) : batch.status === "DRAFT" ? (
-                      <Button variant="primary" isLoading={loading} onClick={() => void submitForApproval()}>Send for approval</Button>
-                    ) : null}
-                  </div>
-                </div>
-              )}
                 </>
               ) : (
                 <p className="py-10 text-center text-sm text-slate-500">
@@ -1421,7 +1403,7 @@ export function BulkPayrollWorkspace() {
                     ? formatCurrency(selectedTotal)
                     : "Calculate payroll first"}
                 </strong>
-                <span className="text-sm text-slate-500">Use the batch actions below the mentor table to save or submit this payroll.</span>
+                <span className="text-sm text-slate-500">Review this mentor’s sessions and adjustments, then use the batch actions at the top when every mentor is ready.</span>
               </div>
             </div>
           </div>

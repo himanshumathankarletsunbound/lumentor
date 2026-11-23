@@ -41,6 +41,13 @@ function hasBillableAbsence(classEvent: ClassEvent) {
   return classEvent.students.some((student) => student.attendanceStatus === 'ABSENT_BILLABLE');
 }
 
+function hasOnlyAbsentAttendance(classEvent: ClassEvent) {
+  return classEvent.students.length > 0
+    && classEvent.students.every(
+      (student) => student.attendanceStatus === 'ABSENT' || student.attendanceStatus === 'EXCUSED',
+    );
+}
+
 function attendanceSummaryForExport(classEvent: ClassEvent) {
   const counts = new Map<string, number>();
   for (const student of classEvent.students) {
@@ -530,6 +537,7 @@ export default function SinglePayoutPage() {
         { Item: 'Period', Amount: month, Notes: `${formatDateTime(bounds.startDate).split(' at ')[0]} – ${formatDateTime(bounds.endDate).split(' at ')[0]}` },
         { Item: 'Unique sessions', Amount: uniqueClasses.length, Notes: 'Each class event appears once, regardless of student roster size.' },
         { Item: 'Present sessions', Amount: uniqueClasses.filter((item) => item.students.some((student) => student.attendanceStatus === 'PRESENT' || student.attendanceStatus === 'LATE')).length, Notes: '' },
+        { Item: 'Absent sessions', Amount: uniqueClasses.filter(hasOnlyAbsentAttendance).length, Notes: 'Non-billable absences' },
         { Item: 'Absent billable sessions', Amount: uniqueClasses.filter(hasBillableAbsence).length, Notes: '' },
         { Item: 'Unmarked sessions', Amount: uniqueClasses.filter((item) => item.attendanceStatusSummary === 'UNMARKED').length, Notes: '' },
         { Item: 'Class payout', Amount: roundMoney(classPayout), Notes: 'Session earnings only' },

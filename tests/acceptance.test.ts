@@ -241,6 +241,56 @@ async function runAcceptanceTests() {
     assert(models.includes('HYBRID'), 'Must support HYBRID model');
   });
 
+  // --- 9B. PRESENT SESSIONS ARE NOT REMOVED BY A GLOBAL DURATION CUT-OFF ---
+  test('Scenario 9B: A marked present short session remains payable under its mapped per-class plan', () => {
+    const mentor = db.createMentor({
+      firstName: 'Short',
+      lastName: 'Session',
+      email: 'short-session@academyapex.com',
+      phone: '+1 555 8800',
+      branchId: 'branch-nyc',
+      branchName: 'NYC Flagship',
+      subjectIds: [],
+      payrollPlanId: 'plan-per-class-std',
+      status: 'ACTIVE',
+      provenance: 'LOCALLY_CREATED',
+      teachingHoursThisMonth: 0,
+      completedClassesCount: 0,
+      attendanceRate: 100,
+    });
+    const shortPresentClass = db.createClass({
+      title: 'Short Present Session',
+      subjectId: 'subj-cs',
+      subjectName: 'Computer Science',
+      mentorId: mentor.id,
+      mentorName: `${mentor.firstName} ${mentor.lastName}`,
+      branchId: 'branch-nyc',
+      branchName: 'NYC Flagship',
+      startTime: '2026-10-10T10:00:00Z',
+      endTime: '2026-10-10T10:30:00Z',
+      durationMinutes: 30,
+      isGroup: false,
+      capacity: 1,
+      students: [{ studentId: 'short-student', studentName: 'Short Student', studentEmail: 'short-student@test.com', attendanceStatus: 'PRESENT' }],
+      status: 'COMPLETED',
+      attendanceStatusSummary: 'ALL_PRESENT',
+      isLateCancellation: false,
+      provenance: 'LOCALLY_CREATED',
+    });
+    const plan = db.getPayrollPlanById('plan-per-class-std')!;
+    const lineItem = payrollEngine.calculateMentorPayroll(
+      mentor,
+      plan,
+      [shortPresentClass],
+      '2026-10-01',
+      '2026-10-31',
+      'test-short-present-session',
+    );
+
+    assert.equal(lineItem.eligibleClassesCount, 1, 'A marked present 30-minute class must not be excluded by the plan duration minimum');
+    assert.equal(lineItem.classEarnings, plan.defaultClassRate, 'The mapped per-class rate must be paid in full');
+  });
+
   // --- 10. REPRODUCIBLE RECALCULATION & PLAN VERSIONING ---
   test('Scenario 10: Payroll calculations are reproducible and preserve plan version snapshots', () => {
     const testMentor = db.createMentor({

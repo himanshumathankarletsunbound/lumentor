@@ -83,8 +83,15 @@ export class PayrollEngine {
         continue;
       }
 
-      // Check minimum duration
-      if (cls.durationMinutes < plan.minEligibleDurationMinutes) {
+      // A marked present/late session is payable whenever its mapped plan and
+      // class status are payable. Do not apply a global duration cut-off here:
+      // short sessions are still completed teaching sessions. Duration minimums
+      // are reserved for non-present, duration-based plans (for example,
+      // billable-absence hourly plans).
+      const appliesDurationMinimum = !hasPresentAttendance
+        && (plan.compensationModel === 'DURATION_BASED' || plan.compensationModel === 'HYBRID')
+        && plan.minEligibleDurationMinutes > 0;
+      if (appliesDurationMinimum && cls.durationMinutes < plan.minEligibleDurationMinutes) {
         calculationNotes.push(`Class ${cls.id} (${cls.title}) excluded: ${cls.durationMinutes}m is below minimum threshold ${plan.minEligibleDurationMinutes}m.`);
         continue;
       }

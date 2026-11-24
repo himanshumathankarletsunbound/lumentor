@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { periodId, startDate, endDate, branchId, mentorIds, payrollPlanId, classPayrollPlanOverrides, excludedClassIds, persist = false } = body;
+    const { periodId, startDate, endDate, branchId, mentorIds, payrollPlanId, classPayrollPlanOverrides, sessionPayrollOverrides, excludedClassIds, persist = false } = body;
 
     const parsedStart = new Date(startDate);
     const parsedEnd = new Date(endDate);
@@ -30,6 +30,20 @@ export async function POST(req: NextRequest) {
       || Object.values(classPayrollPlanOverrides).some((planId) => typeof planId !== 'string' || !planId)
     )) {
       return NextResponse.json({ error: 'classPayrollPlanOverrides must be a map of class IDs to payroll plan IDs.' }, { status: 400 });
+    }
+    if (sessionPayrollOverrides !== undefined && (
+      typeof sessionPayrollOverrides !== 'object'
+      || sessionPayrollOverrides === null
+      || Array.isArray(sessionPayrollOverrides)
+      || Object.entries(sessionPayrollOverrides).some(([classId, override]) => {
+        if (!classId.trim() || typeof override !== 'object' || override === null || Array.isArray(override)) return true;
+        const item = override as { payrollPlanId?: unknown; unitRate?: unknown; payoutFactor?: unknown };
+        return (item.payrollPlanId !== undefined && (typeof item.payrollPlanId !== 'string' || !item.payrollPlanId.trim()))
+          || (item.unitRate !== undefined && (typeof item.unitRate !== 'number' || !Number.isFinite(item.unitRate) || item.unitRate < 0))
+          || (item.payoutFactor !== undefined && (typeof item.payoutFactor !== 'number' || !Number.isFinite(item.payoutFactor) || item.payoutFactor < 0));
+      })
+    )) {
+      return NextResponse.json({ error: 'sessionPayrollOverrides must contain valid optional plan IDs, unit rates, and payout factors.' }, { status: 400 });
     }
     if (excludedClassIds !== undefined && (
       !Array.isArray(excludedClassIds)
@@ -50,6 +64,7 @@ export async function POST(req: NextRequest) {
       mentorIds,
       payrollPlanId,
       classPayrollPlanOverrides,
+      sessionPayrollOverrides,
       excludedClassIds,
     }, { persist });
 

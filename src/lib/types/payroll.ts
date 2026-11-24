@@ -214,6 +214,11 @@ export interface PayrollLineItem {
     lateCancelledEligible: number;
     appliedRateCard: string;
     notes: string[];
+    sessionPayrollOverrides?: Record<string, {
+      payrollPlanId?: string;
+      unitRate?: number;
+      payoutFactor?: number;
+    }>;
   };
 }
 

@@ -19,6 +19,12 @@ export interface CalculatePayrollOptions {
   payrollPlanId?: string;
   /** A plan selected specifically for a billable-absence session. */
   classPayrollPlanOverrides?: Record<string, string>;
+  /** Reviewer-approved, session-specific payout settings. These only apply to the calculated payout. */
+  sessionPayrollOverrides?: Record<string, {
+    payrollPlanId?: string;
+    unitRate?: number;
+    payoutFactor?: number;
+  }>;
   /** Sessions explicitly removed from this payroll calculation. This never changes attendance or the class record. */
   excludedClassIds?: string[];
 }
@@ -27,6 +33,7 @@ export interface PayrollContext {
   adjustments: Array<{ mentorId: string; amount: number; appliedPayrollBatchId?: string | null }>;
   initiatives?: Array<{ mentorId: string; totalAmount: number; name: string }>;
   penalties: PayrollBatch['lineItems'][number] extends never ? never : Array<{ id: string; mentorId: string; status: string; amount: number; appliedPayrollBatchId?: string; category: string; reason: string; createdAt: string }>;
+  sessionPayrollOverrides?: CalculatePayrollOptions['sessionPayrollOverrides'];
 }
 
 export class PayrollEngine {
@@ -68,6 +75,7 @@ export class PayrollEngine {
 
     // Evaluate each class against plan eligibility rules
     for (const cls of mentorClasses) {
+      const sessionOverride = context?.sessionPayrollOverrides?.[cls.id];
       const attendanceStatuses = cls.students.map((student) => student.attendanceStatus);
       const hasPresentAttendance = attendanceStatuses.some((status) => status === 'PRESENT' || status === 'LATE');
       if (hasPresentAttendance) {
@@ -87,16 +95,19 @@ export class PayrollEngine {
       eligibleDurationMinutes += cls.durationMinutes;
 
       const isLateCancel = cls.status === 'LATE_CANCELLED' || cls.isLateCancellation;
-      const lateMultiplier = isLateCancel ? (plan.lateCancellationPayPercent / 100) : 1.0;
+      const calculatedMultiplier = isLateCancel ? (plan.lateCancellationPayPercent / 100) : 1.0;
       if (isLateCancel) lateCancelledCount++;
 
       // Subject or Branch rate overrides
-      const baseClassRate = plan.subjectRates?.[cls.subjectId] ?? plan.branchRates?.[cls.branchId] ?? plan.defaultClassRate;
+      const configuredBaseClassRate = plan.subjectRates?.[cls.subjectId] ?? plan.branchRates?.[cls.branchId] ?? plan.defaultClassRate;
+      const baseClassRate = sessionOverride?.unitRate ?? configuredBaseClassRate;
       const groupMultiplier = cls.isGroup ? plan.groupMultiplier : 1.0;
+      const payoutFactor = sessionOverride?.payoutFactor ?? (groupMultiplier * calculatedMultiplier);
+      const durationPayoutFactor = sessionOverride?.payoutFactor ?? calculatedMultiplier;
 
       // 1. Per Class Component
       if (plan.compensationModel === 'PER_CLASS' || plan.compensationModel === 'HYBRID') {
-        const sessionPay = baseClassRate * groupMultiplier * lateMultiplier;
+        const sessionPay = baseClassRate * payoutFactor;
         classEarnings += sessionPay;
       }
 
@@ -106,7 +117,7 @@ export class PayrollEngine {
       // configured rate once.
       if (plan.compensationModel === 'DURATION_BASED' || plan.compensationModel === 'HYBRID') {
         if (plan.hourlyRate > 0) {
-          const durationPay = plan.hourlyRate * lateMultiplier;
+          const durationPay = (sessionOverride?.unitRate ?? plan.hourlyRate) * durationPayoutFactor;
           durationEarnings += durationPay;
         }
       }
@@ -121,7 +132,7 @@ export class PayrollEngine {
               s.attendanceStatus === 'LATE' ||
               s.attendanceStatus === 'ABSENT_BILLABLE'
           ).length;
-          const studentPay = attendingCount * plan.perStudentRate * lateMultiplier;
+          const studentPay = attendingCount * (sessionOverride?.unitRate ?? plan.perStudentRate) * durationPayoutFactor;
           studentEarnings += studentPay;
         }
       }
@@ -145,7 +156,8 @@ export class PayrollEngine {
               `Revenue basis is missing for percentage-based payroll plan "${plan.name}" on class ${cls.id}. Configure a session revenue basis or package revenue before calculating payroll.`
             );
           }
-          const revShare = sessionRevenueBasis * (plan.revenuePercentage / 100) * lateMultiplier;
+          const revenueBasis = sessionOverride?.unitRate ?? sessionRevenueBasis;
+          const revShare = revenueBasis * (plan.revenuePercentage / 100) * durationPayoutFactor;
           revenueShareEarnings += revShare;
         }
       }

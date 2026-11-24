@@ -33,6 +33,7 @@ export async function generateBatchFromPostgres(
     penalties: penalties
       .filter((item) => selectedMentorIds.has(item.mentorId))
       .map((item) => ({ id: item.id, mentorId: item.mentorId, status: item.status, amount: item.amount, appliedPayrollBatchId: item.appliedPayrollBatchId, category: item.category, reason: item.reason, createdAt: item.createdAt })),
+    sessionPayrollOverrides: options.sessionPayrollOverrides,
   };
   const warnings: string[] = [];
   const excludedClassIds = new Set(options.excludedClassIds || []);
@@ -52,13 +53,15 @@ export async function generateBatchFromPostgres(
       );
       // A partially marked roster remains unmarked for payroll. This prevents
       // a submitted present record from paying an otherwise incomplete class.
+      const sessionOverride = options.sessionPayrollOverrides?.[classEvent.id];
       const planId = hasUnmarkedAttendance
         ? undefined
-        : hasBillableAbsence
+        : sessionOverride?.payrollPlanId
+        ?? (hasBillableAbsence
         ? options.classPayrollPlanOverrides?.[classEvent.id]
         : hasPresentAttendance
           ? classEvent.mappedPayrollPlanId
-          : undefined;
+          : undefined);
       if (!planId) {
         if (hasUnmarkedAttendance) {
           continue;
@@ -106,6 +109,11 @@ export async function generateBatchFromPostgres(
         calculationDetails: {
           ...lineItem.calculationDetails,
           subjectPlanMapping: 'title-mapper-with-billable-absence-session-overrides',
+          sessionPayrollOverrides: Object.fromEntries(
+            classesForPlan
+              .filter((classEvent) => options.sessionPayrollOverrides?.[classEvent.id])
+              .map((classEvent) => [classEvent.id, options.sessionPayrollOverrides![classEvent.id]]),
+          ),
         },
       }];
     });

@@ -34,6 +34,7 @@ export async function generateBatchFromPostgres(
       .filter((item) => selectedMentorIds.has(item.mentorId))
       .map((item) => ({ id: item.id, mentorId: item.mentorId, status: item.status, amount: item.amount, appliedPayrollBatchId: item.appliedPayrollBatchId, category: item.category, reason: item.reason, createdAt: item.createdAt })),
     sessionPayrollOverrides: options.sessionPayrollOverrides,
+    classesArePeriodScoped: true,
   };
   const warnings: string[] = [];
   const excludedClassIds = new Set(options.excludedClassIds || []);

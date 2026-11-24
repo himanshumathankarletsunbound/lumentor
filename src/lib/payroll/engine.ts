@@ -34,6 +34,8 @@ export interface PayrollContext {
   initiatives?: Array<{ mentorId: string; totalAmount: number; name: string }>;
   penalties: PayrollBatch['lineItems'][number] extends never ? never : Array<{ id: string; mentorId: string; status: string; amount: number; appliedPayrollBatchId?: string; category: string; reason: string; createdAt: string }>;
   sessionPayrollOverrides?: CalculatePayrollOptions['sessionPayrollOverrides'];
+  /** The repository already selected sessions using their authoritative Classcard local calendar date. */
+  classesArePeriodScoped?: boolean;
 }
 
 export class PayrollEngine {
@@ -52,9 +54,12 @@ export class PayrollEngine {
     const periodStart = new Date(startDate);
     const periodEnd = new Date(endDate);
 
-    // Filter mentor's classes in date range
+    // PostgreSQL callers already scope Classcard sessions by the source local
+    // calendar date. Reapplying UTC bounds here would drop valid boundary
+    // sessions, such as an Oct 1 IST class whose stored instant is Sep 30 UTC.
     const mentorClasses = classes.filter((c) => {
       if (c.mentorId !== mentor.id) return false;
+      if (context?.classesArePeriodScoped) return true;
       const classDate = new Date(c.startTime);
       return classDate >= periodStart && classDate <= periodEnd;
     });

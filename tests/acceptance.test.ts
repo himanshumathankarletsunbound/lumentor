@@ -451,6 +451,42 @@ async function runAcceptanceTests() {
     assert.equal(lineItem.appliedPenaltyIds.length, 0, 'Another mentor’s penalty must never be attached to this payout');
   });
 
+  test('Scenario 11C: Classcard local-date sessions are not discarded by a second UTC payroll filter', () => {
+    const mentor = db.getMentors()[0];
+    const plan = db.getPayrollPlanById('plan-per-class-std')!;
+    const sourceClass = db.getClasses()[0];
+    const boundaryClass = {
+      ...sourceClass,
+      id: 'classcard-local-october-boundary',
+      mentorId: mentor.id,
+      startTime: '2026-09-30T23:30:00.000Z',
+      endTime: '2026-10-01T00:25:00.000Z',
+      durationMinutes: 55,
+      status: 'COMPLETED' as const,
+      students: [{
+        studentId: 'student-local-boundary',
+        studentName: 'Local Date Student',
+        studentEmail: 'local-date@example.com',
+        attendanceStatus: 'PRESENT' as const,
+      }],
+    };
+    const lineItem = payrollEngine.calculateMentorPayroll(
+      mentor,
+      plan,
+      [boundaryClass],
+      '2026-10-01T00:00:00.000Z',
+      '2026-10-31T23:59:59.999Z',
+      'test-classcard-local-date-boundary',
+      {
+        adjustments: [],
+        penalties: [],
+        classesArePeriodScoped: true,
+      },
+    );
+    assert.equal(lineItem.eligibleClassesCount, 1, 'Repository-scoped Oct 1 Classcard session must remain payable');
+    assert.equal(lineItem.classEarnings, plan.defaultClassRate, 'Boundary session must use its payroll plan rate');
+  });
+
   // --- 12. APPROVED PENALTIES NOT APPLIED TWICE ---
   test('Scenario 12: Approved penalties are not applied twice across subsequent cycles', () => {
     const mentor = db.createMentor({

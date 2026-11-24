@@ -328,6 +328,39 @@ export function BulkPayrollWorkspace() {
     ]),
   );
 
+  const recalculateMentor = async (
+    nextSessionOverrides = sessionPayrollOverrides,
+    nextClassOverrides = classPayrollPlanOverrides,
+    nextExcludedClassIds = excludedClassIds,
+  ) => {
+    if (!selectedMentorId) return;
+    setLoading(true);
+    try {
+      const response = await fetch("/api/payroll/calculate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          periodId: `mentor-review-${month}`,
+          startDate: range.start,
+          endDate: range.end,
+          mentorIds: [selectedMentorId],
+          classPayrollPlanOverrides: nextClassOverrides,
+          sessionPayrollOverrides: nextSessionOverrides,
+          excludedClassIds: nextExcludedClassIds,
+          persist: false,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || data.error) throw new Error(data.error || "Unable to recalculate this mentor.");
+      setMentorReviewBatch(data);
+      setNotice({ type: "success", message: "This mentor's payout was recalculated." });
+    } catch (error) {
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to recalculate this mentor." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const openSessionOverrideEditor = (event: ClassEvent) => {
     const existing = sessionPayrollOverrides[event.id];
     const payrollPlanId = existing?.payrollPlanId
@@ -350,24 +383,24 @@ export function BulkPayrollWorkspace() {
     if (!sessionOverrideForm.payrollPlanId) throw new Error("Select the payroll plan to use for this session.");
     if (!sessionOverrideForm.unitRate.trim() || !Number.isFinite(unitRate) || unitRate < 0) throw new Error("Enter a valid session price of zero or more.");
     if (!sessionOverrideForm.payoutFactor.trim() || !Number.isFinite(payoutFactor) || payoutFactor < 0) throw new Error("Enter a valid payout factor of zero or more.");
-    setSessionPayrollOverrides((current) => ({ ...current, [editingSession.id]: { payrollPlanId: sessionOverrideForm.payrollPlanId, unitRate, payoutFactor } }));
-    setMentorReviewBatch(null);
+    const nextOverrides = {
+      ...sessionPayrollOverrides,
+      [editingSession.id]: { payrollPlanId: sessionOverrideForm.payrollPlanId, unitRate, payoutFactor },
+    };
+    setSessionPayrollOverrides(nextOverrides);
     setBatch(null);
     setEditingSession(null);
-    setNotice({ type: "success", message: "Session payout override saved. Recalculate this mentor to review the updated amount." });
+    void recalculateMentor(nextOverrides);
   };
 
   const clearSessionOverride = () => {
     if (!editingSession) return;
-    setSessionPayrollOverrides((current) => {
-      const next = { ...current };
-      delete next[editingSession.id];
-      return next;
-    });
-    setMentorReviewBatch(null);
+    const nextOverrides = { ...sessionPayrollOverrides };
+    delete nextOverrides[editingSession.id];
+    setSessionPayrollOverrides(nextOverrides);
     setBatch(null);
     setEditingSession(null);
-    setNotice({ type: "success", message: "Session payout override removed. The mapped payroll plan will be used again." });
+    void recalculateMentor(nextOverrides);
   };
 
   useEffect(() => {
@@ -506,19 +539,6 @@ export function BulkPayrollWorkspace() {
     } finally {
       setLoading(false);
     }
-  };
-  const recalculateMentor = async () => {
-    if (!selectedMentorId) return;
-    setLoading(true);
-    try {
-      const response = await fetch("/api/payroll/calculate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ periodId: `mentor-review-${month}`, startDate: range.start, endDate: range.end, mentorIds: [selectedMentorId], classPayrollPlanOverrides, sessionPayrollOverrides, excludedClassIds, persist: false }) });
-      const data = await response.json();
-      if (!response.ok || data.error) throw new Error(data.error || "Unable to recalculate this mentor.");
-      setMentorReviewBatch(data);
-      setNotice({ type: "success", message: "This mentor's payout was recalculated." });
-    } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to recalculate this mentor." });
-    } finally { setLoading(false); }
   };
   const discardMentorReview = () => {
     if (!selectedMentorId) return;

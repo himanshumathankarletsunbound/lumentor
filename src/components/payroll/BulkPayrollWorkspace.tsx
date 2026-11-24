@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Download,
   Eye,
+  Pencil,
   Plus,
   RefreshCw,
   RotateCcw,
@@ -115,6 +116,12 @@ type SessionPayoutDetail = {
   calculation: string;
 };
 
+type SessionPayrollOverride = {
+  payrollPlanId: string;
+  unitRate: number;
+  payoutFactor: number;
+};
+
 type AdjustmentDraft = {
   key: string;
   type: "INCENTIVE" | "FIXED_PAYOUT";
@@ -136,6 +143,13 @@ type PenaltyDraft = {
 
 const newAdjustmentRow = (key: string): AdjustmentDraft => ({ key, type: "INCENTIVE", planId: "", name: "", count: "1", unitAmount: "", payoutFactor: "1" });
 const newPenaltyRow = (key: string): PenaltyDraft => ({ key, policyId: "", type: "", count: "1", unitAmount: "", payoutFactor: "1" });
+const planUnitRate = (plan?: PayrollPlan) => {
+  if (!plan) return 0;
+  if (plan.compensationModel === "DURATION_BASED") return Number(plan.hourlyRate);
+  if (plan.compensationModel === "PER_STUDENT") return Number(plan.perStudentRate);
+  if (plan.compensationModel === "PERCENTAGE_BASED") return Number(plan.sessionRevenueBasis || 0);
+  return Number(plan.defaultClassRate);
+};
 
 export function BulkPayrollWorkspace() {
   const [month, setMonth] = useState("2000-01");
@@ -152,10 +166,13 @@ export function BulkPayrollWorkspace() {
   >({});
   const [selectedMentorId, setSelectedMentorId] = useState<string | null>(null);
   const [mentorReviewBatch, setMentorReviewBatch] = useState<PayrollBatch | null>(null);
-  const [mentorReviewSnapshot, setMentorReviewSnapshot] = useState<Record<string, { excluded: string[]; overrides: Record<string, string> }>>({});
+  const [mentorReviewSnapshot, setMentorReviewSnapshot] = useState<Record<string, { excluded: string[]; overrides: Record<string, string>; sessionOverrides: Record<string, SessionPayrollOverride> }>>({});
   const [selectedSession, setSelectedSession] = useState<ClassEvent | null>(null);
+  const [editingSession, setEditingSession] = useState<ClassEvent | null>(null);
   const [excludedClassIds, setExcludedClassIds] = useState<string[]>([]);
   const [classPayrollPlanOverrides, setClassPayrollPlanOverrides] = useState<Record<string, string>>({});
+  const [sessionPayrollOverrides, setSessionPayrollOverrides] = useState<Record<string, SessionPayrollOverride>>({});
+  const [sessionOverrideForm, setSessionOverrideForm] = useState({ payrollPlanId: "", unitRate: "", payoutFactor: "1" });
   const [payrollPlans, setPayrollPlans] = useState<PayrollPlan[]>([]);
   const [entries, setEntries] = useState<InitiativeEntry[]>([]);
   const [plans, setPlans] = useState<InitiativePlan[]>([]);
@@ -206,11 +223,13 @@ export function BulkPayrollWorkspace() {
     const hasBillable = event.students.some(
       (student) => student.attendanceStatus === "ABSENT_BILLABLE",
     );
-    const planId = hasBillable
+    const sessionOverride = sessionPayrollOverrides[event.id];
+    const planId = sessionOverride?.payrollPlanId
+      || (hasBillable
       ? classPayrollPlanOverrides[event.id]
       : hasPresent
         ? event.mappedPayrollPlanId
-        : undefined;
+        : undefined);
     const plan = planId ? payrollPlans.find((item) => item.id === planId) : undefined;
     const statusIsPayable = Boolean(plan?.payableClassStatuses.includes(event.status));
     const payable = Boolean(plan && statusIsPayable && !excluded);
@@ -227,26 +246,30 @@ export function BulkPayrollWorkspace() {
     if (!statusIsPayable) return { plan, quantity: 0, unitRate: 0, payoutFactor: 0, sessionPayout: 0, payoutStatus: "NOT PAYABLE", calculation: `Class status ${event.status} is not payable in this plan` };
     if (!payable) return { plan, quantity: 0, unitRate: 0, payoutFactor: 0, sessionPayout: 0, payoutStatus: "NOT PAYABLE", calculation: "Session is not payable" };
     if (plan.compensationModel === "PER_CLASS") {
-      const factor = groupFactor * lateFactor;
-      return { plan, quantity: 1, unitRate: baseRate, payoutFactor: factor, sessionPayout: baseRate * factor, payoutStatus: "PAYABLE", calculation: "1 session × rate × factor" };
+      const factor = sessionOverride?.payoutFactor ?? (groupFactor * lateFactor);
+      const rate = sessionOverride?.unitRate ?? baseRate;
+      return { plan, quantity: 1, unitRate: rate, payoutFactor: factor, sessionPayout: rate * factor, payoutStatus: "PAYABLE", calculation: sessionOverride ? "Manual override · 1 session × rate × factor" : "1 session × rate × factor" };
     }
     if (plan.compensationModel === "DURATION_BASED") {
-      const rate = Number(plan.hourlyRate);
-      return { plan, quantity: 1, unitRate: rate, payoutFactor: lateFactor, sessionPayout: rate * lateFactor, payoutStatus: "PAYABLE", calculation: "1 session × plan rate × factor" };
+      const rate = sessionOverride?.unitRate ?? Number(plan.hourlyRate);
+      const factor = sessionOverride?.payoutFactor ?? lateFactor;
+      return { plan, quantity: 1, unitRate: rate, payoutFactor: factor, sessionPayout: rate * factor, payoutStatus: "PAYABLE", calculation: sessionOverride ? "Manual override · 1 session × plan rate × factor" : "1 session × plan rate × factor" };
     }
     if (plan.compensationModel === "PER_STUDENT") {
-      const rate = Number(plan.perStudentRate);
-      return { plan, quantity: paidStudents, unitRate: rate, payoutFactor: lateFactor, sessionPayout: paidStudents * rate * lateFactor, payoutStatus: "PAYABLE", calculation: "paid students × rate × factor" };
+      const rate = sessionOverride?.unitRate ?? Number(plan.perStudentRate);
+      const factor = sessionOverride?.payoutFactor ?? lateFactor;
+      return { plan, quantity: paidStudents, unitRate: rate, payoutFactor: factor, sessionPayout: paidStudents * rate * factor, payoutStatus: "PAYABLE", calculation: sessionOverride ? "Manual override · paid students × rate × factor" : "paid students × rate × factor" };
     }
     if (plan.compensationModel === "PERCENTAGE_BASED") {
-      const rate = Number(plan.sessionRevenueBasis || 0);
-      const factor = (Number(plan.revenuePercentage) / 100) * lateFactor;
-      return { plan, quantity: 1, unitRate: rate, payoutFactor: factor, sessionPayout: rate * factor, payoutStatus: "PAYABLE", calculation: "revenue basis × percentage × factor" };
+      const rate = sessionOverride?.unitRate ?? Number(plan.sessionRevenueBasis || 0);
+      const factor = sessionOverride?.payoutFactor ?? ((Number(plan.revenuePercentage) / 100) * lateFactor);
+      return { plan, quantity: 1, unitRate: rate, payoutFactor: factor, sessionPayout: rate * factor, payoutStatus: "PAYABLE", calculation: sessionOverride ? "Manual override · revenue basis × percentage × factor" : "revenue basis × percentage × factor" };
     }
     if (plan.compensationModel === "HYBRID") {
-      const factor = groupFactor * lateFactor;
-      const payout = baseRate * factor + Number(plan.hourlyRate) * lateFactor + paidStudents * Number(plan.perStudentRate) * lateFactor;
-      return { plan, quantity: 1, unitRate: baseRate, payoutFactor: factor, sessionPayout: payout, payoutStatus: "PAYABLE", calculation: "class + duration + student components" };
+      const factor = sessionOverride?.payoutFactor ?? (groupFactor * lateFactor);
+      const rate = sessionOverride?.unitRate ?? baseRate;
+      const payout = rate * factor + (sessionOverride?.unitRate ?? Number(plan.hourlyRate)) * factor + paidStudents * (sessionOverride?.unitRate ?? Number(plan.perStudentRate)) * factor;
+      return { plan, quantity: 1, unitRate: rate, payoutFactor: factor, sessionPayout: payout, payoutStatus: "PAYABLE", calculation: sessionOverride ? "Manual override · class + duration + student components" : "class + duration + student components" };
     }
     return { plan, quantity: 0, unitRate: 0, payoutFactor: 0, sessionPayout: 0, payoutStatus: "NOT PAYABLE", calculation: "Fixed salary is shown in the payout summary, not per session" };
   };
@@ -304,6 +327,48 @@ export function BulkPayrollWorkspace() {
       },
     ]),
   );
+
+  const openSessionOverrideEditor = (event: ClassEvent) => {
+    const existing = sessionPayrollOverrides[event.id];
+    const payrollPlanId = existing?.payrollPlanId
+      || classPayrollPlanOverrides[event.id]
+      || event.mappedPayrollPlanId
+      || "";
+    const plan = payrollPlans.find((item) => item.id === payrollPlanId);
+    setEditingSession(event);
+    setSessionOverrideForm({
+      payrollPlanId,
+      unitRate: existing ? String(existing.unitRate) : String(planUnitRate(plan)),
+      payoutFactor: existing ? String(existing.payoutFactor) : "1",
+    });
+  };
+
+  const applySessionOverride = () => {
+    if (!editingSession) return;
+    const unitRate = Number(sessionOverrideForm.unitRate);
+    const payoutFactor = Number(sessionOverrideForm.payoutFactor);
+    if (!sessionOverrideForm.payrollPlanId) throw new Error("Select the payroll plan to use for this session.");
+    if (!sessionOverrideForm.unitRate.trim() || !Number.isFinite(unitRate) || unitRate < 0) throw new Error("Enter a valid session price of zero or more.");
+    if (!sessionOverrideForm.payoutFactor.trim() || !Number.isFinite(payoutFactor) || payoutFactor < 0) throw new Error("Enter a valid payout factor of zero or more.");
+    setSessionPayrollOverrides((current) => ({ ...current, [editingSession.id]: { payrollPlanId: sessionOverrideForm.payrollPlanId, unitRate, payoutFactor } }));
+    setMentorReviewBatch(null);
+    setBatch(null);
+    setEditingSession(null);
+    setNotice({ type: "success", message: "Session payout override saved. Recalculate this mentor to review the updated amount." });
+  };
+
+  const clearSessionOverride = () => {
+    if (!editingSession) return;
+    setSessionPayrollOverrides((current) => {
+      const next = { ...current };
+      delete next[editingSession.id];
+      return next;
+    });
+    setMentorReviewBatch(null);
+    setBatch(null);
+    setEditingSession(null);
+    setNotice({ type: "success", message: "Session payout override removed. The mapped payroll plan will be used again." });
+  };
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -414,6 +479,7 @@ export function BulkPayrollWorkspace() {
           endDate: range.end,
           mentorIds: mentors.map((mentor) => mentor.id),
           classPayrollPlanOverrides,
+          sessionPayrollOverrides,
           excludedClassIds,
           persist,
         }),
@@ -445,7 +511,7 @@ export function BulkPayrollWorkspace() {
     if (!selectedMentorId) return;
     setLoading(true);
     try {
-      const response = await fetch("/api/payroll/calculate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ periodId: `mentor-review-${month}`, startDate: range.start, endDate: range.end, mentorIds: [selectedMentorId], classPayrollPlanOverrides, excludedClassIds, persist: false }) });
+      const response = await fetch("/api/payroll/calculate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ periodId: `mentor-review-${month}`, startDate: range.start, endDate: range.end, mentorIds: [selectedMentorId], classPayrollPlanOverrides, sessionPayrollOverrides, excludedClassIds, persist: false }) });
       const data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || "Unable to recalculate this mentor.");
       setMentorReviewBatch(data);
@@ -460,13 +526,14 @@ export function BulkPayrollWorkspace() {
     const mentorClassIds = new Set(classes.filter((item) => item.mentorId === selectedMentorId).map((item) => item.id));
     setExcludedClassIds((current) => [...current.filter((id) => !mentorClassIds.has(id)), ...(snapshot?.excluded || [])]);
     setClassPayrollPlanOverrides((current) => ({ ...Object.fromEntries(Object.entries(current).filter(([id]) => !mentorClassIds.has(id))), ...(snapshot?.overrides || {}) }));
+    setSessionPayrollOverrides((current) => ({ ...Object.fromEntries(Object.entries(current).filter(([id]) => !mentorClassIds.has(id))), ...(snapshot?.sessionOverrides || {}) }));
     setMentorReviewBatch(null);
     setNotice({ type: "success", message: "Unsaved changes for this mentor were discarded." });
   };
   const saveMentorReview = async () => {
     if (!selectedMentorId) return;
     const mentorClassIds = new Set(classes.filter((item) => item.mentorId === selectedMentorId).map((item) => item.id));
-    setMentorReviewSnapshot((current) => ({ ...current, [selectedMentorId]: { excluded: excludedClassIds.filter((id) => mentorClassIds.has(id)), overrides: Object.fromEntries(Object.entries(classPayrollPlanOverrides).filter(([id]) => mentorClassIds.has(id))) } }));
+    setMentorReviewSnapshot((current) => ({ ...current, [selectedMentorId]: { excluded: excludedClassIds.filter((id) => mentorClassIds.has(id)), overrides: Object.fromEntries(Object.entries(classPayrollPlanOverrides).filter(([id]) => mentorClassIds.has(id))), sessionOverrides: Object.fromEntries(Object.entries(sessionPayrollOverrides).filter(([id]) => mentorClassIds.has(id))) } }));
     await recalculateMentor();
     setNotice({ type: "success", message: "This mentor's review changes were saved and recalculated." });
   };
@@ -1102,7 +1169,7 @@ export function BulkPayrollWorkspace() {
                             leftIcon={<Eye className="h-4 w-4" />}
                             onClick={() => {
                               const mentorClassIds = new Set(classes.filter((item) => item.mentorId === mentor.id).map((item) => item.id));
-                              setMentorReviewSnapshot((current) => current[mentor.id] ? current : { ...current, [mentor.id]: { excluded: excludedClassIds.filter((id) => mentorClassIds.has(id)), overrides: Object.fromEntries(Object.entries(classPayrollPlanOverrides).filter(([id]) => mentorClassIds.has(id))) } });
+                              setMentorReviewSnapshot((current) => current[mentor.id] ? current : { ...current, [mentor.id]: { excluded: excludedClassIds.filter((id) => mentorClassIds.has(id)), overrides: Object.fromEntries(Object.entries(classPayrollPlanOverrides).filter(([id]) => mentorClassIds.has(id))), sessionOverrides: Object.fromEntries(Object.entries(sessionPayrollOverrides).filter(([id]) => mentorClassIds.has(id))) } });
                               setMentorReviewBatch(null);
                               setSelectedMentorId(mentor.id);
                             }}
@@ -1216,6 +1283,8 @@ export function BulkPayrollWorkspace() {
                           const billableAbsence = event.students.some(
                             (student) => student.attendanceStatus === "ABSENT_BILLABLE",
                           );
+                          const sessionOverride = sessionPayrollOverrides[event.id];
+                          const overridePlan = payrollPlans.find((plan) => plan.id === sessionOverride?.payrollPlanId);
                           return (
                             <TableRow
                               key={event.id}
@@ -1243,7 +1312,12 @@ export function BulkPayrollWorkspace() {
                                 </Badge>
                               </TableCell>
                               <TableCell>
-                                {billableAbsence ? (
+                                {sessionOverride ? (
+                                  <div>
+                                    <span className="text-xs font-medium text-indigo-700">{overridePlan?.name || "Manual session plan"}</span>
+                                    <span className="block text-[11px] text-indigo-600">Manual · {formatCurrency(sessionOverride.unitRate)} × {sessionOverride.payoutFactor}</span>
+                                  </div>
+                                ) : billableAbsence ? (
                                   <select
                                     aria-label={`Billable payroll plan for ${event.title}`}
                                     value={classPayrollPlanOverrides[event.id] || ""}
@@ -1276,6 +1350,9 @@ export function BulkPayrollWorkspace() {
                               </TableCell>
                               <TableCell>
                                 <div className="flex flex-col items-start gap-1">
+                                  <Button size="sm" variant="ghost" leftIcon={<Pencil className="h-3.5 w-3.5" />} onClick={() => openSessionOverrideEditor(event)}>
+                                    Edit payout
+                                  </Button>
                                   {event.attendanceStatusSummary === "UNMARKED" &&
                                     (excluded ? (
                                       <Button size="sm" variant="ghost" leftIcon={<RotateCcw className="h-3.5 w-3.5" />} onClick={() => setExcludedClassIds((current) => current.filter((id) => id !== event.id))}>
@@ -1428,6 +1505,24 @@ export function BulkPayrollWorkspace() {
                   <Button variant="primary" isLoading={loading} onClick={() => void saveMentorReview()}>Save</Button>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+        {editingSession && (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/40 p-4">
+            <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
+              <div className="flex items-center justify-between border-b p-5">
+                <div><h2 className="text-lg font-bold">Edit session payout</h2><p className="text-xs text-slate-500">{editingSession.title} · {formatDateTime(editingSession.startTime)}</p></div>
+                <Button size="sm" variant="ghost" leftIcon={<X className="h-4 w-4" />} onClick={() => setEditingSession(null)}>Close</Button>
+              </div>
+              <div className="space-y-4 p-5 text-sm">
+                <p className="rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-900">This applies only to this payroll calculation. It does not alter the Title Mapper, original plan, attendance, or class record.</p>
+                {editingSession.attendanceStatusSummary === "UNMARKED" && <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">This session remains non-payable until attendance is marked. You can prepare its override now.</p>}
+                <label className="block font-semibold text-slate-700">Payroll plan<select value={sessionOverrideForm.payrollPlanId} onChange={(event) => { const plan = payrollPlans.find((item) => item.id === event.target.value); setSessionOverrideForm((current) => ({ ...current, payrollPlanId: event.target.value, unitRate: String(planUnitRate(plan)) })); }} className="mt-1 w-full rounded-lg border border-slate-300 p-2 font-normal"><option value="">Select payroll plan</option>{payrollPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} · {plan.code}</option>)}</select></label>
+                <div className="grid gap-3 sm:grid-cols-2"><label className="block font-semibold text-slate-700">Session price<input type="number" min="0" step="0.01" value={sessionOverrideForm.unitRate} onChange={(event) => setSessionOverrideForm((current) => ({ ...current, unitRate: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2 font-normal" /></label><label className="block font-semibold text-slate-700">Payout factor<input type="number" min="0" step="0.01" value={sessionOverrideForm.payoutFactor} onChange={(event) => setSessionOverrideForm((current) => ({ ...current, payoutFactor: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2 font-normal" /></label></div>
+                <div className="rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-700">Estimated session payout: <strong>{formatCurrency((Number(sessionOverrideForm.unitRate) || 0) * (Number(sessionOverrideForm.payoutFactor) || 0))}</strong></div>
+              </div>
+              <div className="flex flex-wrap justify-end gap-2 border-t bg-slate-50 p-4"><Button variant="ghost" onClick={() => setEditingSession(null)}>Cancel</Button>{sessionPayrollOverrides[editingSession.id] && <Button variant="danger" onClick={clearSessionOverride}>Remove override</Button>}<Button variant="primary" onClick={() => { try { applySessionOverride(); } catch (error) { setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save the session override." }); } }}>Save override</Button></div>
             </div>
           </div>
         )}

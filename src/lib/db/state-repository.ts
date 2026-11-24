@@ -25,6 +25,10 @@ import {
   classcardTitleFromPayload,
   normalizeClasscardTitle,
 } from "../classcard/title";
+import {
+  classcardDatePart,
+  isClasscardDateInRange,
+} from "../classcard/date-range";
 
 export async function nextMentorId(): Promise<string> {
   const rows = await prisma.$queryRaw<Array<{ id: string }>>`
@@ -748,7 +752,25 @@ export async function listClasses(
     },
     data: { status: "COMPLETED" },
   });
-  const classes = await prisma.classEvent.findMany({
+  const requestedStartDate = filters.startDate
+    ? classcardDatePart(filters.startDate)
+    : undefined;
+  const requestedEndDate = filters.endDate
+    ? classcardDatePart(filters.endDate)
+    : undefined;
+  const hasDateRange = Boolean(requestedStartDate || requestedEndDate);
+  // Fetch a small buffer around a requested period before applying the
+  // authoritative Classcard local-date test below. A session can be on a
+  // different UTC day from its Classcard calendar day (and older imports may
+  // have stored a local timestamp as UTC), so an exact UTC SQL range would
+  // permanently lose boundary sessions from the correct payroll month.
+  const rangeStart = filters.startDate
+    ? new Date(new Date(filters.startDate).getTime() - 48 * 60 * 60 * 1000)
+    : undefined;
+  const rangeEnd = filters.endDate
+    ? new Date(new Date(filters.endDate).getTime() + 48 * 60 * 60 * 1000)
+    : undefined;
+  const candidateClasses = await prisma.classEvent.findMany({
     where: {
       mentorId: filters.mentorId,
       branchId:
@@ -760,10 +782,10 @@ export async function listClasses(
           ? (filters.status as never)
           : undefined,
       startTime:
-        filters.startDate || filters.endDate
+        hasDateRange
           ? {
-              gte: filters.startDate ? new Date(filters.startDate) : undefined,
-              lte: filters.endDate ? new Date(filters.endDate) : undefined,
+              gte: rangeStart,
+              lte: rangeEnd,
             }
           : undefined,
     },
@@ -775,7 +797,7 @@ export async function listClasses(
     },
     orderBy: { startTime: "desc" },
   });
-  const classEventIds = classes.map((item) => item.id);
+  const classEventIds = candidateClasses.map((item) => item.id);
   const classcardEvents = classEventIds.length
     ? await prisma.classcardEvent.findMany({
         where: { classEventId: { in: classEventIds } },
@@ -783,6 +805,7 @@ export async function listClasses(
           classEventId: true,
           gibbonCourseClassId: true,
           titleKey: true,
+          rawPayload: true,
         },
       })
     : [];
@@ -793,14 +816,42 @@ export async function listClasses(
           item,
         ): item is typeof item & {
           classEventId: string;
-          gibbonCourseClassId: string;
-        } => Boolean(item.classEventId && item.gibbonCourseClassId),
+        } => Boolean(item.classEventId),
       )
       .map((item) => [
         item.classEventId,
-        { classId: item.gibbonCourseClassId, titleKey: item.titleKey },
+        {
+          classId: item.gibbonCourseClassId || undefined,
+          titleKey: item.titleKey,
+          rawPayload: item.rawPayload,
+        },
       ]),
   );
+  const classes = hasDateRange
+    ? candidateClasses.filter((item) => {
+        const classcard = classcardByEventId.get(item.id);
+        if (!classcard) {
+          // Locally created sessions have no Classcard timezone metadata, so
+          // their stored instant remains the authoritative date source.
+          return (
+            (!filters.startDate || item.startTime >= new Date(filters.startDate)) &&
+            (!filters.endDate || item.startTime <= new Date(filters.endDate))
+          );
+        }
+        const payload =
+          classcard.rawPayload && typeof classcard.rawPayload === "object"
+            ? (classcard.rawPayload as Record<string, unknown>)
+            : {};
+        const sourceStart = payload.start || item.startTime.toISOString();
+        const timezone = String(payload.timezoneName || payload.timezone || "") || undefined;
+        return isClasscardDateInRange(
+          sourceStart,
+          requestedStartDate || "0000-01-01",
+          requestedEndDate || "9999-12-31",
+          timezone,
+        );
+      })
+    : candidateClasses;
   const mappings = await prisma.classcardClassMapping.findMany({
     where: { status: "MAPPED" },
     include: { payrollPlan: { select: { id: true, name: true } } },

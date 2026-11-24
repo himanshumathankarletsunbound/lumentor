@@ -14,6 +14,7 @@ import {
   upsertClasscardEventRecord,
 } from "../../../../lib/db/state-repository";
 import { prisma } from "../../../../lib/db/prisma";
+import { isClasscardDateInRange } from "../../../../lib/classcard/date-range";
 import type { Prisma } from "@prisma/client";
 
 const defaultBaseUrl = "https://api.classcardapp.com/api/v2/public";
@@ -142,13 +143,6 @@ function attendanceRows(data: unknown): Record<string, unknown>[] {
   return eventRows(data);
 }
 
-function isDateInRange(value: unknown, start: string, end: string): boolean {
-  const date = new Date(String(value || ""));
-  if (Number.isNaN(date.getTime())) return false;
-  const datePart = date.toISOString().slice(0, 10);
-  return datePart >= start && datePart <= end;
-}
-
 function objectValue(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -240,6 +234,13 @@ function eventEnd(row: Record<string, unknown>): unknown {
     firstValue(event, ["end", "end_time", "end_at", "event_end"]) ??
     eventStart(row)
   );
+}
+
+function eventTimezone(row: Record<string, unknown>): string | undefined {
+  const event = objectValue(row.event);
+  const timezone = firstValue(row, ["timezoneName", "timezone"]) ??
+    firstValue(event, ["timezoneName", "timezone"]);
+  return timezone ? String(timezone) : undefined;
 }
 
 function staffId(row: Record<string, unknown>): string {
@@ -442,7 +443,14 @@ export async function GET(req: NextRequest) {
       success: true,
       events:
         start && end
-          ? events.filter((event) => isDateInRange(event.startTime, start, end))
+          ? events.filter((event) =>
+              isClasscardDateInRange(
+                event.startTime,
+                start,
+                end,
+                String(objectValue(event.rawPayload).timezoneName || "") || undefined,
+              ),
+            )
           : events,
     });
   }
@@ -561,7 +569,7 @@ export async function POST(req: NextRequest) {
       );
       const rows = attendanceRows(payload).filter((row) => {
         const value = eventStart(row);
-        return !value || isDateInRange(value, start, end);
+        return !value || isClasscardDateInRange(value, start, end);
       });
       const staged = await prisma.classcardAttendanceImport.create({
         data: {
@@ -694,11 +702,18 @@ export async function POST(req: NextRequest) {
             }),
           ),
         )
-        .filter((event) => isDateInRange(eventStart(event), start, end));
+        .filter((event) =>
+          isClasscardDateInRange(
+            eventStart(event),
+            start,
+            end,
+            eventTimezone(event),
+          ),
+        );
       const attendanceForMonth = attendanceRows(attendanceData).filter(
         (row) => {
           const value = eventStart(row);
-          return !value || isDateInRange(value, start, end);
+          return !value || isClasscardDateInRange(value, start, end);
         },
       );
       const attendanceByEventStudent = new Map<string, unknown>();
@@ -975,7 +990,12 @@ export async function POST(req: NextRequest) {
         const id = eventId(event);
         if (
           id &&
-          isDateInRange(eventStart(event), start, end) &&
+          isClasscardDateInRange(
+            eventStart(event),
+            start,
+            end,
+            eventTimezone(event),
+          ) &&
           !unique.has(id)
         )
           unique.set(id, event);
@@ -1153,7 +1173,7 @@ export async function POST(req: NextRequest) {
       const fetchedRows = attendanceRows(payload).filter((row) => {
         const date =
           firstValue(row, ["date", "attendance_date"]) || eventStart(row);
-        return !date || isDateInRange(date, start, end);
+        return !date || isClasscardDateInRange(date, start, end);
       });
       const eventIds = [...new Set(fetchedRows.map(eventId).filter(Boolean))];
       const sourceEvents = eventIds.length
@@ -1296,7 +1316,7 @@ export async function POST(req: NextRequest) {
       if (location) query.set("location", location);
       const data = await classcardFetch(`${path}?${query.toString()}`, "GET");
       const rows = eventRows(data).filter((event) =>
-        isDateInRange(event.start, start, end),
+        isClasscardDateInRange(event.start, start, end, eventTimezone(event)),
       );
       let saved = 0;
       let materialized = 0;
@@ -1404,7 +1424,12 @@ export async function POST(req: NextRequest) {
           row.event && typeof row.event === "object"
             ? (row.event as Record<string, unknown>)
             : {};
-        return isDateInRange(row.date || event.start, start, end);
+        return isClasscardDateInRange(
+          row.date || event.start,
+          start,
+          end,
+          eventTimezone(event),
+        );
       });
       const grouped = new Map<string, Set<string>>();
       for (const row of rows) {

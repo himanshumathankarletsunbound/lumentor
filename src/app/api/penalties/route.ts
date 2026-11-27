@@ -7,6 +7,7 @@ import {
 import { ensureServerPersistence } from "../../../lib/db/server-initialization";
 import { createPenalty, listPenalties } from "../../../lib/db/state-repository";
 import { prisma } from "../../../lib/db/prisma";
+import { normalizePenaltyCategory } from "../../../lib/payroll/penalty-category";
 
 export async function GET(req: NextRequest) {
   await ensureServerPersistence();
@@ -45,8 +46,8 @@ export async function POST(req: NextRequest) {
       reason,
       amount,
       evidenceNote,
-      createdBy,
       approveImmediately,
+      policyId,
     } = body;
 
     if (!reason || !amount || !mentorId || !branchId) {
@@ -63,14 +64,23 @@ export async function POST(req: NextRequest) {
         { status: 403 },
       );
     }
+    const policy = policyId
+      ? await prisma.penaltyPolicy.findUnique({ where: { id: String(policyId) } })
+      : null;
+    if (policyId && (!policy || !policy.isActive)) {
+      return NextResponse.json(
+        { error: "The selected penalty type is unavailable." },
+        { status: 400 },
+      );
+    }
     const pen = await createPenalty({
       mentorId,
       branchId,
-      category: category || "OTHER",
+      category: normalizePenaltyCategory(policy?.code, category, policy?.name, reason),
       reason,
       amount: parseFloat(amount),
       evidenceNote,
-      createdBy: createdBy || "system",
+      createdBy: user?.id || "system",
       classId: body.classId,
       status: approveImmediately ? "APPROVED" : "SUBMITTED",
       approvedBy: approveImmediately ? user?.id : undefined,

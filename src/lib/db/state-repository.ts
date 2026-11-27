@@ -29,6 +29,7 @@ import {
   classcardDatePart,
   isClasscardDateInRange,
 } from "../classcard/date-range";
+import type { DatabasePenaltyCategory } from "../payroll/penalty-category";
 
 export async function nextMentorId(): Promise<string> {
   const rows = await prisma.$queryRaw<Array<{ id: string }>>`
@@ -1195,7 +1196,7 @@ export async function createPenalty(input: {
   mentorId: string;
   branchId: string;
   classId?: string;
-  category: string;
+  category: DatabasePenaltyCategory;
   reason: string;
   amount: number;
   evidenceNote?: string;
@@ -1210,7 +1211,7 @@ export async function createPenalty(input: {
       mentorId: input.mentorId,
       branchId: input.branchId,
       classId: input.classId,
-      category: input.category as never,
+      category: input.category,
       reason: input.reason,
       amount: input.amount,
       evidenceNote: input.evidenceNote,

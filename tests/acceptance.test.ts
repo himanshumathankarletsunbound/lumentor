@@ -11,6 +11,7 @@ import { SEED_USERS } from '../src/lib/db/seedData';
 import { formatCurrency, roundToTwoDecimals } from '../src/lib/utils/formatters';
 import { hashPassword, verifyPassword, generateResetToken } from '../src/lib/auth/crypto';
 import { CurrentUser } from '../src/lib/types/auth';
+import { normalizePenaltyCategory } from '../src/lib/payroll/penalty-category';
 
 async function runAcceptanceTests() {
   // Ensure test starts with clean seed data
@@ -485,6 +486,13 @@ async function runAcceptanceTests() {
     );
     assert.equal(lineItem.eligibleClassesCount, 1, 'Repository-scoped Oct 1 Classcard session must remain payable');
     assert.equal(lineItem.classEarnings, plan.defaultClassRate, 'Boundary session must use its payroll plan rate');
+  });
+
+  test('Scenario 11D: Penalty policy names are converted to database categories', () => {
+    assert.equal(normalizePenaltyCategory('MISSI', 'Miss without Information'), 'MISSING_ATTENDANCE');
+    assert.equal(normalizePenaltyCategory('Cancellation within 24 hr.'), 'LATE_CANCELLATION');
+    assert.equal(normalizePenaltyCategory('Late Joining'), 'POLICY_VIOLATION');
+    assert.equal(normalizePenaltyCategory('Custom payroll deduction'), 'OTHER');
   });
 
   // --- 12. APPROVED PENALTIES NOT APPLIED TWICE ---

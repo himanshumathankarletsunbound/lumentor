@@ -460,7 +460,7 @@ export default function SinglePayoutPage() {
     if (!reason || !Number.isFinite(amount) || amount <= 0) throw new Error('Select a penalty type or enter a custom name and positive amount.');
     const response = await fetch('/api/penalties', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mentorId, branchId: mentor.branchId, category: policy?.name || 'OTHER', reason, amount, approveImmediately: true }),
+      body: JSON.stringify({ mentorId, branchId: mentor.branchId, policyId: policy?.id, category: policy?.code || 'OTHER', reason, amount, approveImmediately: true }),
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Unable to add penalty.');

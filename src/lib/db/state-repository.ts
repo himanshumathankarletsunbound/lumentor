@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 import type { AppDatabase } from "./store";
 import type {
+  AttendanceStatus,
   Branch,
   ClassEvent,
   Mentor,
@@ -881,7 +882,7 @@ export async function listClasses(
         : statuses.every((status) => status === "PRESENT" || status === "LATE")
           ? "ALL_PRESENT"
           : statuses.every(
-                (status) => status === "ABSENT" || status === "ABSENT_BILLABLE",
+                (status) => status === "ABSENT" || status === "ABSENT_BILLABLE" || status === "EXCUSED",
               )
             ? "ALL_ABSENT"
             : "PARTIAL";
@@ -911,6 +912,9 @@ export async function listClasses(
         markedAt: attendance.markedAt?.toISOString(),
         markedBy: attendance.markedBy || undefined,
         notes: attendance.notes || undefined,
+        isManualOverride: attendance.isManualOverride,
+        manualOverrideAt: attendance.manualOverrideAt?.toISOString(),
+        manualOverrideBy: attendance.manualOverrideBy || undefined,
       })),
       status: item.status,
       attendanceStatusSummary: summary,
@@ -2060,12 +2064,20 @@ export async function recordNormalizedAttendance(
           notes: student.notes,
           markedAt: student.attendanceStatus === "UNMARKED" ? null : now,
           markedBy: student.attendanceStatus === "UNMARKED" ? null : markedBy,
+          provenance: "LOCALLY_CREATED",
+          isManualOverride: true,
+          manualOverrideAt: now,
+          manualOverrideBy: markedBy,
         },
         update: {
           status: student.attendanceStatus,
           notes: student.notes,
           markedAt: student.attendanceStatus === "UNMARKED" ? null : now,
           markedBy: student.attendanceStatus === "UNMARKED" ? null : markedBy,
+          provenance: "LOCALLY_CREATED",
+          isManualOverride: true,
+          manualOverrideAt: now,
+          manualOverrideBy: markedBy,
         },
       });
     }
@@ -2088,6 +2100,52 @@ export async function recordNormalizedAttendance(
       "The class attendance was saved but the class could not be reloaded.",
     );
   return result;
+}
+
+/** Imports Classcard attendance unless an administrator or mentor has manually overridden it. */
+export async function upsertClasscardAttendanceRecord(input: {
+  classEventId: string;
+  studentId: string;
+  status: AttendanceStatus;
+  markedAt: Date | null;
+  externalId: string;
+}): Promise<boolean> {
+  const existing = await prisma.classAttendance.findUnique({
+    where: {
+      classEventId_studentId: {
+        classEventId: input.classEventId,
+        studentId: input.studentId,
+      },
+    },
+    select: { id: true, isManualOverride: true },
+  });
+  if (existing?.isManualOverride) return false;
+
+  await prisma.classAttendance.upsert({
+    where: {
+      classEventId_studentId: {
+        classEventId: input.classEventId,
+        studentId: input.studentId,
+      },
+    },
+    create: {
+      id: crypto.randomUUID(),
+      classEventId: input.classEventId,
+      studentId: input.studentId,
+      status: input.status,
+      markedAt: input.markedAt,
+      provenance: "CLASSCARD_SOURCED",
+      externalId: input.externalId,
+      isManualOverride: false,
+    },
+    update: {
+      status: input.status,
+      markedAt: input.markedAt,
+      provenance: "CLASSCARD_SOURCED",
+      externalId: input.externalId,
+    },
+  });
+  return true;
 }
 
 export async function listAttendanceSummaries(filters?: {

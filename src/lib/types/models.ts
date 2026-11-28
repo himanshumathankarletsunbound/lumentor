@@ -138,6 +138,9 @@ export interface ClassStudentRoster {
   markedAt?: string;
   markedBy?: string;
   notes?: string;
+  isManualOverride?: boolean;
+  manualOverrideAt?: string;
+  manualOverrideBy?: string;
 }
 
 export interface ClassEvent {

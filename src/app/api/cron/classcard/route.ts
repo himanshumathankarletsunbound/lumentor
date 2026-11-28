@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getEncryptedSecret } from '../../../../lib/db/secure-storage';
 import { prisma } from '../../../../lib/db/prisma';
-import { upsertClasscardEventRecord } from '../../../../lib/db/state-repository';
+import { upsertClasscardAttendanceRecord, upsertClasscardEventRecord } from '../../../../lib/db/state-repository';
 
 function rowsFrom(payload: unknown, keys: string[]): Record<string, unknown>[] {
   if (Array.isArray(payload)) return payload.filter((row): row is Record<string, unknown> => Boolean(row && typeof row === 'object'));
@@ -197,12 +197,14 @@ export async function GET(req: NextRequest) {
         const student = studentExternalId ? await prisma.student.findFirst({ where: { externalId: { in: candidates(studentExternalId) } } }) : null;
         if (!student) { unmatched.students.add(studentExternalId || String(studentRow.name || 'unknown')); continue; }
         const attendanceValue = attendanceByEventStudent.get(`${externalId}:${studentExternalId}`);
-        await prisma.classAttendance.upsert({
-          where: { classEventId_studentId: { classEventId: classEvent.id, studentId: student.id } },
-          create: { id: crypto.randomUUID(), classEventId: classEvent.id, studentId: student.id, status: statusFrom(attendanceValue), markedAt: attendanceValue ? now : null, provenance: 'CLASSCARD_SOURCED', externalId: `${externalId}:${studentExternalId}` },
-          update: { status: statusFrom(attendanceValue), markedAt: attendanceValue ? now : null, provenance: 'CLASSCARD_SOURCED', externalId: `${externalId}:${studentExternalId}` },
+        const imported = await upsertClasscardAttendanceRecord({
+          classEventId: classEvent.id,
+          studentId: student.id,
+          status: statusFrom(attendanceValue),
+          markedAt: attendanceValue ? now : null,
+          externalId: `${externalId}:${studentExternalId}`,
         });
-        attendanceMapped++;
+        if (imported) attendanceMapped++;
       }
     }
     saved++;

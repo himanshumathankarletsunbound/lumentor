@@ -11,6 +11,7 @@ import {
 import {
   listClasscardEventRecords,
   materializeClasscardEventForPayroll,
+  upsertClasscardAttendanceRecord,
   upsertClasscardEventRecord,
 } from "../../../../lib/db/state-repository";
 import { prisma } from "../../../../lib/db/prisma";
@@ -869,30 +870,14 @@ export async function POST(req: NextRequest) {
           const row = attendanceByEventStudent.get(
             `${externalId}:${studentExternalId}`,
           );
-          await prisma.classAttendance.upsert({
-            where: {
-              classEventId_studentId: {
-                classEventId: classEvent.id,
-                studentId: student.id,
-              },
-            },
-            create: {
-              id: crypto.randomUUID(),
-              classEventId: classEvent.id,
-              studentId: student.id,
-              status: attendanceStatus(row),
-              markedAt: row ? new Date() : null,
-              provenance: "CLASSCARD_SOURCED",
-              externalId: `${externalId}:${studentExternalId}`,
-            },
-            update: {
-              status: attendanceStatus(row),
-              markedAt: row ? new Date() : null,
-              provenance: "CLASSCARD_SOURCED",
-              externalId: `${externalId}:${studentExternalId}`,
-            },
+          const imported = await upsertClasscardAttendanceRecord({
+            classEventId: classEvent.id,
+            studentId: student.id,
+            status: attendanceStatus(row),
+            markedAt: row ? new Date() : null,
+            externalId: `${externalId}:${studentExternalId}`,
           });
-          attendanceMapped++;
+          if (imported) attendanceMapped++;
         }
       }
       if (stagedImport) {
@@ -1233,30 +1218,14 @@ export async function POST(req: NextRequest) {
           });
         }
         if (source?.classEventId && localStudentId) {
-          await prisma.classAttendance.upsert({
-            where: {
-              classEventId_studentId: {
-                classEventId: source.classEventId,
-                studentId: localStudentId,
-              },
-            },
-            create: {
-              id: crypto.randomUUID(),
-              classEventId: source.classEventId,
-              studentId: localStudentId,
-              status,
-              markedAt: new Date(),
-              provenance: "CLASSCARD_SOURCED",
-              externalId: `${externalId}:${studentExternalId}`,
-            },
-            update: {
-              status,
-              markedAt: new Date(),
-              provenance: "CLASSCARD_SOURCED",
-              externalId: `${externalId}:${studentExternalId}`,
-            },
+          const imported = await upsertClasscardAttendanceRecord({
+            classEventId: source.classEventId,
+            studentId: localStudentId,
+            status,
+            markedAt: new Date(),
+            externalId: `${externalId}:${studentExternalId}`,
           });
-          updated++;
+          if (imported) updated++;
         }
         results.push({
           eventId: externalId,

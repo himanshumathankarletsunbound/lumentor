@@ -538,19 +538,22 @@ model ClassEvent {
 }
 
 model ClassAttendance {
-  id           String           @id @default(uuid())
-  classEventId String
-  classEvent   ClassEvent       @relation(fields: [classEventId], references: [id], onDelete: Cascade)
-  studentId    String
-  student      Student          @relation(fields: [studentId], references: [id])
-  status       AttendanceStatus @default(UNMARKED)
-  markedAt     DateTime?
-  markedBy     String?
-  notes        String?
-  externalId   String?
-  provenance   DataProvenance   @default(LOCALLY_CREATED)
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  id                  String           @id @default(uuid())
+  classEventId        String
+  classEvent          ClassEvent       @relation(fields: [classEventId], references: [id], onDelete: Cascade)
+  studentId           String
+  student             Student          @relation(fields: [studentId], references: [id])
+  status              AttendanceStatus @default(UNMARKED)
+  markedAt            DateTime?
+  markedBy            String?
+  notes               String?
+  externalId          String?
+  provenance          DataProvenance   @default(LOCALLY_CREATED)
+  isManualOverride    Boolean          @default(false)
+  manualOverrideAt    DateTime?
+  manualOverrideBy    String?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
 
   @@unique([classEventId, studentId])
 }

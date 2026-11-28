@@ -25,7 +25,7 @@ export interface CalendarEventModalProps {
   isOpen: boolean;
   onClose: () => void;
   classEvent: ClassEvent | null;
-  onSave: (updatedEvent: ClassEvent) => void;
+  onSave: (updatedEvent: ClassEvent) => void | Promise<void>;
 }
 
 export function CalendarEventModal({
@@ -39,11 +39,14 @@ export function CalendarEventModal({
   const [cancellationReason, setCancellationReason] = useState('');
   const [showCancellationForm, setShowCancellationForm] = useState(false);
   const [isLateCancel, setIsLateCancel] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   // Sync state if classEvent changes
   React.useEffect(() => {
     setEventData(classEvent);
     setShowCancellationForm(false);
+    setSaveError('');
   }, [classEvent]);
 
   if (!eventData) return null;
@@ -77,7 +80,7 @@ export function CalendarEventModal({
     const statuses = updatedRoster.map((s) => s.attendanceStatus);
     let summary: 'ALL_PRESENT' | 'PARTIAL' | 'ALL_ABSENT' | 'UNMARKED' = 'PARTIAL';
     if (statuses.every((s) => s === 'PRESENT' || s === 'LATE')) summary = 'ALL_PRESENT';
-    else if (statuses.every((s) => s === 'ABSENT' || s === 'ABSENT_BILLABLE')) summary = 'ALL_ABSENT';
+    else if (statuses.every((s) => s === 'ABSENT' || s === 'ABSENT_BILLABLE' || s === 'EXCUSED')) summary = 'ALL_ABSENT';
     else if (statuses.every((s) => s === 'UNMARKED')) summary = 'UNMARKED';
 
     let updatedStatus = eventData.status;
@@ -93,7 +96,7 @@ export function CalendarEventModal({
     });
   };
 
-  const handleConfirmCancellation = () => {
+  const handleConfirmCancellation = async () => {
     if (!cancellationReason.trim()) return;
     const newStatus: ClassStatus = isLateCancel ? 'LATE_CANCELLED' : 'CANCELLED';
     const updated: ClassEvent = {
@@ -110,14 +113,30 @@ export function CalendarEventModal({
       })),
     };
     setEventData(updated);
-    setShowCancellationForm(false);
-    onSave(updated);
+    setIsSaving(true);
+    setSaveError('');
+    try {
+      await onSave(updated);
+      setShowCancellationForm(false);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Unable to save the cancellation.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleSave = () => {
-    if (eventData) {
-      onSave(eventData);
-      onClose();
+  const handleSave = async () => {
+    if (eventData && !isSaving) {
+      setIsSaving(true);
+      setSaveError('');
+      try {
+        await onSave(eventData);
+        onClose();
+      } catch (error) {
+        setSaveError(error instanceof Error ? error.message : 'Unable to save class changes.');
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
@@ -170,7 +189,8 @@ export function CalendarEventModal({
               variant="primary"
               size="sm"
               leftIcon={<Save className="w-4 h-4" />}
-              onClick={handleSave}
+              onClick={() => void handleSave()}
+              isLoading={isSaving}
             >
               Save Class Changes
             </Button>
@@ -179,6 +199,11 @@ export function CalendarEventModal({
       }
     >
       <div className="space-y-6 text-sm">
+        {saveError && (
+          <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
+            {saveError}
+          </div>
+        )}
         {/* Metadata Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-slate-600">
           <div className="flex items-center gap-2.5">
@@ -275,7 +300,8 @@ export function CalendarEventModal({
                 variant="danger"
                 size="sm"
                 disabled={!cancellationReason.trim()}
-                onClick={handleConfirmCancellation}
+                onClick={() => void handleConfirmCancellation()}
+                isLoading={isSaving}
               >
                 Confirm Cancellation
               </Button>
@@ -361,7 +387,7 @@ export function CalendarEventModal({
                               : 'text-slate-600 hover:text-slate-900'
                           }`}
                         >
-                          Excused
+                          Cancel
                         </button>
                       </div>
                     ) : (
@@ -378,7 +404,11 @@ export function CalendarEventModal({
                             : 'neutral'
                         }
                       >
-                        {student.attendanceStatus === 'ABSENT_BILLABLE' ? 'ABSENT BILLABLE' : student.attendanceStatus}
+                        {student.attendanceStatus === 'ABSENT_BILLABLE'
+                          ? 'ABSENT BILLABLE'
+                          : student.attendanceStatus === 'EXCUSED'
+                            ? 'CANCEL'
+                            : student.attendanceStatus}
                       </Badge>
                     )}
                   </div>
@@ -398,6 +428,11 @@ export function CalendarEventModal({
                   {!canEditAttendance && student.notes && (
                     <p className="text-xs text-slate-600 bg-slate-50 p-2 rounded-lg italic">
                       "{student.notes}"
+                    </p>
+                  )}
+                  {student.isManualOverride && (
+                    <p className="text-[11px] font-medium text-indigo-600">
+                      Manual attendance override{student.manualOverrideBy ? ` by ${student.manualOverrideBy}` : ''}
                     </p>
                   )}
                 </div>

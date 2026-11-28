@@ -207,6 +207,8 @@ export function BulkPayrollWorkspace() {
       .reduce<Record<string, number>>((counts, student) => {
         const label = student.attendanceStatus === "ABSENT_BILLABLE"
           ? "Absent billable"
+          : student.attendanceStatus === "EXCUSED"
+            ? "Cancel"
           : student.attendanceStatus === "LATE"
             ? "Present"
             : student.attendanceStatus.charAt(0) + student.attendanceStatus.slice(1).toLowerCase();

@@ -97,11 +97,47 @@ export default function ClassesPage() {
     search,
   ]);
 
-  const handleSaveClass = (updated: ClassEvent) => {
-    db.updateClass(updated.id, updated);
+  const handleSaveClass = async (updated: ClassEvent) => {
+    const attendanceResponse = await fetch("/api/attendance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        classId: updated.id,
+        roster: updated.students.map((student) => ({
+          studentId: student.studentId,
+          attendanceStatus: student.attendanceStatus,
+          notes: student.notes,
+        })),
+      }),
+    });
+    const attendanceResult = await attendanceResponse.json();
+    if (!attendanceResponse.ok || !attendanceResult.success) {
+      throw new Error(attendanceResult.error || "Unable to save attendance changes.");
+    }
+
+    const classResponse = await fetch("/api/classes", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: updated.id,
+        status: updated.status,
+        cancellationReason: updated.cancellationReason,
+        cancelledBy: updated.cancelledBy,
+        notes: updated.notes,
+        room: updated.room,
+      }),
+    });
+    const classResult = await classResponse.json();
+    if (!classResponse.ok || !classResult.success) {
+      throw new Error(classResult.error || "Attendance was saved, but the class details could not be updated.");
+    }
+    const saved = classResult.class as ClassEvent;
     setClasses((current) =>
-      current.map((item) => (item.id === updated.id ? updated : item)),
+      current.map((item) => (item.id === saved.id ? saved : item)),
     );
+    if (typeof db.initClient === "function") {
+      db.initClient({ ...db.getSnapshot(), classes: classes.map((item) => (item.id === saved.id ? saved : item)) });
+    }
   };
 
   return (

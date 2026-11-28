@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
   try {
     await ensureServerPersistence();
     const body = await req.json();
-    const { classId, roster, markedBy = "Staff Administrator" } = body;
+    const { classId, roster, markedBy: requestedMarker = "Staff Administrator" } = body;
 
     if (!classId || !Array.isArray(roster)) {
       return NextResponse.json(
@@ -64,6 +64,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const markedBy = user?.name || requestedMarker;
     const updated = await recordNormalizedAttendance(classId, roster, markedBy);
     const statuses = updated.students.map(
       (student) => student.attendanceStatus,
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: "Attendance recorded successfully",
+      message: "Manual attendance override saved successfully",
       class: updated,
       summary: {
         totalStudents: updated.students.length,

@@ -33,6 +33,8 @@ function attendanceBadges(classEvent: ClassEvent) {
   for (const student of classEvent.students) {
     const label = student.attendanceStatus === 'ABSENT_BILLABLE'
       ? 'Absent billable'
+      : student.attendanceStatus === 'EXCUSED'
+        ? 'Cancel'
       : student.attendanceStatus === 'UNMARKED'
         ? 'Unmarked'
         : student.attendanceStatus === 'LATE'
@@ -60,6 +62,8 @@ function attendanceSummaryForExport(classEvent: ClassEvent) {
   for (const student of classEvent.students) {
     const label = student.attendanceStatus === 'ABSENT_BILLABLE'
       ? 'Absent billable'
+      : student.attendanceStatus === 'EXCUSED'
+        ? 'Cancel'
       : student.attendanceStatus === 'UNMARKED'
         ? 'Unmarked'
         : student.attendanceStatus === 'LATE'

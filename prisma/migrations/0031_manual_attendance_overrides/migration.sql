@@ -1,0 +1,4 @@
+ALTER TABLE "ClassAttendance"
+ADD COLUMN IF NOT EXISTS "isManualOverride" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN IF NOT EXISTS "manualOverrideAt" TIMESTAMP(3),
+ADD COLUMN IF NOT EXISTS "manualOverrideBy" TEXT;
